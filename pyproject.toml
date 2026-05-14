@@ -1,0 +1,51 @@
+[build-system]
+requires = ["hatchling>=1.18"]
+build-backend = "hatchling.build"
+
+[project]
+name = "eval-harness"
+version = "0.0.1"
+description = "Reusable LLM eval framework: golden datasets, LLM-as-judge with calibration, regression runner, pytest plugin, and PR-level eval diffs."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.11"
+authors = [{ name = "JT McHorse", email = "jmchorse.tech@gmail.com" }]
+keywords = ["llm", "evals", "testing", "anthropic", "regression"]
+classifiers = [
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Software Development :: Testing",
+]
+
+# The dataset layer is intentionally dependency-free so it can be imported
+# in environments without API keys, in CI sandboxes, and inside other repos
+# that consume the harness as a library.
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "pytest-cov>=4.1",
+  "ruff>=0.5",
+]
+
+[project.urls]
+Repository = "https://github.com/jt-mchorse/llm-eval-harness"
+Issues    = "https://github.com/jt-mchorse/llm-eval-harness/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["eval_harness"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts   = "-ra -q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "PT"]
+ignore = ["E501"]
