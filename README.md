@@ -55,7 +55,7 @@ Hermetic flow (no API key):
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e '.[dev]'
 ruff check . && ruff format --check .
-pytest                                # 51 hermetic tests pass
+pytest                                # 68 hermetic tests pass
 ```
 
 Real-API calibration run:
@@ -77,6 +77,38 @@ judge = Judge(backend=AnthropicBackend())
 result = calibrate(judge, load_calibration("fixtures/calibration.jsonl"))
 print(result.cohens_kappa, result.pearson_r)
 ```
+
+### Regression runner
+
+Score a dataset, persist the run, and diff against the previous run for
+the same suite. Exits non-zero when any row regresses by more than
+`--threshold-drop` (default `0.1`):
+
+```bash
+# First run: store as the baseline.
+ANTHROPIC_API_KEY=sk-... eval-harness run \
+  --suite faithfulness \
+  --dataset fixtures/sample_factuality_v1.jsonl \
+  --no-diff
+
+# Later run: same command without --no-diff prints a delta table.
+ANTHROPIC_API_KEY=sk-... eval-harness run \
+  --suite faithfulness \
+  --dataset fixtures/sample_factuality_v1.jsonl
+# → stdout: the run's JSON
+# → stderr: an ASCII delta table; exit code 1 if any row drops > 0.1
+```
+
+Run history is stored in SQLite at `~/.eval-harness/runs.db` (override
+with `--db`); two tables, `runs` and `rows`, with a foreign key from
+`rows` to `runs`. `eval-harness diff --current <run_id> --baseline
+<run_id>` is also exposed for comparing any two specific runs.
+
+A separate `AnswerSource` Protocol (D-007) is the *model under test* —
+distinct from the judge model so the runner can score one model's
+answers with another model's judge. The default `DatasetEchoSource`
+emits the example's first `expected_outputs.value` so the runner can
+be exercised hermetically before a real source is wired.
 
 ## Calibration
 

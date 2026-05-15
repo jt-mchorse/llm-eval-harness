@@ -81,3 +81,30 @@ Strategic decisions for this repo, with reasoning. Append-only — superseded de
 **Reversibility:** Cheap. The set is small enough to relabel from scratch in ~30 minutes; supersede via a new D-NNN when better data arrives.
 
 **Related issues:** #2
+
+## D-007 — AnswerSource is a separate Protocol from judge Backend (2026-05-15)
+**Decision:** The regression runner introduces an `AnswerSource` Protocol with one method, `answer(example) -> str`, distinct from the existing `Backend` Protocol used by the judge. The default `DatasetEchoSource` echoes the example's first `expected_outputs.value` so the runner can be exercised hermetically; real model-under-test sources land when a consumer needs one.
+
+**Why:** The model under test and the judge model are conceptually different roles, and conflating them would either lock callers into "score model X with model X's own judge" (which defeats the point of LLM-as-judge) or require role-flag hacks on `Backend`. Two narrow protocols are cleaner than one wide one.
+
+**Alternatives considered:**
+- Merge `AnswerSource` into `Backend` with a `role` argument — rejected: makes the contract muddier and harder to substitute in tests.
+- Single backend that serves both roles — rejected: same reason.
+
+**Reversibility:** Cheap. Both protocols have one method each.
+
+**Related issues:** #3
+
+## D-008 — Run history persisted in SQLite, two tables, foreign key enforced (2026-05-15)
+**Decision:** Run history is stored in a single SQLite file (default `~/.eval-harness/runs.db`, override via `--db`) with two tables: `runs` for aggregate metadata, `rows` for per-example scores, joined on `run_id`. `init_db(path)` is idempotent (`CREATE TABLE IF NOT EXISTS`); the `PRAGMA foreign_keys = ON` is set on every connection so the `rows.run_id` FK is actually enforced.
+
+**Why:** Diffs are conceptually a join, and SQLite is the smallest-possible substrate that makes joins fast without adding a dependency. JSON-lines history would force per-diff scans; Postgres or Mongo would force a service. The PRAGMA is documented as load-bearing because SQLite silently drops orphan rows without it.
+
+**Alternatives considered:**
+- JSON-lines history (no indexes) — rejected: every diff becomes an O(N runs × N rows) scan.
+- Postgres/Mongo — rejected: forces a service for a library that's supposed to run locally and in CI.
+- No persistence, only in-memory diffs against a passed-in baseline — rejected: callers would need to manage history themselves, recreating this layer in each consumer.
+
+**Reversibility:** Cheap. Two `CREATE TABLE` statements; export/import is a `.dump` away.
+
+**Related issues:** #3, #4 (drift detection consumes this), #6 (GitHub Action persists CI runs here)
