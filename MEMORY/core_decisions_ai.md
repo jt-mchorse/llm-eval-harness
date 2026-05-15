@@ -54,3 +54,21 @@
   reversibility: cheap
   related_issues: [2]
   superseded_by: null
+
+- id: D-007
+  date: 2026-05-15
+  decision: answer_source_is_separate_protocol_from_judge_backend
+  rationale: model_under_test_must_be_separable_from_judge_model_so_one_models_outputs_can_be_scored_by_another_models_judge
+  alternatives_rejected: [merge_into_judge_backend_with_role_arg, single_backend_serves_both_roles]
+  reversibility: cheap
+  related_issues: [3]
+  superseded_by: null
+
+- id: D-008
+  date: 2026-05-15
+  decision: run_history_persisted_in_sqlite_two_tables_runs_and_rows_foreign_key_enforced
+  rationale: stdlib_sqlite3_zero_deps_idempotent_create_table_if_not_exists_diffs_just_join_on_run_id
+  alternatives_rejected: [json_lines_history_no_indexes, mongodb_or_postgres_overkill, no_persistence_only_in_memory_diff]
+  reversibility: cheap
+  related_issues: [3, 4, 6]
+  superseded_by: null

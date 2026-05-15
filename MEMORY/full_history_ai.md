@@ -40,3 +40,24 @@ context_for_next_session:
 decisions_made: [D-004, D-005, D-006]
 followups: []
 ---
+
+---
+session: 2026-05-15T19:23Z
+duration_min: 60
+issue: 3
+focus: regression_runner_plus_sqlite_persistence_plus_cli
+delta:
+  files_added: 4
+  files_changed: 3
+  tests_added: 17
+  test_pass_rate: "68/68"
+context_for_next_session:
+  - runner_plus_diff_plus_run_persistence_shipped_via_sqlite_d008
+  - answer_source_is_separate_protocol_from_judge_backend_d007
+  - cli_subcommands_run_and_diff_exit_nonzero_on_flagged_regressions_default_threshold_drop_0_1
+  - dataset_echo_source_is_the_hermetic_default_real_anthropic_answer_source_lands_when_consumer_needs_one
+  - latest_run_id_for_suite_now_takes_exclude_run_id_kwarg_to_avoid_self_baseline_on_same_second_runs
+  - smoke_test_runs_in_under_a_second_acceptance_criterion_was_under_10s
+decisions_made: [D-007, D-008]
+followups: []
+---
