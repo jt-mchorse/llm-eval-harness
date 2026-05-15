@@ -199,10 +199,10 @@ def test_missing_file_raises_filenotfound(tmp_path: Path) -> None:
 
 
 def test_expected_output_rejects_bad_kind() -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="kind"):
         ExpectedOutput(kind="bogus", value="x")
 
 
 def test_expected_output_value_must_be_str() -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="value"):
         ExpectedOutput(kind="exact", value=42)  # type: ignore[arg-type]

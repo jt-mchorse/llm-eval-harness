@@ -33,9 +33,10 @@ silently accepting them, because eval semantics depend on the kind.
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, ClassVar, Iterable, Iterator
+from typing import Any, ClassVar
 
 
 class DatasetLoadError(ValueError):
@@ -164,7 +165,9 @@ def _validate_record(raw: Any, line_no: int) -> Example:
     messages tailored.
     """
     if not isinstance(raw, dict):
-        raise DatasetLoadError(line_no, f"top-level value must be JSON object, got {type(raw).__name__}")
+        raise DatasetLoadError(
+            line_no, f"top-level value must be JSON object, got {type(raw).__name__}"
+        )
 
     missing = [f for f in _REQUIRED_FIELDS if f not in raw]
     if missing:
@@ -237,7 +240,9 @@ def load_jsonl(path: str | Path) -> Dataset:
             if not stripped:
                 # Blank lines aren't part of the format. Be strict about it —
                 # silent skips hide accidental empty rows from broken pipelines.
-                raise DatasetLoadError(line_no, "blank line; dataset must have one JSON object per line")
+                raise DatasetLoadError(
+                    line_no, "blank line; dataset must have one JSON object per line"
+                )
             try:
                 parsed = json.loads(stripped)
             except json.JSONDecodeError as e:
@@ -246,7 +251,9 @@ def load_jsonl(path: str | Path) -> Dataset:
             ex = _validate_record(parsed, line_no)
 
             if ex.id in seen_ids:
-                raise DatasetLoadError(line_no, f"duplicate id {ex.id!r}; ids must be unique within a file")
+                raise DatasetLoadError(
+                    line_no, f"duplicate id {ex.id!r}; ids must be unique within a file"
+                )
             seen_ids.add(ex.id)
 
             if version is None:

@@ -25,11 +25,19 @@ classifiers = [
 dependencies = []
 
 [project.optional-dependencies]
+# The judge wrapper requires the Anthropic SDK at run-time only when the live
+# backend is used. Tests substitute a deterministic stub and don't need this.
+judge = [
+  "anthropic>=0.32",
+]
 dev = [
   "pytest>=8.0",
   "pytest-cov>=4.1",
   "ruff>=0.5",
 ]
+
+[project.scripts]
+eval-harness = "eval_harness.cli:main"
 
 [project.urls]
 Repository = "https://github.com/jt-mchorse/llm-eval-harness"
