@@ -50,18 +50,24 @@ def main(argv: list[str] | None = None) -> int:
     calibrate_p.add_argument("--model", default=None)
     calibrate_p.add_argument("--threshold-kappa", type=float, default=0.6)
 
-    run_p = sub.add_parser("run", help="Score a dataset, persist the run, optionally diff a baseline.")
+    run_p = sub.add_parser(
+        "run", help="Score a dataset, persist the run, optionally diff a baseline."
+    )
     run_p.add_argument("--suite", required=True, help="Suite name used to group runs.")
     run_p.add_argument("--dataset", required=True, help="Path to a JSONL dataset.")
     run_p.add_argument("--db", default=str(DEFAULT_DB_PATH), help="SQLite path for run history.")
     run_p.add_argument("--model", default=None, help="Override the judge model id.")
     run_p.add_argument("--answer-source", choices=["dataset_echo"], default="dataset_echo")
-    run_p.add_argument("--baseline", default=None,
-                       help="Baseline run_id to diff against (default: latest run of the same suite).")
+    run_p.add_argument(
+        "--baseline",
+        default=None,
+        help="Baseline run_id to diff against (default: latest run of the same suite).",
+    )
     run_p.add_argument("--threshold-drop", type=float, default=DEFAULT_THRESHOLD_DROP)
     run_p.add_argument("--out", default=None, help="Write the JSON run result to this path.")
-    run_p.add_argument("--no-diff", action="store_true",
-                       help="Skip the baseline diff even if a prior run exists.")
+    run_p.add_argument(
+        "--no-diff", action="store_true", help="Skip the baseline diff even if a prior run exists."
+    )
 
     diff_p = sub.add_parser("diff", help="Show the delta between two stored runs.")
     diff_p.add_argument("--current", required=True)
@@ -131,8 +137,7 @@ def _run_run(args: argparse.Namespace) -> int:
         print(json_text)
 
     print(
-        f"run {result.run_id} suite={result.suite} n={result.n_rows} "
-        f"mean={result.mean_score:.3f}",
+        f"run {result.run_id} suite={result.suite} n={result.n_rows} mean={result.mean_score:.3f}",
         file=sys.stderr,
     )
 

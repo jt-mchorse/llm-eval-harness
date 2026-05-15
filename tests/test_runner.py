@@ -65,8 +65,7 @@ class TestRunSuite:
             answer_source=DatasetEchoSource(),
             judge_model="test-model",
         )
-        result = run_suite(spec, db_path=db,
-                           started_at="2026-05-15T19:00:00Z", run_id="r-fixed")
+        result = run_suite(spec, db_path=db, started_at="2026-05-15T19:00:00Z", run_id="r-fixed")
         assert result.run_id == "r-fixed"
         assert result.n_rows == 2
         assert result.mean_score == pytest.approx(0.8)
@@ -102,10 +101,12 @@ class TestDelta:
         base_spec = RunSpec("s", dataset, baseline_judge, DatasetEchoSource())
         cur_spec = RunSpec("s", dataset, current_judge, DatasetEchoSource())
 
-        baseline_result = run_suite(base_spec, db_path=db,
-                                    started_at="2026-05-15T18:00:00Z", run_id="b1")
-        current_result = run_suite(cur_spec, db_path=db,
-                                   started_at="2026-05-15T19:00:00Z", run_id="c1")
+        baseline_result = run_suite(
+            base_spec, db_path=db, started_at="2026-05-15T18:00:00Z", run_id="b1"
+        )
+        current_result = run_suite(
+            cur_spec, db_path=db, started_at="2026-05-15T19:00:00Z", run_id="c1"
+        )
 
         with connect(db) as conn:
             base = read_run(conn, baseline_result.run_id)
@@ -132,15 +133,20 @@ class TestDelta:
         judge = Judge(backend=ConstantBackend(score=1.0))
         baseline_result = run_suite(
             RunSpec("s", ds_old, judge, DatasetEchoSource()),
-            db_path=db, started_at="2026-05-15T18:00:00Z", run_id="b1",
+            db_path=db,
+            started_at="2026-05-15T18:00:00Z",
+            run_id="b1",
         )
         current_result = run_suite(
             RunSpec("s", ds_new, judge, DatasetEchoSource()),
-            db_path=db, started_at="2026-05-15T19:00:00Z", run_id="c1",
+            db_path=db,
+            started_at="2026-05-15T19:00:00Z",
+            run_id="c1",
         )
         with connect(db) as conn:
-            report = diff_runs(read_run(conn, current_result.run_id),
-                               read_run(conn, baseline_result.run_id))
+            report = diff_runs(
+                read_run(conn, current_result.run_id), read_run(conn, baseline_result.run_id)
+            )
         statuses = {r.example_id: r.status for r in report.rows}
         assert statuses == {"q1": "unchanged", "q2": "removed", "q3": "new"}
 
@@ -149,10 +155,18 @@ class TestDelta:
         _write_sample_dataset(dataset)
         db = tmp_path / "runs.db"
         judge = Judge(backend=ConstantBackend(score=1.0))
-        a = run_suite(RunSpec("alpha", dataset, judge, DatasetEchoSource()),
-                      db_path=db, started_at="2026-05-15T18:00:00Z", run_id="a")
-        b = run_suite(RunSpec("beta", dataset, judge, DatasetEchoSource()),
-                      db_path=db, started_at="2026-05-15T19:00:00Z", run_id="b")
+        a = run_suite(
+            RunSpec("alpha", dataset, judge, DatasetEchoSource()),
+            db_path=db,
+            started_at="2026-05-15T18:00:00Z",
+            run_id="a",
+        )
+        b = run_suite(
+            RunSpec("beta", dataset, judge, DatasetEchoSource()),
+            db_path=db,
+            started_at="2026-05-15T19:00:00Z",
+            run_id="b",
+        )
         with connect(db) as conn, pytest.raises(ValueError, match="across suites"):
             diff_runs(read_run(conn, a.run_id), read_run(conn, b.run_id))
 
@@ -164,10 +178,18 @@ class TestRenderDeltaAscii:
         db = tmp_path / "runs.db"
         baseline_judge = Judge(backend=PromptMatchBackend({"france": 0.9, "japan": 0.9}))
         current_judge = Judge(backend=PromptMatchBackend({"france": 0.5, "japan": 0.95}))
-        run_suite(RunSpec("s", dataset, baseline_judge, DatasetEchoSource()),
-                  db_path=db, started_at="2026-05-15T18:00:00Z", run_id="b1")
-        run_suite(RunSpec("s", dataset, current_judge, DatasetEchoSource()),
-                  db_path=db, started_at="2026-05-15T19:00:00Z", run_id="c1")
+        run_suite(
+            RunSpec("s", dataset, baseline_judge, DatasetEchoSource()),
+            db_path=db,
+            started_at="2026-05-15T18:00:00Z",
+            run_id="b1",
+        )
+        run_suite(
+            RunSpec("s", dataset, current_judge, DatasetEchoSource()),
+            db_path=db,
+            started_at="2026-05-15T19:00:00Z",
+            run_id="c1",
+        )
         with connect(db) as conn:
             report = diff_runs(read_run(conn, "c1"), read_run(conn, "b1"), threshold_drop=0.1)
         out = render_delta_ascii(report)

@@ -55,8 +55,7 @@ def test_run_completes_quickly_and_emits_json(tmp_path: Path, capsys) -> None:
     db = tmp_path / "runs.db"
     start = time.perf_counter()
     rc, stdout, stderr = _run_cli(
-        ["run", "--suite", "smoke", "--dataset", str(SAMPLE_DATASET),
-         "--db", str(db), "--no-diff"],
+        ["run", "--suite", "smoke", "--dataset", str(SAMPLE_DATASET), "--db", str(db), "--no-diff"],
         capsys=capsys,
     )
     elapsed = time.perf_counter() - start
@@ -71,8 +70,7 @@ def test_run_completes_quickly_and_emits_json(tmp_path: Path, capsys) -> None:
 def test_run_then_diff_against_baseline(tmp_path: Path, capsys) -> None:
     db = tmp_path / "runs.db"
     rc1, _, _ = _run_cli(
-        ["run", "--suite", "smoke", "--dataset", str(SAMPLE_DATASET),
-         "--db", str(db), "--no-diff"],
+        ["run", "--suite", "smoke", "--dataset", str(SAMPLE_DATASET), "--db", str(db), "--no-diff"],
         capsys=capsys,
     )
     assert rc1 == 0
@@ -80,8 +78,7 @@ def test_run_then_diff_against_baseline(tmp_path: Path, capsys) -> None:
     # Second run with the same backend should compare against the first and
     # exit 0 (no flagged regressions).
     rc2, stdout2, stderr2 = _run_cli(
-        ["run", "--suite", "smoke", "--dataset", str(SAMPLE_DATASET),
-         "--db", str(db)],
+        ["run", "--suite", "smoke", "--dataset", str(SAMPLE_DATASET), "--db", str(db)],
         capsys=capsys,
     )
     assert rc2 == 0
@@ -103,8 +100,18 @@ def test_diff_exits_nonzero_when_regression_flagged(tmp_path: Path, capsys) -> N
             return "SCORE: 1.0\nREASONING: high\n"
 
     with patch("eval_harness.cli.AnthropicBackend", HighBackend):
-        rc_base = main(["run", "--suite", "smoke", "--dataset", str(SAMPLE_DATASET),
-                        "--db", str(db), "--no-diff"])
+        rc_base = main(
+            [
+                "run",
+                "--suite",
+                "smoke",
+                "--dataset",
+                str(SAMPLE_DATASET),
+                "--db",
+                str(db),
+                "--no-diff",
+            ]
+        )
     assert rc_base == 0
 
     # Current: every prompt scores 0.5 → 0.5-point drop, flagged.
@@ -117,8 +124,9 @@ def test_diff_exits_nonzero_when_regression_flagged(tmp_path: Path, capsys) -> N
             return "SCORE: 0.5\nREASONING: low\n"
 
     with patch("eval_harness.cli.AnthropicBackend", LowBackend):
-        rc_cur = main(["run", "--suite", "smoke", "--dataset", str(SAMPLE_DATASET),
-                       "--db", str(db)])
+        rc_cur = main(
+            ["run", "--suite", "smoke", "--dataset", str(SAMPLE_DATASET), "--db", str(db)]
+        )
     captured = capsys.readouterr()
     assert rc_cur == 1
     assert "FLAG" in captured.err

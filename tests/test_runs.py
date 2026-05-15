@@ -39,8 +39,12 @@ class TestInitDB:
         init_db(db)
         init_db(db)  # second call must not raise
         with connect(db) as conn:
-            tables = {r[0] for r in conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table';").fetchall()}
+            tables = {
+                r[0]
+                for r in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table';"
+                ).fetchall()
+            }
         assert {"runs", "rows"}.issubset(tables)
 
     def test_creates_parent_directory(self, tmp_path: Path) -> None:
@@ -79,11 +83,21 @@ class TestWriteAndRead:
         db = tmp_path / "runs.db"
         init_db(db)
         with connect(db) as conn:
-            _seed_run(conn, run_id="r1", suite="s", started_at="2026-05-15T19:00:00Z",
-                      rows=[("ex", 1.0, "ok")])
+            _seed_run(
+                conn,
+                run_id="r1",
+                suite="s",
+                started_at="2026-05-15T19:00:00Z",
+                rows=[("ex", 1.0, "ok")],
+            )
             with pytest.raises(ValueError, match="failed to persist"):
-                _seed_run(conn, run_id="r1", suite="s", started_at="2026-05-15T19:00:00Z",
-                          rows=[("ex", 0.0, "no")])
+                _seed_run(
+                    conn,
+                    run_id="r1",
+                    suite="s",
+                    started_at="2026-05-15T19:00:00Z",
+                    rows=[("ex", 0.0, "no")],
+                )
 
     def test_unknown_run_raises_keyerror(self, tmp_path: Path) -> None:
         db = tmp_path / "runs.db"
@@ -97,12 +111,27 @@ class TestLatestForSuite:
         db = tmp_path / "runs.db"
         init_db(db)
         with connect(db) as conn:
-            _seed_run(conn, run_id="early", suite="s", started_at="2026-05-15T09:00:00Z",
-                      rows=[("ex", 1.0, "ok")])
-            _seed_run(conn, run_id="late", suite="s", started_at="2026-05-15T19:00:00Z",
-                      rows=[("ex", 0.5, "meh")])
-            _seed_run(conn, run_id="other_suite", suite="t", started_at="2026-05-15T23:00:00Z",
-                      rows=[("ex", 0.1, "no")])
+            _seed_run(
+                conn,
+                run_id="early",
+                suite="s",
+                started_at="2026-05-15T09:00:00Z",
+                rows=[("ex", 1.0, "ok")],
+            )
+            _seed_run(
+                conn,
+                run_id="late",
+                suite="s",
+                started_at="2026-05-15T19:00:00Z",
+                rows=[("ex", 0.5, "meh")],
+            )
+            _seed_run(
+                conn,
+                run_id="other_suite",
+                suite="t",
+                started_at="2026-05-15T23:00:00Z",
+                rows=[("ex", 0.1, "no")],
+            )
             assert latest_run_id_for_suite(conn, "s") == "late"
             assert latest_run_id_for_suite(conn, "t") == "other_suite"
 

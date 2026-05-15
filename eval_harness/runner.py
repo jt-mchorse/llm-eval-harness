@@ -352,7 +352,9 @@ def render_delta_ascii(report: DeltaReport) -> str:
         current = f"{r.current_score:.3f}" if r.current_score is not None else "  -  "
         delta = f"{r.delta:+.3f}" if r.delta is not None else "  -   "
         flag = "FLAG" if r.flagged else "    "
-        lines.append(sep.join([f"{r.status:9}", f"{r.example_id:12}", baseline, current, delta, flag]))
+        lines.append(
+            sep.join([f"{r.status:9}", f"{r.example_id:12}", baseline, current, delta, flag])
+        )
     s = report.summary
     lines.append("")
     lines.append(

@@ -135,14 +135,25 @@ def write_run(
                                   judge_kappa, mean_score, n_rows, git_sha)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
                 """,
-                (run_id, started_at, suite, dataset_version, judge_model, judge_kappa,
-                 mean_score, n_rows, git_sha),
+                (
+                    run_id,
+                    started_at,
+                    suite,
+                    dataset_version,
+                    judge_model,
+                    judge_kappa,
+                    mean_score,
+                    n_rows,
+                    git_sha,
+                ),
             )
             conn.executemany(
                 "INSERT INTO rows (run_id, example_id, score, reasoning) VALUES (?, ?, ?, ?);",
                 [(run_id, ex_id, score, reasoning) for ex_id, score, reasoning in rows],
             )
-    except sqlite3.IntegrityError as e:  # pragma: no cover - exact message is sqlite-version-specific
+    except (
+        sqlite3.IntegrityError
+    ) as e:  # pragma: no cover - exact message is sqlite-version-specific
         raise ValueError(f"failed to persist run {run_id!r}: {e}") from e
 
 
