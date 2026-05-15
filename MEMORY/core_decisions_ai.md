@@ -27,3 +27,30 @@
   reversibility: cheap
   related_issues: [1, 6]
   superseded_by: null
+
+- id: D-004
+  date: 2026-05-15
+  decision: judge_backend_is_single_method_protocol_for_test_swap
+  rationale: tests_substitute_deterministic_stub_no_api_key_required_for_unit_tests
+  alternatives_rejected: [hard_coded_anthropic_client, abstract_base_class, dependency_injection_container]
+  reversibility: cheap
+  related_issues: [2, 3]
+  superseded_by: null
+
+- id: D-005
+  date: 2026-05-15
+  decision: calibration_metrics_kappa_binarized_plus_pearson_continuous_only_kappa_gates_ci
+  rationale: kappa_is_classification_correctness_pearson_catches_systematic_bias_kappa_misses
+  alternatives_rejected: [kappa_only, pearson_only, mse_or_mae, accuracy_at_threshold]
+  reversibility: cheap
+  related_issues: [2]
+  superseded_by: null
+
+- id: D-006
+  date: 2026-05-15
+  decision: calibration_set_self_labeled_with_explicit_disclosure_50_rows_distributed_across_score_axis
+  rationale: small_n_single_labeler_honest_about_limits_better_than_pretending_multi_rater
+  alternatives_rejected: [require_multi_rater_before_shipping_judge, ship_judge_without_calibration, generate_set_with_an_llm]
+  reversibility: cheap
+  related_issues: [2]
+  superseded_by: null
