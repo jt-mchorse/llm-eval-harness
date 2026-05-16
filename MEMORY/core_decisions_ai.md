@@ -72,3 +72,21 @@
   reversibility: cheap
   related_issues: [3, 4, 6]
   superseded_by: null
+
+- id: D-009
+  date: 2026-05-16
+  decision: sticky_pr_comment_identified_by_hidden_html_marker_not_by_author_or_title
+  rationale: marker_based_identity_survives_bot_renames_token_rotations_and_consumers_calling_same_action_from_different_repos
+  alternatives_rejected: [match_on_comment_author_username, match_on_title_prefix, single_comment_per_pr_via_locked_thread_metadata]
+  reversibility: cheap
+  related_issues: [6]
+  superseded_by: null
+
+- id: D-010
+  date: 2026-05-16
+  decision: diff_json_subcommand_operates_on_runresult_json_files_no_sqlite
+  rationale: ci_runners_are_ephemeral_sqlite_history_is_for_local_dev_action_just_needs_one_current_vs_one_baseline
+  alternatives_rejected: [persist_runs_to_sqlite_in_ci_then_diff, ship_sqlite_db_as_a_workflow_artifact, recompute_via_api]
+  reversibility: cheap
+  related_issues: [6, 7]
+  superseded_by: null

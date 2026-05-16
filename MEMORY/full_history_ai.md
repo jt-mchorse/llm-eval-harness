@@ -61,3 +61,29 @@ context_for_next_session:
 decisions_made: [D-007, D-008]
 followups: []
 ---
+
+---
+session: 2026-05-16T04:00Z
+duration_min: 40
+issue: 6
+focus: github_action_sticky_pr_eval_delta_comment
+delta:
+  files_added: 5
+  files_changed: 4
+  tests_added: 19
+  test_pass_rate: "87/87"
+context_for_next_session:
+  - comment_module_renders_gfm_table_with_hidden_marker_d_009
+  - sticky_marker_is_eval_harness_sticky_comment_html_comment_substring_first_match_wins
+  - find_sticky_comment_paginates_per_page_100_caps_at_1000_total_comments_to_save_rate_limit
+  - upsert_sticky_comment_refuses_body_without_marker_to_prevent_duplicates_next_run
+  - github_api_plumbing_is_stdlib_urllib_request_no_pip_dep_token_via_github_token_env
+  - diff_json_subcommand_d_010_takes_two_runresult_json_files_no_sqlite_emits_json_ascii_or_markdown
+  - comment_subcommand_takes_repo_pr_delta_json_dry_run_for_local_testing
+  - fixtures_demo_baseline_demo_current_committed_with_all_5_status_types_improved_unchanged_regressed_new_removed
+  - workflow_eval_yml_runs_on_pull_request_against_main_uses_secrets_github_token_with_pull_requests_write_permission
+  - tests_use_in_process_fake_github_server_via_api_base_override_not_mock_module
+  - issue_6_acceptance_workflow_runs_on_pr_done_sticky_comment_pattern_done_table_renders_cleanly_done_demo_pr_is_this_pr
+decisions_made: [D-009, D-010]
+followups: []
+---
