@@ -178,3 +178,18 @@ Strategic decisions for this repo, with reasoning. Append-only — superseded de
 **Reversibility:** Cheap. The hookwrapper is one function; switching to a different enforcement seam is a localized rewrite.
 
 **Related issues:** #5
+
+## D-014 — Drift axes use Jensen-Shannon divergence (base-2, bounded in [0, 1]) (2026-05-16)
+**Decision:** Each drift axis in `eval_harness.drift` (length, embedding-cluster, judge) scores the difference between the golden distribution and the candidate distribution with Jensen-Shannon divergence in base-2. JSD is symmetric in its arguments and bounded in `[0, 1]`. The same threshold scale (0.0 = identical, 1.0 = maximally different) is used per axis, with axis-specific defaults the caller can override.
+
+**Why:** Three reasons stack. (1) **Bounded** — KL divergence has no upper bound, so picking a threshold means picking a number that has no natural meaning; "0.42 drift" only signifies something if the operator already knows the scale of that axis. JSD's 0..1 range gives every axis the same scale and the same threshold semantics. (2) **Symmetric** — KL is direction-dependent (`KL(golden||candidate)` is not the same as `KL(candidate||golden)`), and that asymmetry is a frequent source of bugs when someone swaps argument order. JSD removes the question entirely. (3) **Works on every axis we need** — KS only operates on ordered scalars, which is fine for length but doesn't generalize to the cluster-id axis (cluster ids are categorical, not ordered). JSD operates on any discrete distribution, so the same formula scores all three axes.
+
+**Alternatives considered:**
+- KL divergence (either direction) — rejected; unbounded and asymmetric, both ergonomic failures.
+- Kolmogorov-Smirnov statistic — rejected; doesn't generalize to categorical (cluster id) data.
+- Total variation distance — viable; bounded and symmetric, but the 0..1 range interprets differently and it's less common in ML drift literature, so we'd lose recognizability.
+- Wasserstein / Earth Mover's distance — rejected; the natural implementation needs an extra dep (`scipy`) and the math doesn't generalize to categorical clusters without a ground metric we'd have to invent.
+
+**Reversibility:** Cheap. The metric is one function (`jensen_shannon`) called from three call sites; swapping to a different metric is a localized rewrite.
+
+**Related issues:** #4

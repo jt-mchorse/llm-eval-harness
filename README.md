@@ -183,6 +183,53 @@ steps in their own workflow:
 files produced by `eval-harness run --out`. Action runners are
 ephemeral; making the diff a pure JSON operation matches that.
 
+### Drift detection on production traffic samples (#4)
+
+```bash
+eval-harness drift \
+    --golden    fixtures/drift/golden_inputs.jsonl \
+    --candidate fixtures/drift/shifted.jsonl \
+    --output    /tmp/drift.html \
+    --judge-stub
+# stdout: length=0.4012 (drifted), embedding=0.2783 (drifted), judge=0.3094 (drifted)
+```
+
+Three axes are scored:
+
+- **Length** — char-count histogram of inputs.
+- **Embedding cluster** — a dep-free hash embedder (lexical-overlap
+  pattern, deterministic, no API key) builds k=8 cluster centroids
+  from the golden set; each candidate input is assigned to its
+  nearest centroid by cosine; cluster-id histograms are compared.
+- **Judge** — operator-supplied `judge_score_fn(input) -> float`. The
+  axis is *skipped* (not scored) when no function is provided so the
+  rest of the report still renders. `--judge-stub` is a deterministic
+  word-count stub for hermetic CI / smoke testing.
+
+Each axis returns a Jensen-Shannon divergence in `[0, 1]` and a status
+(`ok` / `drifted`) against a per-axis threshold. JSD is bounded and
+symmetric — the choice is recorded as D-014: KL is unbounded and
+asymmetric; KS only works for ordered scalars (it doesn't generalize
+to the cluster-id axis); JSD does both with one formula and one
+threshold per axis.
+
+The output HTML report is single-file (inline SVG, no external CDN)
+and lists the most-distant candidate inputs from any golden centroid
+so the operator can eyeball what the drift looks like.
+
+Library API (when wiring into a custom workflow):
+
+```python
+from eval_harness import compute_drift, render_drift_html
+
+report = compute_drift(
+    golden_inputs=[...],     # list[str] from your golden dataset
+    candidate_inputs=[...],  # list[str] sampled from production
+    judge_score_fn=lambda s: my_judge.score(s, s).score,
+)
+Path("drift.html").write_text(render_drift_html(report))
+```
+
 ## Calibration
 
 The calibration set is **50 rows** of `(prompt, response, human_score)`

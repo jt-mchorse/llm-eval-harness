@@ -135,6 +135,24 @@ def main(argv: list[str] | None = None) -> int:
         help="Render and print the markdown without calling the GitHub API.",
     )
 
+    # `drift` measures distribution drift between a golden set and a
+    # candidate sample of production inputs (#4).
+    drift_p = sub.add_parser(
+        "drift",
+        help="Measure distribution drift on length / embedding / judge axes; write an HTML report.",
+    )
+    drift_p.add_argument("--golden", required=True, help="Path to golden JSONL of inputs.")
+    drift_p.add_argument("--candidate", required=True, help="Path to candidate JSONL of inputs.")
+    drift_p.add_argument("--output", required=True, help="Output HTML report path.")
+    drift_p.add_argument(
+        "--judge-stub",
+        action="store_true",
+        help="Use the deterministic word-count judge stub (hermetic CI / smoke).",
+    )
+    drift_p.add_argument(
+        "--cluster-k", type=int, default=8, help="K-means cluster count (default: 8)."
+    )
+
     args = parser.parse_args(argv)
     if args.command == "judge" and args.judge_command == "calibrate":
         return _run_calibrate(args)
@@ -150,8 +168,29 @@ def main(argv: list[str] | None = None) -> int:
         return _run_diff_json(args)
     if args.command == "comment":
         return _run_comment(args)
+    if args.command == "drift":
+        return _run_drift(args)
     parser.error(f"unknown command {args.command!r}")
     return 2  # unreachable
+
+
+def _run_drift(args: argparse.Namespace) -> int:
+    """Delegate to the drift module's CLI implementation."""
+    from eval_harness.drift import cli as drift_cli
+
+    drift_argv = [
+        "--golden",
+        args.golden,
+        "--candidate",
+        args.candidate,
+        "--output",
+        args.output,
+        "--cluster-k",
+        str(args.cluster_k),
+    ]
+    if args.judge_stub:
+        drift_argv.append("--judge-stub")
+    return drift_cli(drift_argv)
 
 
 def _add_calibrate_args(parser: argparse.ArgumentParser) -> None:

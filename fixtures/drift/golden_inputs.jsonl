@@ -1,0 +1,20 @@
+{"input": "How do I configure shared_buffers in Postgres for an OLTP workload?"}
+{"input": "What is the difference between HNSW and IVFFlat in pgvector?"}
+{"input": "Explain how reciprocal rank fusion combines lexical and dense retrieval."}
+{"input": "Should I use cross-encoder reranking when my recall@5 is already 0.92?"}
+{"input": "Walk me through token cost telemetry for an Anthropic-backed RAG service."}
+{"input": "What are the tradeoffs between BM25 and dense retrieval for a legal corpus?"}
+{"input": "How do I write a retrieval eval harness that runs on every pull request?"}
+{"input": "Why does my Postgres query plan switch from bitmap heap to seq scan at 500k rows?"}
+{"input": "Describe a streaming response pattern with server-sent events from FastAPI."}
+{"input": "Compare faithfulness vs answer-correctness as RAG eval metrics."}
+{"input": "How should I structure a JSONL golden dataset for an LLM eval?"}
+{"input": "What is Jensen-Shannon divergence and when do I use it over KL divergence?"}
+{"input": "Walk me through pgvector HNSW parameter tuning (M, ef_construction, ef_search)."}
+{"input": "How does Anthropic prompt caching change the cost equation for retrieval?"}
+{"input": "Why does my embedding model perform worse on legal documents than on web text?"}
+{"input": "What does a 'sticky' PR comment look like for an eval-harness regression report?"}
+{"input": "How do I write a deterministic judge stub for hermetic CI without an API key?"}
+{"input": "Explain how reciprocal rank fusion's k constant affects fusion results."}
+{"input": "What are good thresholds for recall@5 and faithfulness on a production RAG?"}
+{"input": "Walk through a citation-enforcement contract for an LLM answer generator."}
