@@ -5,7 +5,11 @@ Subcommands:
   `docs/calibration_report.md`. Exits non-zero if Cohen's κ < threshold.
 - `run` — score a dataset, persist the run, optionally diff against a baseline.
   Exits non-zero when any row regresses beyond `--threshold-drop`.
-- `diff` — show the delta between two stored runs.
+- `diff` — show the delta between two stored runs (SQLite-backed history).
+- `diff-json` — diff two `RunResult` JSON files without SQLite (D-010). Used
+  by CI workflows where the action runner is ephemeral.
+- `comment` — render a delta JSON as markdown and upsert it as a sticky
+  comment on a PR (D-009).
 
 Other subcommands (`list`, drift) land with their own issues.
 """
@@ -18,6 +22,11 @@ import sys
 from pathlib import Path
 
 from eval_harness.calibration import calibrate, load_calibration, render_report
+from eval_harness.comment import (
+    STICKY_MARKER,
+    render_delta_markdown,
+    upsert_sticky_comment,
+)
 from eval_harness.judge import AnthropicBackend, Judge
 from eval_harness.runner import (
     DEFAULT_THRESHOLD_DROP,
@@ -25,6 +34,7 @@ from eval_harness.runner import (
     RunSpec,
     diff_runs,
     load_baseline,
+    load_run_result_from_json,
     render_delta_ascii,
     render_run_json,
     run_suite,
@@ -76,6 +86,32 @@ def main(argv: list[str] | None = None) -> int:
     diff_p.add_argument("--threshold-drop", type=float, default=DEFAULT_THRESHOLD_DROP)
     diff_p.add_argument("--format", choices=["ascii", "json"], default="ascii")
 
+    # `diff-json` is SQLite-free: takes two RunResult JSON files (the format
+    # `eval-harness run --out` writes) and emits a DeltaReport JSON, ascii
+    # table, or markdown. Used by CI where the action runner is ephemeral.
+    diff_json_p = sub.add_parser(
+        "diff-json", help="Diff two RunResult JSON files; no SQLite needed."
+    )
+    diff_json_p.add_argument("--current", required=True, help="Path to current RunResult JSON.")
+    diff_json_p.add_argument("--baseline", required=True, help="Path to baseline RunResult JSON.")
+    diff_json_p.add_argument("--threshold-drop", type=float, default=DEFAULT_THRESHOLD_DROP)
+    diff_json_p.add_argument("--format", choices=["ascii", "json", "markdown"], default="json")
+    diff_json_p.add_argument(
+        "--out", default=None, help="Write the rendered delta to this path (otherwise stdout)."
+    )
+
+    # `comment` upserts a sticky comment on a PR. `--delta-json` is the
+    # output of `diff-json --format json`.
+    comment_p = sub.add_parser("comment", help="Upsert a sticky PR comment from a delta JSON.")
+    comment_p.add_argument("--repo", required=True, help='GitHub repo in "owner/name" form.')
+    comment_p.add_argument("--pr", required=True, type=int, help="PR number to comment on.")
+    comment_p.add_argument("--delta-json", required=True, help="Path to a DeltaReport JSON.")
+    comment_p.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Render and print the markdown without calling the GitHub API.",
+    )
+
     args = parser.parse_args(argv)
     if args.command == "judge" and args.judge_command == "calibrate":
         return _run_calibrate(args)
@@ -83,6 +119,10 @@ def main(argv: list[str] | None = None) -> int:
         return _run_run(args)
     if args.command == "diff":
         return _run_diff(args)
+    if args.command == "diff-json":
+        return _run_diff_json(args)
+    if args.command == "comment":
+        return _run_comment(args)
     parser.error(f"unknown command {args.command!r}")
     return 2  # unreachable
 
@@ -167,5 +207,66 @@ def _run_diff(args: argparse.Namespace) -> int:
     return 1 if report.summary["n_flagged"] > 0 else 0
 
 
+def _run_diff_json(args: argparse.Namespace) -> int:
+    current = load_run_result_from_json(args.current)
+    baseline = load_run_result_from_json(args.baseline)
+    report = diff_runs(current, baseline, threshold_drop=args.threshold_drop)
+    if args.format == "json":
+        rendered = json.dumps(report.to_json(), indent=2, sort_keys=True) + "\n"
+    elif args.format == "markdown":
+        rendered = render_delta_markdown(report)
+    else:
+        rendered = render_delta_ascii(report)
+    if args.out:
+        Path(args.out).parent.mkdir(parents=True, exist_ok=True)
+        Path(args.out).write_text(rendered, encoding="utf-8")
+    else:
+        print(rendered, end="")
+    return 1 if report.summary["n_flagged"] > 0 else 0
+
+
+def _run_comment(args: argparse.Namespace) -> int:
+    # The delta JSON written by `diff-json --format json` is the
+    # DeltaReport.to_json() shape; reconstruct a minimal DeltaReport for
+    # rendering. We don't need the full object — just the fields the
+    # markdown renderer consults — so we accept a duck-typed shim.
+    raw = Path(args.delta_json).read_text(encoding="utf-8")
+    payload = json.loads(raw)
+    # Build a minimal report-shaped object the markdown renderer will accept.
+    from types import SimpleNamespace
+
+    rows = [
+        SimpleNamespace(
+            example_id=r["example_id"],
+            baseline_score=r.get("baseline_score"),
+            current_score=r.get("current_score"),
+            delta=r.get("delta"),
+            status=r["status"],
+            flagged=r.get("flagged", False),
+        )
+        for r in payload.get("rows", [])
+    ]
+    report_shim = SimpleNamespace(
+        current_run_id=payload.get("current_run_id", "current"),
+        baseline_run_id=payload.get("baseline_run_id", "baseline"),
+        suite=payload.get("suite", "(unknown)"),
+        threshold_drop=float(payload.get("threshold_drop", DEFAULT_THRESHOLD_DROP)),
+        rows=tuple(rows),
+        summary=payload.get("summary", {}),
+    )
+    body = render_delta_markdown(report_shim)  # type: ignore[arg-type]
+    if args.dry_run:
+        print(body, end="")
+        return 0
+    comment_id = upsert_sticky_comment(args.repo, args.pr, body)
+    print(f"upserted sticky comment id={comment_id} on {args.repo}#{args.pr}", file=sys.stderr)
+    return 0
+
+
 if __name__ == "__main__":
     sys.exit(main())
+
+
+# Re-export the sticky marker for tests that want to assert on it
+# without importing the inner `comment` module path.
+__all__ = ["main", "STICKY_MARKER"]

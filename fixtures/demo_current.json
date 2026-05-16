@@ -1,0 +1,18 @@
+{
+  "run_id": "demo_current_run_2026_05_16",
+  "started_at": "2026-05-16T03:30:00Z",
+  "suite": "demo-faithfulness",
+  "dataset_version": "demo-v0.1",
+  "judge_model": "claude-haiku-4-5-stub",
+  "judge_kappa": 0.71,
+  "mean_score": 0.79,
+  "n_rows": 5,
+  "git_sha": "demo-current-sha",
+  "rows": [
+    { "example_id": "qa_geography_01", "score": 0.97, "reasoning": "Same correct capital, slightly tighter phrasing." },
+    { "example_id": "qa_geometry_01", "score": 0.90, "reasoning": "Unchanged from baseline." },
+    { "example_id": "qa_history_01", "score": 0.55, "reasoning": "Year missing — flagged regression." },
+    { "example_id": "qa_factuality_01", "score": 0.78, "reasoning": "Citation slightly less specific (drop within threshold)." },
+    { "example_id": "qa_followup_01", "score": 0.65, "reasoning": "New row added in current run." }
+  ]
+}
