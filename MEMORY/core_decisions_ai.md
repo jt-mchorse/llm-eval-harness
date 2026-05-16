@@ -99,3 +99,21 @@
   reversibility: cheap
   related_issues: [#7]
   superseded_by: null
+
+- id: D-012
+  date: 2026-05-16
+  decision: pytest_plugin_parametrizes_via_pytest_generate_tests_not_collection_modifyitems
+  rationale: parametrize_path_works_with_pytest_k_collect_only_and_xdist_synthesizing_items_in_modifyitems_would_break_those_integrations
+  alternatives_rejected: [collection_modifyitems_full_ownership, custom_pytest_item_subclass, helper_function_called_from_each_test]
+  reversibility: cheap
+  related_issues: [#5]
+  superseded_by: null
+
+- id: D-013
+  date: 2026-05-16
+  decision: threshold_assertion_lives_in_pytest_pyfunc_call_hookwrapper_not_autouse_fixture_teardown
+  rationale: fixture_teardown_assertion_error_counts_as_test_error_not_test_failure_pytest_pyfunc_call_keeps_assertion_in_call_phase
+  alternatives_rejected: [autouse_fixture_with_pytest_fail_in_teardown, custom_runtest_method_on_a_subclassed_item, force_users_to_write_explicit_assert]
+  reversibility: cheap
+  related_issues: [#5]
+  superseded_by: null

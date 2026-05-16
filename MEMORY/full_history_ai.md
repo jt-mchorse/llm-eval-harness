@@ -108,3 +108,25 @@ context_for_next_session:
 decisions_made: [D-011]
 followups: []
 ---
+
+---
+session: 2026-05-16T15:53Z
+duration_min: 40
+issue: 5
+focus: pytest_plugin_evals_as_tests
+delta:
+  files_added: 2  # pytest_plugin.py, test_pytest_plugin.py
+  files_changed: 2  # pyproject.toml, README
+  tests_added: 6
+  test_pass_rate: "102/102"
+context_for_next_session:
+  - pytest_plugin_registered_via_pytest11_entry_point_marker_is_pytest_mark_eval
+  - parametrize_via_pytest_generate_tests_d_012_keeps_k_collect_only_xdist_working
+  - threshold_check_in_pytest_pyfunc_call_hookwrapper_d_013_so_failure_is_failed_not_error
+  - judge_score_fixture_caches_per_row_eval_row_fixture_carries_the_example
+  - autouse_ensure_judge_score_runs_forces_scoring_even_when_body_doesnt_reference_fixture
+  - empty_dataset_fails_collection_via_load_jsonl_own_contains_no_examples_error
+  - readme_quickstart_has_marker_example
+decisions_made: [D-012, D-013]
+followups: []
+---
