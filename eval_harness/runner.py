@@ -366,5 +366,32 @@ def render_delta_ascii(report: DeltaReport) -> str:
     return "\n".join(lines) + "\n"
 
 
+def load_run_result_from_json(path: str | Path) -> StoredRun:
+    """Read a `RunResult.to_json()` payload from disk; return as `StoredRun`.
+
+    `StoredRun` is the shape `diff_runs` consumes (`rows` is a dict keyed
+    by example_id). Doing the conversion here lets CI workflows diff two
+    JSON files without an intermediate SQLite — which is what #6's
+    GitHub Action needs since the action runner is ephemeral.
+    """
+    raw = Path(path).read_text(encoding="utf-8")
+    payload = json.loads(raw)
+    rows: dict[str, tuple[float, str]] = {}
+    for r in payload.get("rows", []):
+        rows[r["example_id"]] = (float(r["score"]), str(r.get("reasoning", "")))
+    return StoredRun(
+        run_id=payload["run_id"],
+        started_at=payload["started_at"],
+        suite=payload["suite"],
+        dataset_version=payload.get("dataset_version", ""),
+        judge_model=payload.get("judge_model"),
+        judge_kappa=payload.get("judge_kappa"),
+        mean_score=float(payload.get("mean_score", 0.0)),
+        n_rows=int(payload.get("n_rows", len(rows))),
+        git_sha=payload.get("git_sha"),
+        rows=rows,
+    )
+
+
 def render_run_json(result: RunResult) -> str:
     return json.dumps(result.to_json(), indent=2, sort_keys=True)

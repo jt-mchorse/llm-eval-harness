@@ -110,6 +110,34 @@ answers with another model's judge. The default `DatasetEchoSource`
 emits the example's first `expected_outputs.value` so the runner can
 be exercised hermetically before a real source is wired.
 
+### GitHub Action: sticky eval-delta comments on PRs (#6)
+
+The `eval` workflow (`.github/workflows/eval.yml`) runs on every PR
+and posts a single self-updating comment with the per-row Δ between
+`fixtures/demo_current.json` and `fixtures/demo_baseline.json`. The
+comment is identified by a hidden HTML marker
+(`<!-- eval-harness:sticky-comment -->`) so it's edited in place on
+every push — no duplicates pile up across the PR's lifetime (D-009).
+
+Downstream repos that import `eval-harness` use the same two CLI
+steps in their own workflow:
+
+```yaml
+- run: eval-harness diff-json \
+    --current  results/current.json \
+    --baseline fixtures/main-baseline.json \
+    --format json --out /tmp/delta.json
+- run: eval-harness comment \
+    --repo ${{ github.repository }} \
+    --pr   ${{ github.event.pull_request.number }} \
+    --delta-json /tmp/delta.json
+  env: { GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} }
+```
+
+`diff-json` is SQLite-free (D-010) — it diffs two `RunResult` JSON
+files produced by `eval-harness run --out`. Action runners are
+ephemeral; making the diff a pure JSON operation matches that.
+
 ## Calibration
 
 The calibration set is **50 rows** of `(prompt, response, human_score)`

@@ -1,0 +1,18 @@
+{
+  "run_id": "demo_baseline_run_2026_05_15",
+  "started_at": "2026-05-15T10:00:00Z",
+  "suite": "demo-faithfulness",
+  "dataset_version": "demo-v0.1",
+  "judge_model": "claude-haiku-4-5-stub",
+  "judge_kappa": 0.72,
+  "mean_score": 0.84,
+  "n_rows": 5,
+  "git_sha": "demo-baseline-sha",
+  "rows": [
+    { "example_id": "qa_geography_01", "score": 0.95, "reasoning": "Capital named correctly." },
+    { "example_id": "qa_geometry_01", "score": 0.90, "reasoning": "Polygon side count correct." },
+    { "example_id": "qa_history_01", "score": 0.80, "reasoning": "Year present and bolded." },
+    { "example_id": "qa_factuality_01", "score": 0.85, "reasoning": "Citation included." },
+    { "example_id": "qa_summarize_01", "score": 0.70, "reasoning": "Summary covers key points." }
+  ]
+}

@@ -108,3 +108,31 @@ Strategic decisions for this repo, with reasoning. Append-only — superseded de
 **Reversibility:** Cheap. Two `CREATE TABLE` statements; export/import is a `.dump` away.
 
 **Related issues:** #3, #4 (drift detection consumes this), #6 (GitHub Action persists CI runs here)
+
+## D-009 — Sticky PR comment identified by hidden HTML marker, not author/title (2026-05-16)
+**Decision:** The eval-harness PR-comment workflow uses a hidden `<!-- eval-harness:sticky-comment -->` HTML marker embedded in the comment body to find its prior comment when upserting. Matching is "marker substring appears in body"; first-match wins. The bot does *not* identify its prior comments by author name or by title parsing.
+
+**Why:** Marker-based identity survives bot renames, token rotations, the same action running from multiple repos under different bot identities, and even a human editing the comment first. Title or author matching breaks under any of those. The downside — someone could spoof the marker in their own comment — is accepted: spoofing is a deliberate prank, not a security failure, and the worst case is "the bot edits the wrong comment", which is reversible.
+
+**Alternatives considered:**
+- Match on comment author username — rejected: changes when the token rotates; fails across orgs.
+- Match on title/heading prefix — rejected: titles can be edited; markdown rendering varies.
+- Locked-thread metadata — rejected: GitHub doesn't expose per-comment metadata to non-Marketplace apps.
+
+**Reversibility:** Cheap. The marker is a single constant in `eval_harness/comment.py`.
+
+**Related issues:** #6
+
+## D-010 — `diff-json` operates on RunResult JSON files, not SQLite (2026-05-16)
+**Decision:** A new CLI subcommand `eval-harness diff-json --current X.json --baseline Y.json` diffs two JSON files (the format `eval-harness run --out` writes) and emits a `DeltaReport` in JSON, ascii, or markdown. It does not read or write SQLite.
+
+**Why:** CI action runners are ephemeral. The existing `eval-harness diff` requires both runs to live in local SQLite — fine for a developer's machine, useless in an Action job. Splitting the diff is cheaper than threading "use this DB" / "use these files" through one subcommand because the two paths actually serve different use cases (dev-time history-vs-history, CI-time current-vs-committed-baseline). Both share the same `diff_runs(current, baseline)` core so semantics can't drift.
+
+**Alternatives considered:**
+- Persist runs to SQLite in the action then call `diff` — rejected: the ephemeral runner means SQLite has to be uploaded as an artifact and downloaded next run; much more plumbing than diffing two committed JSON files.
+- Ship the SQLite DB as a workflow artifact — rejected: storage cost + same plumbing burden.
+- Re-extract via GitHub API on each run — rejected: requires Marketplace permissions and a network hop.
+
+**Reversibility:** Cheap. The new subcommand is ~30 lines of plumbing on top of the shared `diff_runs` core.
+
+**Related issues:** #6, #7

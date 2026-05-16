@@ -1,0 +1,62 @@
+# Eval delta on PRs (issue #6).
+#
+# Diffs the committed `fixtures/demo_current.json` against
+# `fixtures/demo_baseline.json` and posts a sticky comment to the PR
+# under the `<!-- eval-harness:sticky-comment -->` marker.
+#
+# What this PR ships is the *plumbing* — the diff-and-comment surface.
+# Downstream consumers (rag-production-kit, agent-orchestration-platform,
+# llm-cost-optimizer) wire their own real eval runs in their own
+# workflows and call `eval-harness comment` to post the sticky.
+#
+# Why fixtures instead of a real LLM call here: the action runner has
+# no `ANTHROPIC_API_KEY` budget allocated, and even if it did the
+# demo's value isn't "real eval at every PR" — it's "the sticky
+# comment workflow renders cleanly". Real-LLM runs land in repos that
+# actually use this package against a real model.
+
+name: eval
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  eval-comment:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install eval_harness
+        run: pip install -e .
+      - name: Diff demo fixtures
+        run: |
+          eval-harness diff-json \
+            --current fixtures/demo_current.json \
+            --baseline fixtures/demo_baseline.json \
+            --format json \
+            --out /tmp/delta.json \
+            || echo "diff-json exited non-zero (regression flagged) — continuing to post comment"
+      - name: Render markdown (preview in logs)
+        # Same non-zero-on-regression behavior as diff-json's exit code;
+        # the comment step runs unconditionally below so the preview's
+        # rc doesn't gate posting.
+        run: |
+          eval-harness diff-json \
+            --current fixtures/demo_current.json \
+            --baseline fixtures/demo_baseline.json \
+            --format markdown \
+            || echo "(preview exited non-zero — regression flagged — continuing)"
+      - name: Upsert sticky PR comment
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          eval-harness comment \
+            --repo ${{ github.repository }} \
+            --pr ${{ github.event.pull_request.number }} \
+            --delta-json /tmp/delta.json
