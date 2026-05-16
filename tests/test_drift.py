@@ -225,7 +225,9 @@ def test_cli_writes_html_and_returns_zero(tmp_path: Path, capsys: pytest.Capture
     assert "judge=" in captured.out
 
 
-def test_cli_runs_without_judge_when_flag_not_set(tmp_path: Path, capsys: pytest.CaptureFixture[str]):
+def test_cli_runs_without_judge_when_flag_not_set(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+):
     out = tmp_path / "report.html"
     rc = cli(
         [

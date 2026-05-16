@@ -179,10 +179,14 @@ def _run_drift(args: argparse.Namespace) -> int:
     from eval_harness.drift import cli as drift_cli
 
     drift_argv = [
-        "--golden", args.golden,
-        "--candidate", args.candidate,
-        "--output", args.output,
-        "--cluster-k", str(args.cluster_k),
+        "--golden",
+        args.golden,
+        "--candidate",
+        args.candidate,
+        "--output",
+        args.output,
+        "--cluster-k",
+        str(args.cluster_k),
     ]
     if args.judge_stub:
         drift_argv.append("--judge-stub")

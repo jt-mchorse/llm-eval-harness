@@ -343,6 +343,7 @@ def compute_drift(
     c_vecs = [hash_embed(s, dim=embedding_dim) for s in candidate_inputs]
     centroids, _ = _kmeans(g_vecs, cluster_k)
     if centroids:
+
         def _assign(v: Sequence[float]) -> int:
             best = 0
             best_sim = -2.0
@@ -409,7 +410,9 @@ def compute_drift(
         for v, text in zip(c_vecs, candidate_inputs, strict=True):
             nearest_sim = max(_cosine(v, c) for c in centroids)
             examples.append(
-                RepresentativeExample(text=text, distance_to_nearest_golden_cluster=1.0 - nearest_sim)
+                RepresentativeExample(
+                    text=text, distance_to_nearest_golden_cluster=1.0 - nearest_sim
+                )
             )
         examples.sort(key=lambda r: r.distance_to_nearest_golden_cluster, reverse=True)
         examples = examples[:n_representative_examples]
@@ -491,7 +494,7 @@ def _bar_chart_svg(
         )
     parts.append(
         f'<text x="{width - 30}" y="{margin_t + 8}" text-anchor="end" font-size="9" fill="#666">'
-        'golden / candidate</text>'
+        "golden / candidate</text>"
     )
     parts.append("</svg>")
     return "".join(parts)
@@ -525,7 +528,7 @@ def render_html(report: DriftReport) -> str:
             list(report.judge_stats[0].bucket_counts),
             list(report.judge_stats[1].bucket_counts),
         )
-        judge_block = f'<h2>Judge axis</h2>{judge_svg}'
+        judge_block = f"<h2>Judge axis</h2>{judge_svg}"
 
     examples_rows = "\n".join(
         f"<tr><td>{r.distance_to_nearest_golden_cluster:.3f}</td>"
@@ -534,14 +537,14 @@ def render_html(report: DriftReport) -> str:
     )
     if report.judge is not None:
         judge_row = (
-            f'<tr><td>judge</td><td>{report.judge.drift_score:.4f}</td>'
-            f'<td>{report.judge.threshold}</td>'
+            f"<tr><td>judge</td><td>{report.judge.drift_score:.4f}</td>"
+            f"<td>{report.judge.threshold}</td>"
             f'<td class="status-{report.judge.status}">{report.judge.status}</td>'
-            f'<td>{html.escape(report.judge.detail)}</td></tr>'
+            f"<td>{html.escape(report.judge.detail)}</td></tr>"
         )
     else:
         judge_row = (
-            '<tr><td>judge</td>'
+            "<tr><td>judge</td>"
             '<td colspan="4" style="color:#999">no judge_score_fn supplied; axis skipped</td></tr>'
         )
 
@@ -550,43 +553,43 @@ def render_html(report: DriftReport) -> str:
     )
     return (
         '<!doctype html><html lang="en"><head><meta charset="utf-8">'
-        '<title>eval-harness drift report</title>'
-        '<style>'
-        'body{font-family:-apple-system,BlinkMacSystemFont,system-ui,sans-serif;'
-        'max-width:720px;margin:24px auto;padding:0 16px;color:#222}'
-        'h1{font-size:20px}h2{font-size:13px;color:#555;margin-top:18px}'
-        'table{width:100%;border-collapse:collapse;font-size:12px;margin-top:8px}'
-        'th,td{text-align:left;padding:6px 8px;border-bottom:1px solid #eee}'
-        'th{background:#fafafa}.status-ok{color:#1f8848;font-weight:600}'
-        '.status-drifted{color:#b04127;font-weight:600}'
-        '</style></head><body>'
-        f'<h1>Drift report — {report.n_golden} golden vs {report.n_candidate} candidate inputs</h1>'
-        '<table>'
-        '<thead><tr><th>Axis</th><th>Drift (JSD)</th><th>Threshold</th><th>Status</th><th>Detail</th></tr></thead>'
-        '<tbody>'
-        f'<tr><td>length</td><td>{report.length.drift_score:.4f}</td>'
-        f'<td>{report.length.threshold}</td>'
+        "<title>eval-harness drift report</title>"
+        "<style>"
+        "body{font-family:-apple-system,BlinkMacSystemFont,system-ui,sans-serif;"
+        "max-width:720px;margin:24px auto;padding:0 16px;color:#222}"
+        "h1{font-size:20px}h2{font-size:13px;color:#555;margin-top:18px}"
+        "table{width:100%;border-collapse:collapse;font-size:12px;margin-top:8px}"
+        "th,td{text-align:left;padding:6px 8px;border-bottom:1px solid #eee}"
+        "th{background:#fafafa}.status-ok{color:#1f8848;font-weight:600}"
+        ".status-drifted{color:#b04127;font-weight:600}"
+        "</style></head><body>"
+        f"<h1>Drift report — {report.n_golden} golden vs {report.n_candidate} candidate inputs</h1>"
+        "<table>"
+        "<thead><tr><th>Axis</th><th>Drift (JSD)</th><th>Threshold</th><th>Status</th><th>Detail</th></tr></thead>"
+        "<tbody>"
+        f"<tr><td>length</td><td>{report.length.drift_score:.4f}</td>"
+        f"<td>{report.length.threshold}</td>"
         f'<td class="status-{report.length.status}">{report.length.status}</td>'
-        f'<td>{html.escape(report.length.detail)}</td></tr>'
-        f'<tr><td>embedding</td><td>{report.embedding.drift_score:.4f}</td>'
-        f'<td>{report.embedding.threshold}</td>'
+        f"<td>{html.escape(report.length.detail)}</td></tr>"
+        f"<tr><td>embedding</td><td>{report.embedding.drift_score:.4f}</td>"
+        f"<td>{report.embedding.threshold}</td>"
         f'<td class="status-{report.embedding.status}">{report.embedding.status}</td>'
-        f'<td>{html.escape(report.embedding.detail)}</td></tr>'
-        f'{judge_row}'
-        '</tbody></table>'
-        f'<h2>Length axis</h2>{length_svg}'
-        f'<h2>Embedding cluster axis</h2>{cluster_svg}'
-        f'{judge_block}'
-        '<h2>Most distant candidate inputs from any golden cluster centroid</h2>'
-        '<table><thead><tr><th>Distance</th><th>Text</th></tr></thead><tbody>'
-        f'{examples_rows or empty_examples_row}'
-        '</tbody></table>'
+        f"<td>{html.escape(report.embedding.detail)}</td></tr>"
+        f"{judge_row}"
+        "</tbody></table>"
+        f"<h2>Length axis</h2>{length_svg}"
+        f"<h2>Embedding cluster axis</h2>{cluster_svg}"
+        f"{judge_block}"
+        "<h2>Most distant candidate inputs from any golden cluster centroid</h2>"
+        "<table><thead><tr><th>Distance</th><th>Text</th></tr></thead><tbody>"
+        f"{examples_rows or empty_examples_row}"
+        "</tbody></table>"
         '<p style="color:#888;font-size:11px;margin-top:18px">'
-        'Drift score is Jensen-Shannon divergence (base-2, bounded in [0, 1]) between '
-        'golden and candidate histograms on each axis (D-014). Drift &gt; threshold is the '
+        "Drift score is Jensen-Shannon divergence (base-2, bounded in [0, 1]) between "
+        "golden and candidate histograms on each axis (D-014). Drift &gt; threshold is the "
         "operator's signal to look at the representative examples and decide whether to "
-        're-baseline or investigate.</p>'
-        '</body></html>'
+        "re-baseline or investigate.</p>"
+        "</body></html>"
     )
 
 
@@ -616,9 +619,7 @@ def _load_inputs_jsonl(path: Path) -> list[str]:
                     out.append(val)
                     break
             else:
-                raise ValueError(
-                    f"{path}:{lineno}: object row missing input/prompt/text: {row!r}"
-                )
+                raise ValueError(f"{path}:{lineno}: object row missing input/prompt/text: {row!r}")
         else:
             raise ValueError(f"{path}:{lineno}: row is not a string or object: {row!r}")
     if not out:
