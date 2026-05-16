@@ -90,3 +90,12 @@
   reversibility: cheap
   related_issues: [6, 7]
   superseded_by: null
+
+- id: D-011
+  date: 2026-05-16
+  decision: top_level_calibrate_subcommand_with_judge_calibrate_kept_as_hidden_alias
+  rationale: issue_7_public_surface_is_run_list_calibrate_diff_but_judge_calibrate_existed_first_breaking_existing_scripts_buys_nothing
+  alternatives_rejected: [remove_judge_calibrate_entirely, keep_only_judge_calibrate_and_close_issue_7_as_naming_disagreement, alias_via_argparse_aliases_kwarg_loses_per_alias_help]
+  reversibility: cheap
+  related_issues: [#7]
+  superseded_by: null

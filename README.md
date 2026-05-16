@@ -104,6 +104,19 @@ with `--db`); two tables, `runs` and `rows`, with a foreign key from
 `rows` to `runs`. `eval-harness diff --current <run_id> --baseline
 <run_id>` is also exposed for comparing any two specific runs.
 
+`eval-harness list` shows the most recent runs from the same DB:
+
+```bash
+$ eval-harness list --limit 5
+started_at            run_id        suite         mean   rows  judge_model
+--------------------  ------------  ------------  -----  ----  -----------
+2026-05-16T08:42:00Z  a1b2c3d4e5f6  faithfulness  0.910  8     claude-haiku-4-5
+2026-05-15T19:15:00Z  9f8e7d6c5b4a  faithfulness  0.895  8     claude-haiku-4-5
+...
+```
+
+Pass `--suite <name>` to filter, `--json` for machine output.
+
 A separate `AnswerSource` Protocol (D-007) is the *model under test* —
 distinct from the judge model so the runner can score one model's
 answers with another model's judge. The default `DatasetEchoSource`

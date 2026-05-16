@@ -32,6 +32,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS runs (
@@ -215,3 +216,62 @@ def latest_run_id_for_suite(
         )
     row = cur.fetchone()
     return row[0] if row else None
+
+
+@dataclass(frozen=True)
+class RunSummary:
+    """One row from `list_runs`: the aggregate fields, no per-example rows."""
+
+    run_id: str
+    started_at: str
+    suite: str
+    dataset_version: str
+    judge_model: str | None
+    judge_kappa: float | None
+    mean_score: float
+    n_rows: int
+    git_sha: str | None
+
+
+def list_runs(
+    conn: sqlite3.Connection,
+    *,
+    limit: int = 20,
+    suite: str | None = None,
+) -> list[RunSummary]:
+    """Return up to `limit` most-recent runs, optionally filtered by suite.
+
+    Sorted by `started_at` descending. Used by the `eval-harness list`
+    CLI subcommand (#7). Rows are loaded into a list (not yielded) because
+    consumers always print or serialize the full set; streaming buys
+    nothing at typical history sizes (<= a few thousand runs per DB).
+    """
+    if limit <= 0:
+        raise ValueError(f"limit must be positive, got {limit}")
+    query = (
+        "SELECT run_id, started_at, suite, dataset_version, judge_model, "
+        "       judge_kappa, mean_score, n_rows, git_sha "
+        "FROM runs"
+    )
+    params: tuple[Any, ...]
+    if suite is None:
+        query += " ORDER BY started_at DESC LIMIT ?;"
+        params = (limit,)
+    else:
+        query += " WHERE suite = ? ORDER BY started_at DESC LIMIT ?;"
+        params = (suite, limit)
+    cur = conn.execute(query, params)
+    return [
+        RunSummary(
+            run_id=row[0],
+            started_at=row[1],
+            suite=row[2],
+            dataset_version=row[3],
+            judge_model=row[4],
+            judge_kappa=row[5],
+            mean_score=row[6],
+            n_rows=row[7],
+            git_sha=row[8],
+        )
+        for row in cur
+    ]

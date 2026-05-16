@@ -136,3 +136,17 @@ Strategic decisions for this repo, with reasoning. Append-only — superseded de
 **Reversibility:** Cheap. The new subcommand is ~30 lines of plumbing on top of the shared `diff_runs` core.
 
 **Related issues:** #6, #7
+
+## D-011 — Top-level `calibrate` subcommand with `judge calibrate` kept as hidden alias (2026-05-16)
+**Decision:** The `eval-harness` CLI exposes `calibrate` as a top-level subcommand alongside `run`, `list`, and `diff` (the four-subcommand contract from issue #7). The pre-existing `judge calibrate` (nested form) stays callable and routes into the same handler. The nested form is not documented in the new README quickstart but is still mentioned in the module docstring as the legacy alias.
+
+**Why:** Issue #7's body lists the public surface as `run / list / calibrate / diff`. The repo shipped `judge calibrate` first because the calibration loop was the only thing the `judge` parent then exposed (the assumption was the `judge` namespace would grow more peers). It didn't, and the nesting forces `eval-harness judge calibrate` instead of `eval-harness calibrate` for what's a top-level concern. Removing the nested form entirely would break any consumer script or CI snippet that already invokes it — a free correction with zero upside.
+
+**Alternatives considered:**
+- Remove `judge calibrate` entirely — rejected; pure churn for downstreams.
+- Keep only `judge calibrate` and close #7 as "naming disagreement" — rejected; the issue's public-surface contract is the part that matters and the nested form is unfriendly.
+- Use `argparse.add_subparsers(aliases=...)` — `argparse` aliases share `--help` text, which makes the legacy form's separate semantics harder to document; the duplicated parser is two lines of code and clearer.
+
+**Reversibility:** Cheap. The legacy alias is two `if` clauses in `main()`; removing it after a deprecation cycle is a one-line edit. If a future minor version deprecates it, the deprecation can be a `print_to_stderr` from inside `_run_calibrate` when `args.command == "judge"`.
+
+**Related issues:** #7
