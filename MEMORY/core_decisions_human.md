@@ -150,3 +150,31 @@ Strategic decisions for this repo, with reasoning. Append-only — superseded de
 **Reversibility:** Cheap. The legacy alias is two `if` clauses in `main()`; removing it after a deprecation cycle is a one-line edit. If a future minor version deprecates it, the deprecation can be a `print_to_stderr` from inside `_run_calibrate` when `args.command == "judge"`.
 
 **Related issues:** #7
+
+## D-012 — Pytest plugin parametrizes via `pytest_generate_tests`, not collection_modifyitems (2026-05-16)
+**Decision:** `@pytest.mark.eval(...)` tests are expanded one-item-per-row using pytest's `pytest_generate_tests` hook + `metafunc.parametrize()`. The plugin does NOT synthesize new test items in `pytest_collection_modifyitems`.
+
+**Why:** The parametrize seam is what `pytest -k`, `--collect-only`, pytest-xdist (parallel runners), and pytest's per-item caching all hook into. Synthesizing items in `modifyitems` would have given the plugin tighter control over the item's lifecycle but at the cost of breaking those integrations — `pytest -k qa_001` would no longer single out a row by id, and xdist's work-stealing wouldn't see the items at collection time. The parametrize path is also the documented extension point pytest itself recommends for "one test, many inputs."
+
+**Alternatives considered:**
+- Full ownership in `pytest_collection_modifyitems` — rejected; breaks `-k`, `--collect-only`, xdist.
+- Custom `Item` subclass — rejected; same brittle integration problem as modifyitems, plus more pluggy surface.
+- Helper function called from each test (no parametrize) — rejected; the issue's acceptance criterion is "each eval row becomes a test", which means one pytest item per row, not one item that internally loops.
+
+**Reversibility:** Cheap. If a future feature needs the modifyitems path (e.g., dynamic discovery of eval files), the plugin can grow a second hook while keeping the parametrize path.
+
+**Related issues:** #5
+
+## D-013 — Threshold assertion lives in `pytest_pyfunc_call` hookwrapper, not autouse fixture teardown (2026-05-16)
+**Decision:** The "score < threshold → fail" assertion is enforced inside a `pytest_pyfunc_call` hookwrapper (a "call-phase" hook). The earlier draft used an autouse fixture with the assertion after `yield` (teardown phase), and this was changed.
+
+**Why:** pytest classifies test outcomes by *phase*: failures in the `call` phase are reported as `failed`; failures in `setup` or `teardown` are reported as `error`. An eval row that misses its threshold is a *test failure* — not a setup error or a teardown error — and should look like one in pytest output, in CI summaries, and in `--last-failed` reruns. The hookwrapper runs the user's test body, then runs the threshold check, then raises if the score is too low — all inside the call phase.
+
+**Alternatives considered:**
+- Autouse fixture with `pytest.fail` in teardown — rejected; pytest still reports it as an `error`, not a `failed`.
+- Custom `runtest` method on a subclassed `pytest.Item` — rejected; couples the plugin to pytest's internal Item lifecycle and breaks the modifyitems alternative cleanly.
+- Force users to write `assert score >= threshold` themselves — rejected; the issue says "the plugin asserts the threshold automatically", and a marker that's only inert without a hand-rolled assertion is half a feature.
+
+**Reversibility:** Cheap. The hookwrapper is one function; switching to a different enforcement seam is a localized rewrite.
+
+**Related issues:** #5
