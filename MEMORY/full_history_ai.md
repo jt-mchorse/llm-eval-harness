@@ -87,3 +87,24 @@ context_for_next_session:
 decisions_made: [D-009, D-010]
 followups: []
 ---
+
+---
+session: 2026-05-16T15:45Z
+duration_min: 30
+issue: 7
+focus: cli_list_subcommand_calibrate_alias_macos_ci_matrix
+delta:
+  files_added: 1  # tests/test_cli_list.py
+  files_changed: 4  # cli.py, runs.py, ci.yml, README
+  tests_added: 9
+  test_pass_rate: "105/105"
+context_for_next_session:
+  - list_runs_helper_in_runs_py_returns_runsummary_list
+  - eval_harness_list_subcommand_text_table_default_json_via_flag
+  - calibrate_promoted_to_top_level_judge_calibrate_kept_as_hidden_alias_d_011
+  - ci_test_matrix_now_os_ubuntu_macos_x_python_3_11_3_12_4_cells
+  - cli_smoke_step_exercises_help_on_four_public_subcommands_per_cell
+  - readme_quickstart_has_list_example_with_rendered_table
+decisions_made: [D-011]
+followups: []
+---
