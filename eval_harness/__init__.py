@@ -4,7 +4,9 @@ Public surface:
 - Dataset layer (#1, shipped): versioned JSONL goldens with line-number errors.
 - Judge wrapper (#2, shipped): LLM-as-judge with calibration against human labels.
 - Regression runner (#3, shipped): SQLite-backed run history + per-run diffs.
-- Drift detection (#4), pytest plugin (#5), GitHub Action (#6) — separate issues.
+- Drift detection (#4, shipped): three-axis drift (length / embedding / judge)
+  scored via Jensen-Shannon divergence with an HTML report.
+- pytest plugin (#5, shipped), GitHub Action (#6, shipped), CLI surface (#7, shipped).
 """
 
 from eval_harness.calibration import (
@@ -24,6 +26,23 @@ from eval_harness.dataset import (
     Example,
     ExpectedOutput,
     load_jsonl,
+)
+from eval_harness.drift import (
+    DEFAULT_EMBEDDING_THRESHOLD,
+    DEFAULT_JUDGE_THRESHOLD,
+    DEFAULT_LENGTH_THRESHOLD,
+    AxisReport,
+    ClusterStats,
+    DriftReport,
+    JudgeStats,
+    LengthStats,
+    RepresentativeExample,
+    compute_drift,
+    hash_embed,
+    jensen_shannon,
+)
+from eval_harness.drift import (
+    render_html as render_drift_html,
 )
 from eval_harness.judge import (
     FAITHFULNESS_RUBRIC,
@@ -68,6 +87,20 @@ __all__ = [
     "Example",
     "ExpectedOutput",
     "load_jsonl",
+    # Drift
+    "AxisReport",
+    "ClusterStats",
+    "DEFAULT_EMBEDDING_THRESHOLD",
+    "DEFAULT_JUDGE_THRESHOLD",
+    "DEFAULT_LENGTH_THRESHOLD",
+    "DriftReport",
+    "JudgeStats",
+    "LengthStats",
+    "RepresentativeExample",
+    "compute_drift",
+    "hash_embed",
+    "jensen_shannon",
+    "render_drift_html",
     # Judge
     "AnthropicBackend",
     "Backend",
