@@ -19,10 +19,14 @@ jobs:
       - run: ruff format --check .
 
   test:
-    runs-on: ubuntu-latest
+    # Issue #7 acceptance criterion: tested on macOS and ubuntu-latest.
+    # Python matrix kept so the CLI typing stays compatible across the
+    # versions consumers run.
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
+        os: [ubuntu-latest, macos-latest]
         python: ["3.11", "3.12"]
     steps:
       - uses: actions/checkout@v4
@@ -31,6 +35,16 @@ jobs:
           python-version: ${{ matrix.python }}
       - run: pip install -e '.[dev]'
       - run: pytest --cov=eval_harness --cov-report=term
+      # Smoke-test the CLI itself is callable and the four public
+      # subcommands surface in --help — matches the "CLI installed as
+      # console_script" + "complete --help" acceptance criteria.
+      - name: CLI smoke
+        run: |
+          eval-harness --help
+          eval-harness run --help
+          eval-harness list --help
+          eval-harness calibrate --help
+          eval-harness diff --help
 
   memory-check:
     runs-on: ubuntu-latest

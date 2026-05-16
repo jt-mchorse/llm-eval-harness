@@ -1,17 +1,20 @@
 """`eval-harness` CLI entry point.
 
-Subcommands:
-- `judge calibrate` — runs the judge over `fixtures/calibration.jsonl` and writes
-  `docs/calibration_report.md`. Exits non-zero if Cohen's κ < threshold.
+Public subcommands (issue #7 contract — `run / list / calibrate / diff`):
 - `run` — score a dataset, persist the run, optionally diff against a baseline.
   Exits non-zero when any row regresses beyond `--threshold-drop`.
+- `list` — show the most-recent N runs from the SQLite history. `--suite`
+  filters, `--json` switches to machine output.
+- `calibrate` — run the judge over `fixtures/calibration.jsonl` and write
+  `docs/calibration_report.md`. Exits non-zero if Cohen's κ < threshold.
+  `judge calibrate` remains as a hidden nested alias for backwards compat.
 - `diff` — show the delta between two stored runs (SQLite-backed history).
+
+Plus two consumer-workflow subcommands:
 - `diff-json` — diff two `RunResult` JSON files without SQLite (D-010). Used
   by CI workflows where the action runner is ephemeral.
 - `comment` — render a delta JSON as markdown and upsert it as a sticky
   comment on a PR (D-009).
-
-Other subcommands (`list`, drift) land with their own issues.
 """
 
 from __future__ import annotations
@@ -39,7 +42,7 @@ from eval_harness.runner import (
     render_run_json,
     run_suite,
 )
-from eval_harness.runs import connect, init_db_on, read_run
+from eval_harness.runs import RunSummary, connect, init_db_on, list_runs, read_run
 
 DEFAULT_DB_PATH = Path.home() / ".eval-harness" / "runs.db"
 
@@ -52,13 +55,33 @@ def main(argv: list[str] | None = None) -> int:
 
     judge_p = sub.add_parser("judge", help="Judge-related subcommands.")
     judge_sub = judge_p.add_subparsers(dest="judge_command", required=True)
-    calibrate_p = judge_sub.add_parser(
+    judge_calibrate_p = judge_sub.add_parser(
         "calibrate", help="Run the judge over the calibration set and write the report."
     )
-    calibrate_p.add_argument("--calibration", default="fixtures/calibration.jsonl")
-    calibrate_p.add_argument("--report", default="docs/calibration_report.md")
-    calibrate_p.add_argument("--model", default=None)
-    calibrate_p.add_argument("--threshold-kappa", type=float, default=0.6)
+    _add_calibrate_args(judge_calibrate_p)
+
+    # Top-level `calibrate` — equivalent to `judge calibrate`. The judge-
+    # nested form stays as a hidden alias for backwards compat with scripts
+    # that already invoke it. Issue #7 asks for `run/list/calibrate/diff`
+    # as the public surface; this brings the CLI tree in line.
+    calibrate_p = sub.add_parser(
+        "calibrate", help="Run the judge over the calibration set and write the report."
+    )
+    _add_calibrate_args(calibrate_p)
+
+    # List recent runs from the SQLite history (#7).
+    list_p = sub.add_parser("list", help="Show the most recent runs from the SQLite history.")
+    list_p.add_argument("--db", default=str(DEFAULT_DB_PATH), help="SQLite path for run history.")
+    list_p.add_argument(
+        "--limit", type=int, default=20, help="Maximum number of runs to show (default 20)."
+    )
+    list_p.add_argument("--suite", default=None, help="Filter by suite name (default: all suites).")
+    list_p.add_argument(
+        "--json",
+        action="store_true",
+        dest="as_json",
+        help="Emit a JSON array instead of the human-readable text table.",
+    )
 
     run_p = sub.add_parser(
         "run", help="Score a dataset, persist the run, optionally diff a baseline."
@@ -115,8 +138,12 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.command == "judge" and args.judge_command == "calibrate":
         return _run_calibrate(args)
+    if args.command == "calibrate":
+        return _run_calibrate(args)
     if args.command == "run":
         return _run_run(args)
+    if args.command == "list":
+        return _run_list(args)
     if args.command == "diff":
         return _run_diff(args)
     if args.command == "diff-json":
@@ -125,6 +152,18 @@ def main(argv: list[str] | None = None) -> int:
         return _run_comment(args)
     parser.error(f"unknown command {args.command!r}")
     return 2  # unreachable
+
+
+def _add_calibrate_args(parser: argparse.ArgumentParser) -> None:
+    """Shared `--calibration / --report / --model / --threshold-kappa` set.
+
+    Used by both `judge calibrate` (legacy nested form) and the top-level
+    `calibrate` subcommand (#7) so the two surfaces stay in sync.
+    """
+    parser.add_argument("--calibration", default="fixtures/calibration.jsonl")
+    parser.add_argument("--report", default="docs/calibration_report.md")
+    parser.add_argument("--model", default=None)
+    parser.add_argument("--threshold-kappa", type=float, default=0.6)
 
 
 def _run_calibrate(args: argparse.Namespace) -> int:
@@ -261,6 +300,87 @@ def _run_comment(args: argparse.Namespace) -> int:
     comment_id = upsert_sticky_comment(args.repo, args.pr, body)
     print(f"upserted sticky comment id={comment_id} on {args.repo}#{args.pr}", file=sys.stderr)
     return 0
+
+
+def _run_list(args: argparse.Namespace) -> int:
+    """List recent runs from the SQLite history.
+
+    Default output is a fixed-width text table sized to the longest
+    run_id present; ``--json`` emits a JSON array instead. An empty DB
+    is not an error — prints "no runs" (text) or "[]" (json) and exits 0.
+    """
+    db_path = Path(args.db)
+    if not db_path.exists():
+        # No DB on disk yet — equivalent to no runs. Don't auto-create
+        # here (init_db is what `run` does); avoid the side effect.
+        if args.as_json:
+            print("[]")
+        else:
+            print(f"# no runs (no database at {db_path})")
+        return 0
+
+    with connect(db_path) as conn:
+        init_db_on(conn)  # idempotent; safe even if the file already has the schema
+        runs = list_runs(conn, limit=args.limit, suite=args.suite)
+
+    if args.as_json:
+        print(json.dumps([_run_summary_to_json(r) for r in runs], indent=2))
+        return 0
+
+    if not runs:
+        if args.suite is not None:
+            print(f"# no runs for suite {args.suite!r}")
+        else:
+            print("# no runs")
+        return 0
+
+    print(_render_runs_table(runs))
+    return 0
+
+
+def _run_summary_to_json(r: RunSummary) -> dict[str, object]:
+    return {
+        "run_id": r.run_id,
+        "started_at": r.started_at,
+        "suite": r.suite,
+        "dataset_version": r.dataset_version,
+        "judge_model": r.judge_model,
+        "judge_kappa": r.judge_kappa,
+        "mean_score": r.mean_score,
+        "n_rows": r.n_rows,
+        "git_sha": r.git_sha,
+    }
+
+
+def _render_runs_table(runs: list[RunSummary]) -> str:
+    """Fixed-width text table for `eval-harness list` default output.
+
+    Columns: started_at, run_id (truncated to 12), suite, mean_score,
+    n_rows, judge_model. Widths sized from the widest cell so the table
+    fits whatever the actual history looks like.
+    """
+    rows = [
+        [
+            r.started_at,
+            (r.run_id[:12] + ("…" if len(r.run_id) > 12 else "")),
+            r.suite,
+            f"{r.mean_score:.3f}",
+            str(r.n_rows),
+            r.judge_model or "-",
+        ]
+        for r in runs
+    ]
+    header = ["started_at", "run_id", "suite", "mean", "rows", "judge_model"]
+    widths = [
+        max(len(header[i]), max((len(row[i]) for row in rows), default=0))
+        for i in range(len(header))
+    ]
+    fmt = "  ".join(f"{{:<{w}}}" for w in widths)
+    lines = [fmt.format(*header)]
+    lines.append("  ".join("-" * w for w in widths))
+    for row in rows:
+        lines.append(fmt.format(*row))
+    return "\n".join(lines)
 
 
 if __name__ == "__main__":
