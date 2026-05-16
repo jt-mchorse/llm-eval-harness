@@ -39,6 +39,12 @@ dev = [
 [project.scripts]
 eval-harness = "eval_harness.cli:main"
 
+[project.entry-points.pytest11]
+# Pytest plugin registration (#5). Anyone with eval-harness installed
+# can write `@pytest.mark.eval(...)` on a test and the plugin parametrizes
+# the test once per row in the cited dataset.
+eval_harness = "eval_harness.pytest_plugin"
+
 [project.urls]
 Repository = "https://github.com/jt-mchorse/llm-eval-harness"
 Issues    = "https://github.com/jt-mchorse/llm-eval-harness/issues"
@@ -49,6 +55,9 @@ packages = ["eval_harness"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts   = "-ra -q"
+markers = [
+  "eval(suite, dataset, answer_source, judge_backend, threshold=0.6, rubric=None): run as one eval item per dataset row (see eval_harness.pytest_plugin).",
+]
 
 [tool.ruff]
 line-length = 100

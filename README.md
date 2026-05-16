@@ -123,6 +123,38 @@ answers with another model's judge. The default `DatasetEchoSource`
 emits the example's first `expected_outputs.value` so the runner can
 be exercised hermetically before a real source is wired.
 
+### Pytest plugin: evals as tests (#5)
+
+`eval-harness` registers a pytest plugin via `pytest11`, so any project
+that installs the package can mark a test with `@pytest.mark.eval(...)`
+and the plugin will parametrize it once per row in the cited dataset.
+Each row becomes its own pytest item (visible with the row id as the
+parametrize label); the plugin asserts `score >= threshold` and on
+failure surfaces the row id, expected outputs, the actual response, the
+judge score, and the judge's reasoning.
+
+```python
+import pytest
+from eval_harness.judge import AnthropicBackend
+from eval_harness.runner import DatasetEchoSource
+
+@pytest.mark.eval(
+    suite="faithfulness",
+    dataset="fixtures/sample_factuality_v1.jsonl",
+    answer_source=DatasetEchoSource(),    # or your own model under test
+    judge_backend=AnthropicBackend(),     # stub backends work in CI
+    threshold=0.6,
+)
+def test_faithfulness_eval(eval_row, judge_score):
+    # Body is optional — the plugin asserts the threshold automatically.
+    # Reference `judge_score` (a `JudgeScore` dataclass) if you want
+    # row-level invariants beyond the threshold.
+    pass
+```
+
+The plugin parametrizes via `pytest_generate_tests`, so `pytest -k`,
+`--collect-only`, and pytest-xdist all work unchanged.
+
 ### GitHub Action: sticky eval-delta comments on PRs (#6)
 
 The `eval` workflow (`.github/workflows/eval.yml`) runs on every PR
