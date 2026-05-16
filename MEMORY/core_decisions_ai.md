@@ -117,3 +117,12 @@
   reversibility: cheap
   related_issues: [#5]
   superseded_by: null
+
+- id: D-014
+  date: 2026-05-16
+  decision: drift_axes_use_jensen_shannon_divergence_base_2_bounded_zero_to_one
+  rationale: kl_is_unbounded_and_asymmetric_ks_only_works_on_ordered_scalars_so_it_does_not_generalize_to_the_cluster_id_axis_jsd_does_both_with_one_formula_and_one_threshold_per_axis
+  alternatives_rejected: [kl_divergence_either_direction, kolmogorov_smirnov_statistic, total_variation_distance, wasserstein_extra_dep]
+  reversibility: cheap
+  related_issues: [#4]
+  superseded_by: null
