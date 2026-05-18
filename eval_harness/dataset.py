@@ -283,3 +283,34 @@ def iter_jsonl(path: str | Path) -> Iterable[Example]:
     """
     ds = load_jsonl(path)  # placeholder eager impl; replace when issue #3 needs it
     yield from ds.examples
+
+
+def filter_examples_by_tags(
+    examples: Iterable[Example], tags: Iterable[str] | None
+) -> list[Example]:
+    """Return examples whose tag set intersects `tags` (set-union match).
+
+    - `tags=None` or empty → no filter (return every example).
+    - Otherwise an example is kept iff `set(example.tags) & set(tags)` is non-empty.
+
+    The match is *any-of*, not *all-of*: this is the right default for an
+    operator who wants to score "the geometry cluster or the history cluster
+    in one shot". Strict-intersection (`--require-all-tags`) is a future
+    extension if anyone asks; it's deliberately out-of-scope for issue #15.
+    """
+    materialized = list(examples)
+    if not tags:
+        return materialized
+    wanted = set(tags)
+    return [ex for ex in materialized if wanted & set(ex.tags)]
+
+
+def collect_tag_inventory(examples: Iterable[Example]) -> list[str]:
+    """Return the sorted, de-duplicated tag inventory for an example list.
+
+    Used to produce a helpful stderr message when `--tags` matches zero rows.
+    """
+    inv: set[str] = set()
+    for ex in examples:
+        inv.update(ex.tags)
+    return sorted(inv)

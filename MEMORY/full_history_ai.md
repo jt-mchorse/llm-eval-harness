@@ -154,3 +154,25 @@ context_for_next_session:
 decisions_made: [D-014]
 followups: []
 ---
+
+---
+session: 2026-05-18T15:30Z
+duration_min: 30
+issue: 15
+focus: run_tags_filter_set_union_subset_eval
+delta:
+  files_added: 1   # tests/test_tag_filter.py
+  files_changed: 5  # dataset.py, runner.py, cli.py, test_cli_run.py, README.md
+  tests_added: 11  # 7 helper + 4 CLI
+  test_pass_rate: "137/137"
+context_for_next_session:
+  - filter_examples_by_tags_and_collect_tag_inventory_live_in_dataset_py_set_union_semantics_pure_no_runner_deps
+  - empty_tag_filter_error_in_runner_py_carries_requested_tags_and_inventory_so_silent_zero_rows_is_impossible
+  - parse_tags_arg_in_cli_treats_whitespace_only_string_as_no_filter_degenerate_input_must_not_silently_match_zero
+  - run_spec_tags_field_default_empty_tuple_no_filter_behavior_unchanged_when_flag_absent
+  - calibrate_was_excluded_from_tag_filter_intentionally_calibration_row_schema_has_no_tags_field
+  - cli_exit_2_on_unknown_tag_distinct_from_exit_1_regression_flag_and_exit_0_clean_run
+issue_15_closure_after_pr_16_merge: true
+decisions_made: []
+followups: []
+---

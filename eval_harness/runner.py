@@ -32,7 +32,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol
 
-from eval_harness.dataset import Dataset, Example, load_jsonl
+from eval_harness.dataset import Dataset, Example, filter_examples_by_tags, load_jsonl
 from eval_harness.judge import FAITHFULNESS_RUBRIC, Judge, JudgeScore
 from eval_harness.runs import (
     StoredRun,
@@ -120,6 +120,7 @@ class RunSpec:
     judge_model: str | None = None
     judge_kappa: float | None = None
     rubric: str = FAITHFULNESS_RUBRIC
+    tags: tuple[str, ...] = ()  # set-union filter on Example.tags; () = no filter
 
 
 @dataclass(frozen=True)
@@ -185,12 +186,40 @@ def _detect_git_sha(dataset_path: Path) -> str | None:
     return sha or None
 
 
-def _load(dataset_path: str | Path) -> tuple[Dataset, list[Example]]:
+class EmptyTagFilterError(ValueError):
+    """Raised when a `tags` filter matches zero rows in the dataset.
+
+    Distinct from a generic empty dataset because the cause is operator-
+    requested filtering, and the operator wants to know exactly which tags
+    were requested and which exist in the file so they can self-correct.
+    """
+
+    def __init__(
+        self, dataset_path: Path, requested: tuple[str, ...], inventory: list[str]
+    ) -> None:
+        self.dataset_path = dataset_path
+        self.requested = requested
+        self.inventory = inventory
+        super().__init__(
+            f"--tags {list(requested)} matched zero rows in {dataset_path}; "
+            f"available tags: {inventory}"
+        )
+
+
+def _load(dataset_path: str | Path, *, tags: tuple[str, ...] = ()) -> tuple[Dataset, list[Example]]:
     p = Path(dataset_path)
-    examples = list(load_jsonl(p))
-    if not examples:
+    full = list(load_jsonl(p))
+    if not full:
         raise ValueError(f"dataset at {p} is empty")
-    dataset = Dataset(version=examples[0].dataset_version, examples=examples)
+    if tags:
+        examples = filter_examples_by_tags(full, tags)
+        if not examples:
+            from eval_harness.dataset import collect_tag_inventory
+
+            raise EmptyTagFilterError(p, tags, collect_tag_inventory(full))
+    else:
+        examples = full
+    dataset = Dataset(version=full[0].dataset_version, examples=examples)
     return dataset, examples
 
 
@@ -207,7 +236,7 @@ def run_suite(
     The git SHA is best-effort: read from `git rev-parse HEAD` relative to
     the dataset's directory, or `None` when the lookup fails.
     """
-    dataset, examples = _load(spec.dataset_path)
+    dataset, examples = _load(spec.dataset_path, tags=spec.tags)
     rid = run_id or new_run_id()
     when = started_at or utc_now_iso()
     git_sha = _detect_git_sha(Path(spec.dataset_path))

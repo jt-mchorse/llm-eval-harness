@@ -99,6 +99,19 @@ ANTHROPIC_API_KEY=sk-... eval-harness run \
 # → stderr: an ASCII delta table; exit code 1 if any row drops > 0.1
 ```
 
+Score a subset by tag with `--tags` (comma-separated, set-union match —
+any row whose `tags` intersects the requested set is included):
+
+```bash
+eval-harness run \
+  --suite faithfulness \
+  --dataset fixtures/sample_factuality_v1.jsonl \
+  --tags geography,history \
+  --no-diff
+# → scores only the geography + history rows.
+# → exits 2 with the dataset's tag inventory on stderr if --tags matches zero rows.
+```
+
 Run history is stored in SQLite at `~/.eval-harness/runs.db` (override
 with `--db`); two tables, `runs` and `rows`, with a foreign key from
 `rows` to `runs`. `eval-harness diff --current <run_id> --baseline
