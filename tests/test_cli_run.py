@@ -130,3 +130,101 @@ def test_diff_exits_nonzero_when_regression_flagged(tmp_path: Path, capsys) -> N
     captured = capsys.readouterr()
     assert rc_cur == 1
     assert "FLAG" in captured.err
+
+
+# --- --tags filter (issue #15) ----------------------------------------------
+
+
+def test_run_with_tags_scores_only_matching_rows(tmp_path: Path, capsys) -> None:
+    """`--tags geometry` should score the single row tagged `geometry` in the fixture."""
+    db = tmp_path / "runs.db"
+    rc, stdout, _ = _run_cli(
+        [
+            "run",
+            "--suite",
+            "smoke",
+            "--dataset",
+            str(SAMPLE_DATASET),
+            "--db",
+            str(db),
+            "--no-diff",
+            "--tags",
+            "geometry",
+        ],
+        capsys=capsys,
+    )
+    assert rc == 0
+    payload = json.loads(stdout)
+    assert payload["n_rows"] == 1
+    assert [r["example_id"] for r in payload["rows"]] == ["qa_002"]
+
+
+def test_run_with_multi_tag_filter_is_set_union(tmp_path: Path, capsys) -> None:
+    """`--tags geography,history` scores the union (qa_001 + qa_003 + qa_007)."""
+    db = tmp_path / "runs.db"
+    rc, stdout, _ = _run_cli(
+        [
+            "run",
+            "--suite",
+            "smoke",
+            "--dataset",
+            str(SAMPLE_DATASET),
+            "--db",
+            str(db),
+            "--no-diff",
+            "--tags",
+            "geography,history",
+        ],
+        capsys=capsys,
+    )
+    assert rc == 0
+    payload = json.loads(stdout)
+    assert sorted(r["example_id"] for r in payload["rows"]) == ["qa_001", "qa_003", "qa_007"]
+
+
+def test_run_with_unknown_tag_exits_2_and_lists_inventory(tmp_path: Path, capsys) -> None:
+    db = tmp_path / "runs.db"
+    rc, _, stderr = _run_cli(
+        [
+            "run",
+            "--suite",
+            "smoke",
+            "--dataset",
+            str(SAMPLE_DATASET),
+            "--db",
+            str(db),
+            "--no-diff",
+            "--tags",
+            "does-not-exist",
+        ],
+        capsys=capsys,
+    )
+    assert rc == 2
+    # Tag inventory must appear so the operator can self-correct.
+    assert "does-not-exist" in stderr
+    assert "geography" in stderr  # one of the real tags in the fixture
+    assert "geometry" in stderr
+
+
+def test_run_with_whitespace_tags_string_is_treated_as_no_filter(tmp_path: Path, capsys) -> None:
+    """`--tags ' '` and `--tags ','` should behave like no flag — full dataset."""
+    db = tmp_path / "runs.db"
+    rc, stdout, _ = _run_cli(
+        [
+            "run",
+            "--suite",
+            "smoke",
+            "--dataset",
+            str(SAMPLE_DATASET),
+            "--db",
+            str(db),
+            "--no-diff",
+            "--tags",
+            "  ,   ",
+        ],
+        capsys=capsys,
+    )
+    assert rc == 0
+    payload = json.loads(stdout)
+    # Fixture has 10 rows; degenerate tag string must not silently filter to 0.
+    assert payload["n_rows"] == 10

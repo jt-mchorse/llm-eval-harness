@@ -101,6 +101,14 @@ def main(argv: list[str] | None = None) -> int:
     run_p.add_argument(
         "--no-diff", action="store_true", help="Skip the baseline diff even if a prior run exists."
     )
+    run_p.add_argument(
+        "--tags",
+        default=None,
+        help=(
+            "Comma-separated tag filter (any-of / set-union semantics). "
+            "Example: `--tags geography,history`. Default: score every row."
+        ),
+    )
 
     diff_p = sub.add_parser("diff", help="Show the delta between two stored runs.")
     diff_p.add_argument("--current", required=True)
@@ -236,7 +244,21 @@ def _make_answer_source(name: str):
     raise ValueError(f"unknown answer source: {name}")  # pragma: no cover - argparse rejects first
 
 
+def _parse_tags_arg(raw: str | None) -> tuple[str, ...]:
+    """Parse `--tags a,b,c` into a tuple. Whitespace tolerated; empty tokens dropped.
+
+    Returns `()` when the flag is absent or only whitespace/commas — the runner
+    treats `()` as "no filter", which is the default behavior.
+    """
+    if raw is None:
+        return ()
+    parts = [t.strip() for t in raw.split(",")]
+    return tuple(t for t in parts if t)
+
+
 def _run_run(args: argparse.Namespace) -> int:
+    from eval_harness.runner import EmptyTagFilterError
+
     backend = AnthropicBackend(model=args.model)
     judge = Judge(backend=backend)
     spec = RunSpec(
@@ -245,8 +267,19 @@ def _run_run(args: argparse.Namespace) -> int:
         judge=judge,
         answer_source=_make_answer_source(args.answer_source),
         judge_model=backend.model,
+        tags=_parse_tags_arg(args.tags),
     )
-    result = run_suite(spec, db_path=args.db)
+    try:
+        result = run_suite(spec, db_path=args.db)
+    except EmptyTagFilterError as e:
+        # Silent-empty-run is the worst failure mode; surface the requested
+        # tags and the dataset's tag inventory so the operator can self-correct.
+        print(
+            f"::error::--tags {list(e.requested)} matched zero rows in "
+            f"{e.dataset_path}. Available tags: {e.inventory}",
+            file=sys.stderr,
+        )
+        return 2
     json_text = render_run_json(result)
     if args.out:
         Path(args.out).parent.mkdir(parents=True, exist_ok=True)
