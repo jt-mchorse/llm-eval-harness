@@ -55,7 +55,7 @@ Hermetic flow (no API key):
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e '.[dev]'
 ruff check . && ruff format --check .
-pytest                                # 68 hermetic tests pass
+pytest                                # full hermetic suite (no API key)
 ```
 
 Real-API calibration run:
@@ -77,6 +77,24 @@ judge = Judge(backend=AnthropicBackend())
 result = calibrate(judge, load_calibration("fixtures/calibration.jsonl"))
 print(result.cohens_kappa, result.pearson_r)
 ```
+
+### Examples
+
+Self-contained runnable examples live in [`examples/`](examples/). Each one
+runs end-to-end on a fresh clone without an API key (stub backends and
+`DatasetEchoSource` keep everything hermetic) and is smoke-tested in CI by
+`tests/test_examples_smoke.py` so the snippets can't bitrot.
+
+| File | Shows |
+|------|-------|
+| [`examples/judge_calibration_stub.py`](examples/judge_calibration_stub.py) | Wiring `Judge` + `calibrate` against a stub `Backend` over `fixtures/calibration.jsonl`; prints κ and Pearson r. |
+| [`examples/regression_run_and_diff.py`](examples/regression_run_and_diff.py) | Two `run_suite` calls against the same dataset with deterministic backends, then `diff_runs` + `render_delta_ascii` to surface the regressed row. SQLite history lives in a tempdir. |
+| [`examples/drift_report.py`](examples/drift_report.py) | `compute_drift` across length / embedding / judge axes on a synthetic golden vs. shifted input pair; writes the single-file HTML report to a tempfile. |
+| [`examples/pytest_eval.py`](examples/pytest_eval.py) | `@pytest.mark.eval(...)` parametrizing over a dataset with stub backends — the same pattern a downstream repo wires into its own `pytest` run. |
+
+Each example swaps cleanly to the live Anthropic backend by replacing the stub
+with `AnthropicBackend()` (which requires the `judge` extra and an
+`ANTHROPIC_API_KEY`); the rest of the wiring is identical.
 
 ### Regression runner
 
