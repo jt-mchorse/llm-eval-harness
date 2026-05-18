@@ -176,3 +176,26 @@ issue_15_closure_after_pr_16_merge: true
 decisions_made: []
 followups: []
 ---
+
+---
+session: 2026-05-18T19:30Z
+duration_min: 45
+issue: 17
+focus: examples_directory_runnable_hermetic_with_smoke_test
+delta:
+  files_added: 6   # 4 examples + examples/__init__.py + tests/test_examples_smoke.py
+  files_changed: 1  # README.md gets ### Examples subsection + drops stale 68-tests number
+  tests_added: 8   # smoke tests
+  test_pass_rate: "145/145"
+context_for_next_session:
+  - examples_dir_has_four_files_judge_calibration_stub_regression_run_and_diff_drift_report_pytest_eval
+  - every_example_exposes_main_int_with_name_main_guard_so_smoke_test_can_call_main_uniformly
+  - pytest_eval_example_main_shells_out_to_pytest_subprocess_to_keep_outer_and_inner_suites_isolated
+  - smoke_test_imports_each_example_fresh_via_importlib_then_redirects_stdout_to_assert_sentinels
+  - regression_example_uses_tempdir_sqlite_so_repeated_runs_do_not_pollute_user_home
+  - drift_example_uses_tempfile_namedtemporaryfile_delete_false_so_smoke_test_can_assert_html_contents
+  - readme_examples_subsection_under_quickstart_complements_library_use_snippet_does_not_replace_it
+  - readme_test_count_changed_from_specific_68_to_generic_full_hermetic_suite_to_avoid_bitrot
+decisions_made: []
+followups: []
+---
