@@ -129,3 +129,16 @@ Chronological log of work sessions. Most recent first below the divider.
 **Open questions / blockers:** None — PR ready for review.
 
 **Next session:** Move to the next repo in the build sequence per the multi-issue loop; this repo only needs the calibration κ benchmark (operator action) and a 60-s demo recording before v0.1.
+
+## 2026-05-18 — Issue #17: `examples/` directory with smoke-tested integration patterns
+**Duration:** ~45 min · **Branch:** `session/2026-05-18-1913-issue-17`
+
+- Added `examples/` with four self-contained Python files exercising each layer of the public API (calibration, regression run + diff, drift, pytest-marker). All four are hermetic — stub backends + `DatasetEchoSource` keep them runnable without an API key.
+- New `tests/test_examples_smoke.py` (8 tests) imports each example fresh via `importlib`, captures stdout, and asserts the expected sentinels + on-disk artifacts. The pytest example is exercised through a subprocess so the outer suite and the inner parametrized items stay cleanly isolated. Full test count: 145/145.
+- README gets a new `### Examples` subsection under Quickstart with a four-row table and a note that each example swaps cleanly to `AnthropicBackend()` for live runs. The stale "68 hermetic tests pass" line is replaced with `# full hermetic suite (no API key)` to avoid future bitrot.
+
+**Why this work, this session:** The harness is feature-complete per §2 and is imported by other portfolio repos, but downstream-repo authors had only the README snippets + skimming `tests/` to learn the integration patterns. A smoke-tested examples directory is leverage — it documents the wire-up patterns, won't bitrot, and is the obvious next click after the Quickstart.
+
+**Open questions / blockers:** None. PR opened ready for review; CI will exercise the smoke suite alongside the existing tests.
+
+**Next session:** Move to the next repo in the build sequence (`llm-cost-optimizer`) and look for a similar leverage move.
