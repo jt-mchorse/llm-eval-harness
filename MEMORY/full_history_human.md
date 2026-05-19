@@ -169,3 +169,17 @@ Chronological log of work sessions. Most recent first below the divider.
 **Open questions / blockers:** None. PR opened ready for review; CI will exercise the smoke suite alongside the existing tests.
 
 **Next session:** Move to the next repo in the build sequence (`llm-cost-optimizer`) and look for a similar leverage move.
+
+## 2026-05-19 — Issue #24: Public-surface snapshot test
+**Duration:** ~30 min · **Branch:** `session/2026-05-19-2317-issue-24` · **PR:** [#25](https://github.com/jt-mchorse/llm-eval-harness/pull/25) (ready, CI green, merging)
+
+- Issue filed in-session: a portfolio-wide loop turn started with zero open `priority:high` or `priority:med` issues across all twelve repos and only demo-capture `priority:low` blockers; per Phase B step 5's escape, picked llm-eval-harness (first in build sequence) and filed a fresh actionable issue grounded in a real gap — coverage of `eval_harness/__init__.py` was 0%, meaning silent renames in any submodule could break the README's `from eval_harness import ...` example without any test failing.
+- New `tests/test_public_surface.py` (5 axes, 10 test items) locks: (1) `__version__` is semver-ish, (2) every `__all__` entry is bound non-None, (3) `__all__` agrees bidirectionally with the AST-parsed `from eval_harness.X import` block, (4) README's quoted `Judge` / `calibrate` / `load_calibration` resolve at the top level, (5) one anchor per submodule (judge/calibration/dataset/drift/runner/runs) survives at the top level.
+- Coverage trick: the `eval-harness` pytest plugin is loaded by entry points before pytest-cov instruments, so the package's top-level `__init__.py` always executed pre-instrumentation and showed 0% even with tests exercising every re-export. An `importlib.reload(eval_harness)` at the test module top forces the body to re-execute under the tracer; coverage of `__init__.py` jumps 0% → 100%.
+- Also `.coverage` artifacts to `.gitignore` so a local `pytest --cov` doesn't appear as uncommitted state.
+
+**Why this work, this session:** Same hygiene posture as the recent README snapshot tests across the portfolio (#19, #22 in this repo). Orthogonal axis — Python public surface vs. README text. A library that twelve other repos plan to import deserves a snapshot on its top-level surface; this is the cheapest way to catch a silent break.
+
+**Open questions / blockers:** None.
+
+**Next session:** Loop to another repo. This repo's open queue is now {#20 (demo capture)} — gated on human action.
