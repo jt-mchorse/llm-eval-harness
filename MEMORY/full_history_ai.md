@@ -221,3 +221,21 @@ context_for_next_session:
 decisions_made: []
 followups: ["#20"]
 ---
+
+---
+session: 2026-05-19T19:30Z
+duration_min: 35
+issue: 22
+focus: snapshot_lock_readme_numeric_identifier_defaults_to_source
+delta:
+  files_added: 1   # tests/test_readme_defaults_snapshot.py
+  tests_added: 6
+  test_pass_rate: "155/155"
+context_for_next_session:
+  - readme_defaults_now_locked_six_pairings_calibration_rows_pip_extras_threshold_drop_kappa_gate_cluster_k_sticky_marker
+  - kappa_default_parsed_by_regex_against_cli_py_argparse_no_clean_introspection_for_subparser_defaults
+  - tamper_verified_three_of_six_threshold_drop_calibration_rows_cluster_k
+  - sister_to_existing_test_readme_snapshot_py_orthogonal_axis_numeric_not_structural
+decisions_made: []
+followups: []
+---
