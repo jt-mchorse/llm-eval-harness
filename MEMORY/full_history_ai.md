@@ -239,3 +239,26 @@ context_for_next_session:
 decisions_made: []
 followups: []
 ---
+
+---
+session: 2026-05-19T20:30Z
+duration_min: 30
+issue: 24
+focus: public_surface_snapshot_locks_eval_harness_top_level_init_exports
+delta:
+  files_added: 1   # tests/test_public_surface.py
+  files_changed: 1 # .gitignore (added .coverage artifacts)
+  tests_added: 10
+  test_pass_rate: "165/165"
+  coverage_init_py: "0pct_to_100pct"
+context_for_next_session:
+  - public_surface_snapshot_five_axes_version_all_bound_all_matches_imports_readme_example_imports_submodule_anchors
+  - importlib_reload_at_module_top_works_around_entry_points_plugin_loading_before_pytest_cov_instruments_otherwise_init_py_stays_at_zero_coverage
+  - ast_parses_init_py_to_extract_actual_top_level_import_block_compared_against_all_in_both_directions
+  - parametrized_over_six_submodules_judge_calibration_dataset_drift_runner_runs_one_anchor_each
+  - tamper_verified_three_of_five_drop_all_entry_alias_rename_re_import_garbage_version
+  - sister_to_existing_test_readme_snapshot_py_and_test_readme_defaults_snapshot_py_orthogonal_axis_python_surface_vs_readme_text
+  - filed_issue_24_in_session_when_loop_started_no_priority_high_or_med_open_in_any_portfolio_repo_falls_under_self_filed_actionable_per_phase_b_step_5_escape
+decisions_made: []
+followups: []
+---
