@@ -199,3 +199,25 @@ context_for_next_session:
 decisions_made: []
 followups: []
 ---
+
+---
+session: 2026-05-19T04:45Z
+duration_min: 45
+issue: 19
+focus: readme_drop_session_specific_framing_plus_snapshot_test
+delta:
+  files_changed: 1   # README.md
+  files_added: 1     # tests/test_readme_snapshot.py
+  tests_added: 4
+  test_pass_rate: "149/149"
+context_for_next_session:
+  - readme_what_this_is_rewritten_to_nine_bullet_landing_order_drops_three_pieces_shipped_today
+  - architecture_mermaid_now_shows_all_shipped_pieces_and_wiring_including_sticky_comment_pytest_plugin_examples
+  - cli_bullet_locked_to_python_m_help_subcommand_surface_via_snapshot
+  - demo_section_replaces_pending_until_3_lands_with_two_command_hermetic_demo_path
+  - capture_followup_filed_as_issue_20
+  - sister_to_eight_other_portfolio_snapshot_prs_landed_today_or_yesterday_pattern_complete_for_now
+  - tamper_verified_calibrate_to_nonexistent_in_cli_bullet_fires_snapshot
+decisions_made: []
+followups: ["#20"]
+---
