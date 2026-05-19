@@ -8,21 +8,46 @@
 
 A small, dep-disciplined Python package every other repo in this
 portfolio (rag, agents, cost-optimizer) imports to express its evals as
-code. Three pieces shipped today:
+code. Nine closed issues map to nine pieces of surface:
 
-1. **Versioned golden datasets** (`fixtures/*.jsonl`). Each line
+1. **Versioned golden datasets** (#1) — `fixtures/*.jsonl`. Each line
    carries `id`, `input`, `expected_outputs`, `tags`, `dataset_version`,
    `provenance`. Loader rejects malformed lines with a 1-indexed line
    number; round-trip identity guaranteed.
-2. **LLM-as-judge wrapper** (`eval_harness.judge`). A `Judge` scores a
-   model response against a rubric and returns a structured verdict
-   (`{score, reasoning, raw}`). Backend is a pluggable Protocol so
-   tests substitute a deterministic stub without an API key.
-3. **Calibration against human labels** (`eval_harness.calibration`).
-   Cohen's κ on binarized scores + Pearson r on continuous scores,
-   computed against a 50-row human-labeled set committed to the repo.
-   The judge is only as good as its agreement with humans on this set;
-   the κ ≥ 0.6 threshold is the CI gate.
+2. **LLM-as-judge wrapper with calibration** (#2) — `eval_harness.judge`
+   and `eval_harness.calibration`. A `Judge` scores a model response
+   against a rubric and returns a structured verdict
+   (`{score, reasoning, raw}`); calibration is Cohen's κ on binarized
+   scores + Pearson r on continuous scores against a 50-row
+   human-labeled set committed to the repo. The κ ≥ 0.6 threshold is
+   the CI gate (D-005).
+3. **Regression runner with per-model diff** (#3) — `eval-harness run`
+   stores each row's verdict in a SQLite history (D-008) and exits
+   non-zero when any row regresses by more than `--threshold-drop`.
+   `eval-harness diff` and `eval-harness list` exposed for ad-hoc
+   comparison.
+4. **Drift detection** (#4) — `eval-harness drift` scores three
+   distribution-shift axes (length, embedding-cluster, judge) with
+   Jensen-Shannon divergence (D-014) and renders a single-file HTML
+   report.
+5. **Pytest plugin** (#5) — `@pytest.mark.eval(...)` parametrizes a
+   single test once per dataset row; thresholds assert in the call
+   phase (D-013) so failures count as test failures, not test errors.
+6. **GitHub Action** (#6) — `.github/workflows/eval.yml` posts a
+   self-updating sticky comment with the per-row Δ between
+   `fixtures/demo_current.json` and `fixtures/demo_baseline.json`.
+   Downstream repos use `eval-harness diff-json` + `eval-harness
+   comment` to do the same on their own PRs.
+7. **CLI** (#7) — `eval-harness run | list | calibrate | diff |
+   diff-json | comment | drift` (plus `judge calibrate` as a hidden
+   backwards-compat alias).
+8. **--tags row-level subset filter** (#15) — set-union match over the
+   dataset's per-row `tags`; exit code 2 with the dataset's tag
+   inventory on stderr when the filter matches zero rows.
+9. **Runnable examples** (#17) — `examples/` ships four self-contained
+   scripts (judge + calibration stub; regression run + diff; drift
+   report; pytest-eval pattern) each smoke-tested in CI so the
+   snippets can't bitrot.
 
 The framework is opinionated about two things. **No fabricated
 benchmarks** — the calibration κ number lands in
@@ -39,12 +64,22 @@ See [`docs/architecture.md`](docs/architecture.md). The shape:
 
 ```mermaid
 flowchart LR
-  DS[(Golden dataset<br/>fixtures/*.jsonl)] --> RUN[Regression runner #3]
-  CAL[(Calibration set<br/>fixtures/calibration.jsonl)] --> JUDGE
-  JUDGE[Judge wrapper] --> CALOUT[(calibration report<br/>docs/calibration_report.md)]
+  DS[("Golden dataset<br/>fixtures/*.jsonl")] --> RUN["Regression runner (#3)"]
+  CAL[("Calibration set<br/>fixtures/calibration.jsonl")] --> JUDGE
+  JUDGE["Judge wrapper (#2)"] --> CALOUT[("Calibration report<br/>docs/calibration_report.md")]
   RUN --> JUDGE
-  RUN --> SQLITE[(run history<br/>SQLite)]
-  SQLITE --> ACTION[GitHub Action #6<br/>posts PR delta]
+  RUN --> SQLITE[("Run history<br/>SQLite")]
+  SQLITE --> LIST["eval-harness list (#7)"]
+  SQLITE --> DIFF["eval-harness diff (#7)"]
+  RUN --> JSON[("Run JSON<br/>--out flag")]
+  JSON --> DIFFJSON["eval-harness diff-json (#7)"]
+  DIFFJSON --> COMMENT["eval-harness comment (#7)"]
+  COMMENT --> ACTION["GitHub Action (#6)<br/>sticky PR comment"]
+  RUN --> TAGS["--tags filter (#15)"]
+  DS --> DRIFT["Drift detector (#4)<br/>length + embedding + judge axes"]
+  DRIFT --> HTML[("Drift report<br/>single-file HTML")]
+  JUDGE -.->|"@pytest.mark.eval"| PYTEST["Pytest plugin (#5)"]
+  DS --> EXAMPLES["examples/ (#17)<br/>four hermetic scripts"]
 ```
 
 ## Quickstart
@@ -284,8 +319,21 @@ Calibration κ (faithfulness rubric): pending operator's first
 
 ## Demo
 
-60-second demo pending until at least the regression runner (#3) lands —
-a "demo" of just the dataset + judge layers wouldn't show enough.
+Today's demo is two commands on a fresh clone — both run without an API
+key against the stub backends, which is the same path CI exercises:
+
+```bash
+# Regression runner + diff (#3, #7).
+python examples/regression_run_and_diff.py
+
+# Single-file drift report (#4, #7).
+python examples/drift_report.py
+```
+
+The first prints a delta table showing a deliberately regressed row;
+the second writes an HTML drift report to a tempfile and prints its
+path. A captured 60-second GIF/video walking through both plus the PR
+sticky-comment flow (#6) is tracked in **#20**.
 
 ## Why these decisions
 
