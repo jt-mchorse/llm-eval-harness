@@ -4,6 +4,19 @@ Chronological log of work sessions. Most recent first below the divider.
 
 ---
 
+## 2026-05-19 — Issue #22: snapshot lock README numeric/identifier defaults to source
+**Duration:** ~35 min · **Branch:** `session/2026-05-19-1910-issue-22` · **PR:** [#23](https://github.com/jt-mchorse/llm-eval-harness/pull/23) (ready)
+
+- Added `tests/test_readme_defaults_snapshot.py` (6 tests) closing the orthogonal axis that `test_readme_snapshot.py` doesn't cover: numeric and identifier defaults the README quotes as if derived from source (calibration row count, pip extras keys, `--threshold-drop` default, kappa gate default, drift `cluster_k`, sticky-comment marker literal).
+- Source is the truth — every failure message tells the operator to update the README quote to match the new live value (never the other way around). The kappa default is parsed by regex against `cli.py` source because argparse subparser defaults don't introspect cleanly without invoking `parse_args`; the regex-matched assertion fires first so a future refactor can't silently green this test.
+- Tamper-verified 3 of 6 (`DEFAULT_THRESHOLD_DROP`, README "50 rows", `drift.compute_drift(cluster_k=...)` default) — each fires with the symbol referenced in the message; revert restores green. Full suite 155/155 (was 149); ruff check + format clean.
+
+**Why this work, this session:** Phase A repo selection ran with all `priority:high` queues empty and the `priority:med`/`priority:low` issues either already had open PRs against them or required screen capture (the demo issues). Filing #22 + working it kept the portfolio's snapshot wave (eight sister PRs landed 2026-05-18..19) honest by closing the orthogonal numeric-defaults gap in the foundation repo.
+
+**Open questions / blockers:** None.
+
+**Next session:** Continues with whichever repo Phase A selection picks; the loop now expects more numeric-defaults snapshot opportunities across the other repos with README↔source default claims (likely candidates: `llm-cost-optimizer`, `agent-orchestration-platform`).
+
 ## 2026-05-19 — Issue #19: README + snapshot test
 **Duration:** ~45 min · **Branch:** `session/2026-05-19-issue-19`
 
