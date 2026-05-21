@@ -183,3 +183,16 @@ Chronological log of work sessions. Most recent first below the divider.
 **Open questions / blockers:** None.
 
 **Next session:** Loop to another repo. This repo's open queue is now {#20 (demo capture)} — gated on human action.
+
+## 2026-05-21 — Issue #20: Capture script for the three-surface 60s demo
+**Duration:** ~40 min · **Branch:** `session/2026-05-21-1508-issue-20` · **PR:** [#26](https://github.com/jt-mchorse/llm-eval-harness/pull/26) (draft — issue stays open for JT's GIF recording)
+
+- `scripts/capture_demo.sh` lands as the deterministic driver for the 60-second README demo. It runs the three highest-leverage surfaces in sequence on a fresh clone with no API key: (1) `examples/regression_run_and_diff.py` for the ASCII delta table, (2) `examples/drift_report.py` for the three-axis JSD + single-file HTML, (3) `eval-harness diff-json --format markdown` rendered twice on the committed fixtures — once for "push #1" and once for a synthesized "push #2" where the worst-scoring row recovers — so the `<!-- eval-harness:sticky-comment -->` marker line shows up identical in both renderings (the visible D-009 contract). Pacing is controlled by `CAPTURE_PACE_SECONDS` (default 2 for recording, 0 for CI). `CAPTURE_OPEN_HTML=1` launches the OS default opener on the drift HTML; off in CI.
+- `tests/test_capture_demo_smoke.py` (4 tests, module-scoped fixture so the script only runs once) asserts each surface's distinctive output appears, plus that the sticky-comment marker is present in both push-1 and push-2 renderings — the entire point of marker-based identity. Same anti-bitrot pattern as `tests/test_examples_smoke.py`. Full suite is now 169/169.
+- README "Demo" section rewritten to point at `scripts/capture_demo.sh` and the three surfaces; still names #20 as the follow-up for the actual GIF/video asset and never uses "pending until ..." language, so the existing README snapshot test stays green.
+
+**Why this work, this session:** Issue #20 was the only open issue across the three repos last touched >36h ago, and its acceptance criterion 3 (the capture script) is the only one of the three that's actionable autonomously. Landing the reproducible-capture infrastructure now means JT's recording session is a single command, the GIF will be reproducible at any later point by re-running the script, and the smoke test guarantees the demo path can't bitrot between recordings.
+
+**Open questions / blockers:** None. Acceptance criteria 1 (`docs/demo.gif|mp4`) and 2 (README embed) remain pending JT screen capture and are explicitly out of autonomous scope.
+
+**Next session:** Loop to the next eligible repo in the build sequence. This repo's open queue is still {#20 (demo capture)} — same gate, now with the infrastructure done.

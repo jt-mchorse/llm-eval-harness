@@ -262,3 +262,27 @@ context_for_next_session:
 decisions_made: []
 followups: []
 ---
+
+---
+session: 2026-05-21T15:08Z
+duration_min: 40
+issue: 20
+focus: capture_script_for_60s_demo_three_surfaces
+delta:
+  files_added: 2   # scripts/capture_demo.sh, tests/test_capture_demo_smoke.py
+  files_changed: 1 # README.md (Demo section)
+  tests_added: 4
+  test_pass_rate: "169/169"
+context_for_next_session:
+  - capture_script_lives_at_scripts_capture_demo_sh_one_bash_entry_point_for_jt_recording
+  - three_surfaces_regression_run_diff_drift_html_sticky_comment_marker_stability_two_pushes
+  - sticky_comment_demo_synthesizes_push_2_current_by_bumping_lowest_score_clamped_to_1_0_to_show_marker_unchanged_across_pushes_d_009
+  - capture_pace_seconds_env_default_2_smoke_test_sets_0
+  - capture_open_html_env_off_by_default_macos_open_linux_xdg_open
+  - smoke_test_runs_via_bash_subprocess_path_extended_with_active_venv_bin_so_eval_harness_resolves
+  - readme_demo_section_updated_still_names_20_no_pending_until_language_readme_snapshot_test_stays_green
+  - acceptance_criterion_3_capture_script_under_scripts_satisfied_acceptance_1_gif_and_2_readme_embed_remain_blocked_on_human_recording
+  - pr_26_draft_issue_20_stays_open_until_jt_records_gif
+decisions_made: []
+followups: []
+---
