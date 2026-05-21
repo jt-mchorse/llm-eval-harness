@@ -319,21 +319,33 @@ Calibration κ (faithfulness rubric): pending operator's first
 
 ## Demo
 
-Today's demo is two commands on a fresh clone — both run without an API
-key against the stub backends, which is the same path CI exercises:
+Today's demo is one command on a fresh clone:
 
 ```bash
-# Regression runner + diff (#3, #7).
-python examples/regression_run_and_diff.py
-
-# Single-file drift report (#4, #7).
-python examples/drift_report.py
+scripts/capture_demo.sh
 ```
 
-The first prints a delta table showing a deliberately regressed row;
-the second writes an HTML drift report to a tempfile and prints its
-path. A captured 60-second GIF/video walking through both plus the PR
-sticky-comment flow (#6) is tracked in **#20**.
+That drives the three highest-leverage surfaces in sequence without
+an API key (the same hermetic path CI exercises):
+
+1. **Regression runner + delta table** (#3, #7) —
+   `examples/regression_run_and_diff.py` runs a baseline + regressed
+   pair against the same dataset and prints the ASCII delta with the
+   flagged row.
+2. **Three-axis drift report** (#4, #7) —
+   `examples/drift_report.py` writes a single-file HTML report to a
+   tempfile (length / embedding-cluster / judge axes, JSD per axis).
+3. **PR sticky-comment flow** (#6, #7) — `eval-harness diff-json
+   --format markdown` rendered twice on the committed demo fixtures,
+   once for "push #1" and once for a synthesized "push #2" where one
+   row recovers, so the `<!-- eval-harness:sticky-comment -->` marker
+   line shows up identical in both renderings (the D-009 contract the
+   GitHub Action upserts against).
+
+`tests/test_capture_demo_smoke.py` runs the script end-to-end in CI so
+it can't bitrot. The captured 60-second GIF/video that this script
+drives is tracked in **#20**; once recorded it lands at `docs/demo.gif`
+and gets embedded here.
 
 ## Why these decisions
 
