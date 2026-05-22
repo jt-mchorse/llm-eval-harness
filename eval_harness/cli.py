@@ -48,17 +48,22 @@ DEFAULT_DB_PATH = Path.home() / ".eval-harness" / "runs.db"
 
 
 def main(argv: list[str] | None = None) -> int:
+    # `judge calibrate ...` is a backwards-compat alias for `calibrate ...`.
+    # Rewrite the argv before argparse sees it so the alias resolves to the
+    # canonical subcommand without registering a visible `judge` subparser
+    # (which would clutter `eval-harness --help` and contradict the issue
+    # #7 contract of `run / list / calibrate / diff` as the public surface).
+    # Older scripts that already invoke `eval-harness judge calibrate ...`
+    # keep working unchanged.
+    if argv is None:
+        argv = sys.argv[1:]
+    if len(argv) >= 2 and argv[0] == "judge" and argv[1] == "calibrate":
+        argv = ["calibrate", *argv[2:]]
+
     parser = argparse.ArgumentParser(
         prog="eval-harness", description="Reusable LLM eval framework."
     )
     sub = parser.add_subparsers(dest="command", required=True)
-
-    judge_p = sub.add_parser("judge", help="Judge-related subcommands.")
-    judge_sub = judge_p.add_subparsers(dest="judge_command", required=True)
-    judge_calibrate_p = judge_sub.add_parser(
-        "calibrate", help="Run the judge over the calibration set and write the report."
-    )
-    _add_calibrate_args(judge_calibrate_p)
 
     # Top-level `calibrate` — equivalent to `judge calibrate`. The judge-
     # nested form stays as a hidden alias for backwards compat with scripts

@@ -262,3 +262,26 @@ context_for_next_session:
 decisions_made: []
 followups: []
 ---
+
+---
+session: 2026-05-22T03:55Z
+duration_min: 25
+issue: 27
+focus: hide_judge_calibrate_alias_from_top_level_help_keep_alias_working
+decisions_made: []
+delta:
+  files_changed: 2  # eval_harness/cli.py, README.md
+  files_added: 1    # tests/test_cli_judge_alias.py
+  tests_added: 4
+  test_pass_rate: "169/169"
+context_for_next_session:
+  - judge_p_subparser_was_registered_with_visible_help_string_so_eval_harness_help_showed_judge_judge_related_subcommands_contradicting_module_docstring_hidden_nested_alias_claim
+  - argparse_subparser_help_suppress_renders_as_literal_suppress_string_not_truly_hidden_so_chose_argv_rewrite_approach_in_main
+  - if_argv_starts_with_judge_calibrate_rewrite_to_calibrate_before_argparse_parses_so_judge_subparser_doesnt_register_at_all
+  - alias_via_alias_help_byte_identical_to_via_canonical_help_pinned_in_test
+  - bare_eval_harness_judge_and_eval_harness_judge_unknown_subcommand_fail_correctly_at_parser_level_pinned_in_test
+  - readme_l100_quickstart_uses_canonical_calibrate_with_one_paragraph_explaining_legacy_alias_still_works
+  - readme_l317_benchmarks_pending_line_uses_canonical_calibrate
+  - seventh_post_v0_1_drift_fix_today
+followups: []
+---

@@ -97,10 +97,14 @@ Real-API calibration run:
 
 ```bash
 pip install -e '.[judge]'             # adds the anthropic SDK
-ANTHROPIC_API_KEY=sk-... eval-harness judge calibrate
+ANTHROPIC_API_KEY=sk-... eval-harness calibrate
 # → writes docs/calibration_report.md
 # → exits non-zero if Cohen's κ < 0.6
 ```
+
+(Scripts that already invoke the legacy `eval-harness judge calibrate`
+form still work — it's a hidden backwards-compat alias; canonical is
+the top-level `calibrate` subcommand.)
 
 Library use (in another repo):
 
@@ -314,7 +318,7 @@ won't quote a κ number until the report exists.
 ## Benchmarks / Results
 
 Calibration κ (faithfulness rubric): pending operator's first
-`eval-harness judge calibrate` run; will land in
+`eval-harness calibrate` run; will land in
 `docs/calibration_report.md` and be referenced here.
 
 ## Demo
