@@ -183,3 +183,15 @@ Chronological log of work sessions. Most recent first below the divider.
 **Open questions / blockers:** None.
 
 **Next session:** Loop to another repo. This repo's open queue is now {#20 (demo capture)} — gated on human action.
+
+## 2026-05-22 — Hide `judge calibrate` alias from top-level help (#27)
+
+**Duration:** ~25 min. **Issue:** [#27](https://github.com/jt-mchorse/llm-eval-harness/issues/27). **PR:** TBD.
+
+The CLI module docstring and README both said `judge calibrate` "remains as a hidden nested alias for backwards compat". The CLI did not actually hide it: the `judge` subparser was registered with `help="Judge-related subcommands."` and showed up in `eval-harness --help` exactly like the canonical `calibrate`. A new operator reading the help saw two ways to do the same thing, and the README's own quickstart used the legacy form.
+
+First attempt was `help=argparse.SUPPRESS` on `add_parser("judge", ...)` — but argparse renders that as literal `==SUPPRESS==` in subparser listings, which is worse than not suppressing it. Switched to an argv rewrite at the top of `main()`: if argv starts with `["judge", "calibrate"]`, rewrite to `["calibrate", ...rest]` before constructing the parser. The `judge` subparser is then never registered, so `--help` only shows the issue #7 contract surface (`run / list / calibrate / diff / diff-json / comment / drift`), and legacy invocations still resolve via the rewrite.
+
+Four tests pin the contract in `tests/test_cli_judge_alias.py`: top-level help omits `judge` (and includes the canonical four); `judge calibrate --help` and `calibrate --help` produce byte-identical output (proves the rewrite is faithful); `judge` alone fails at the parser; `judge unknown-subcommand` fails at the parser. The README quickstart's `eval-harness judge calibrate` is replaced with the canonical `eval-harness calibrate`, with a one-sentence note that the legacy form still works. The Benchmarks line at L321 gets the same fix.
+
+Seventh post-v0.1 silent-drift fix today across the portfolio. The fix family is now well-established: every repo has had at least one "the README/contract claims X, the code does Y" gap, and closing them in this batch is bracing the portfolio against the rule §10 spends its longest entry on.
