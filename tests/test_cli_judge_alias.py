@@ -62,8 +62,7 @@ def test_top_level_help_omits_judge_subcommand() -> None:
     # Sanity: the canonical surface from issue #7 is present.
     for expected in ("run", "list", "calibrate", "diff"):
         assert expected in visible_subcommands, (
-            f"public subcommand {expected!r} must remain visible; "
-            f"got: {visible_subcommands}"
+            f"public subcommand {expected!r} must remain visible; got: {visible_subcommands}"
         )
 
 
