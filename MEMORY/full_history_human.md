@@ -213,3 +213,19 @@ Fourteenth post-v0.1 drift fix in the portfolio pattern, fifth architecture-doc 
 **Open questions / blockers:** None — PR opened ready for review.
 
 **Next session:** `prompt-regression-suite` is the remaining drift target in the portfolio (build sequence position 3, `docs/architecture.md` still says `## Shipped (this PR — issue #1)` + has `:::pending` mermaid nodes). Other repos either have clean docs already (rag-production-kit, agent-orchestration-platform, chunking-strategies-lab, python-async-llm-pipelines, llm-cost-optimizer) or have just landed the lock (cookbook, emb-shootout, vss, nextjs, ai-app, this one).
+
+## 2026-05-23 — Architecture-doc active-decision-range axis + real-drift backfill (#31)
+
+**Duration:** ~25 min. **Issue:** [#31](https://github.com/jt-mchorse/llm-eval-harness/issues/31). **PR:** [#32](https://github.com/jt-mchorse/llm-eval-harness/pull/32).
+
+Fifth of twelve repos to land the active-decision-range upper-bound axis on its architecture-doc lock (sister to `rag-production-kit` PR #29, `llm-cost-optimizer` PR #27, `python-async-llm-pipelines` PR #24, `chunking-strategies-lab` PR #21). The axis parses `MEMORY/core_decisions_ai.md` for non-superseded `D-NNN` entries with id `>= MIN_ACTIVE_DECISION_ID` (2 — D-001 is the scope baseline) and fails loud when an active decision isn't cited anywhere in `docs/architecture.md`.
+
+The new test caught **real drift** on first run — three omissions plus one outright mis-attribution: D-010 (`diff-json` SQLite-free posture, added to the Layer 6 paragraph), D-011 (top-level `calibrate` with `judge calibrate` as the hidden alias, added to the CLI Surface section), and D-012 (`pytest_generate_tests` vs `collection_modifyitems` for `pytest -k` / `pytest-xdist` compatibility, added to Layer 5). The CLI Surface paragraph also **incorrectly attributed** the `judge calibrate` alias to D-007 — fixed by replacing with D-011 there and adding the real D-007 reference (`AnswerSource` Protocol separation) to the Layer 2 Judge + Calibration section where it actually belongs.
+
+Tamper-verified three axes: synthetic D-099 active block → per-D-NNN missing list fires; removing inline D-014 citation → same test fires with D-014 flagged; flipping `MIN_ACTIVE_DECISION_ID` → hard-pin fires. Pycache gotcha noted in next-session context: when changing a module-level constant, `tests/__pycache__` can serve the old compiled value across pytest runs; `rm -rf tests/__pycache__` clears it.
+
+**Why this work, this session:** First in the multi-issue loop after Phase A merged seven open PRs. The active-decision-range axis is established as a portfolio pattern by four sister PRs and was missing in 8 of 12 repos; llm-eval-harness is §8 build-sequence #1 and starting here lets subsequent loop iterations cite it as the canonical template.
+
+**Open questions / blockers:** none — PR ready for review.
+
+**Next session:** Apply the same pattern to the next four repos with arch-doc tests but no D-axis (`embedding-model-shootout`, `vector-search-at-scale`, `prompt-regression-suite`, `agent-orchestration-platform`).

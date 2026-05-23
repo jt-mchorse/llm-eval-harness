@@ -59,7 +59,10 @@ the caller's `(prompt, response, rubric)`, hands the pair to a
 single-method `Backend`, and parses the response using a strict
 `SCORE: ...\nREASONING: ...` format. Score is clamped to [0, 1].
 The Backend Protocol is the load-bearing seam (D-004); production
-uses `AnthropicBackend`, tests use a deterministic stub.
+uses `AnthropicBackend`, tests use a deterministic stub. The
+`AnswerSource` Protocol is a separate seam (D-007) — the model
+under test must be substitutable independently of the judge model
+so one model's outputs can be scored by another model's judge.
 
 Calibration computes Cohen's κ on binarized scores (threshold 0.5)
 plus Pearson r on continuous scores against the 50-row human-labeled
@@ -102,11 +105,12 @@ operators can attach it to a ticket.
 
 `pytest_plugin.py` registers `@pytest.mark.eval(dataset=..., judge=...,
 threshold=...)`. The plugin parametrizes a single test function once
-per dataset row; the threshold assertion fires in the call phase
-(D-013), not the collection phase, so failures count as test
-failures rather than test errors — which means the standard pytest
-output formats (xunit, junit) preserve the per-row signal that a CI
-dashboard will want.
+per dataset row via `pytest_generate_tests` (D-012, so `pytest -k` and
+`pytest --collect-only` keep working alongside `pytest-xdist`); the
+threshold assertion fires in the call phase (D-013), not the
+collection phase, so failures count as test failures rather than
+test errors — which means the standard pytest output formats (xunit,
+junit) preserve the per-row signal that a CI dashboard will want.
 
 ## Layer 6 — Sticky comment + GitHub Action (#6)
 
@@ -128,6 +132,10 @@ every push (D-009) — comment-id-based identity would have stacked
 duplicates across pushes. `.github/workflows/eval.yml` is the action
 the framework ships; downstream repos use `eval-harness diff-json` +
 `eval-harness comment` to do the same on their own PRs.
+`diff-json` deliberately operates on two `RunResult` JSON files
+without touching the SQLite history (D-010) — CI runners are
+ephemeral, so the history layer is for local dev; the action just
+needs one current-vs-baseline pair.
 
 ## CLI surface (#7)
 
@@ -139,9 +147,11 @@ eval-harness run | list | calibrate | diff | diff-json | comment | drift
 
 Each subcommand has a `--help`; the suite of CLI smoke tests
 (`tests/test_cli_*.py`) pins the surface against rename or
-removal. `judge calibrate` exists as a hidden backwards-compat alias
-(D-007); #27 closed a regression where it was visible in `--help`,
-locked by `tests/test_cli_judge_alias.py`.
+removal. The top-level `calibrate` subcommand is the public surface;
+`judge calibrate` is kept as a hidden backwards-compat alias (D-011)
+so existing scripts keep working. #27 closed a regression where the
+alias was visible in `--help`, locked by
+`tests/test_cli_judge_alias.py`.
 
 ## Cross-cutting surfaces
 
