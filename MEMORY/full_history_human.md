@@ -229,3 +229,19 @@ Tamper-verified three axes: synthetic D-099 active block → per-D-NNN missing l
 **Open questions / blockers:** none — PR ready for review.
 
 **Next session:** Apply the same pattern to the next four repos with arch-doc tests but no D-axis (`embedding-model-shootout`, `vector-search-at-scale`, `prompt-regression-suite`, `agent-orchestration-platform`).
+
+## 2026-05-23 — 60-second demo capture script (#20, AC3 of 3)
+
+**Duration:** ~35 min. **Issue:** [#20](https://github.com/jt-mchorse/llm-eval-harness/issues/20). **PR:** [#33](https://github.com/jt-mchorse/llm-eval-harness/pull/33).
+
+First issue picked under the day-session "issue genuinely actionable by Claude" rule — the portfolio reached the quiet point where every open issue is a `[demo]` GIF/MP4 capture, the v0.1 quality bar's only outstanding row across all twelve repos. Of the three acceptance criteria on each demo issue, two are operator-only (record the GIF, embed it in README) and one is scriptable — "capture script committed under `scripts/` so the demo can be re-captured deterministically." This session lands that third row for `llm-eval-harness`.
+
+`scripts/capture_demo.py` sequences `examples/regression_run_and_diff.py` and `examples/drift_report.py` in-process under explicit `STAGE N` banners with a `--pause-seconds` knob so the screen recorder has cue points to cut on. The drift example's tempfile-path HTML is copied into a stable destination (`docs/demo-artifacts/drift_report.html`, gitignored — regenerated artifact, not source) and the printed path is rewritten in the captured stdout so the recording shows the stable destination, not a random tempdir. The browser auto-opens unless `--no-open`. For flow #3 (the sticky-comment HTML marker), which needs real PR webhook events and can't be Python-driven, the script prints a numbered cheat-sheet of `gh fork → push → re-push` commands the operator runs on a throwaway fork.
+
+`tests/test_capture_demo_smoke.py` adds four tests under the same hermetic contract as the existing examples-smoke suite (no API key, no live network). The architecture-doc lock landed in a prior session already excluded #20 from its closed-feature-issue coverage list with the note *"capture script shipped in a separate PR and locked by `tests/test_capture_demo_smoke.py`"* — so this PR's test file is exactly the lock that prior session anticipated. The `scripts/` resolvable-prefix slot was likewise pre-reserved in `RESOLVABLE_PREFIXES`.
+
+**Why this work, this session:** Day-session selection rules said pick the highest-priority unblocked issue in the earliest build-sequence repo; with zero `priority:high` and `priority:med` across all twelve repos, the only `priority:low` issues were the seven demo-GIF captures. `llm-eval-harness` is build-sequence #1; AC3 was the only Claude-actionable row. Doing AC3 here gives the next six demo issues across the portfolio a worked example to mirror.
+
+**Open questions / blockers:** AC1 + AC2 require operator action (screen recorder + README embed). The PR is ready for review on AC3 standalone — issue #20 stays open until JT records the capture.
+
+**Next session:** Continue the day-session loop on the next demo-capture issue. `nextjs-streaming-ai-patterns` #16 and `ai-app-integration-tests` #16 already reference capture scripts in their titles (so the AC3 row is already done there — those are pure AC1/AC2 operator blockers). The four remaining options with AC3 still open are `llm-cost-optimizer` #18, `prompt-regression-suite` #15, `rag-production-kit` #25, `mcp-server-cookbook` #16; build-sequence picks `llm-cost-optimizer` #18 next.
