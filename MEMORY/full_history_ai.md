@@ -285,3 +285,28 @@ context_for_next_session:
   - seventh_post_v0_1_drift_fix_today
 followups: []
 ---
+
+---
+session: 2026-05-22T19:50Z
+duration_min: 30
+issue: 29
+focus: docs_architecture_md_reflects_all_nine_shipped_surfaces_not_one_plus_two_only_pre_shipping_state
+delta:
+  files_changed: 1   # docs/architecture.md
+  files_added: 1     # tests/test_architecture_doc.py
+  tests_added: 7
+  tamper_verify_axes: 3
+context_for_next_session:
+  - architecture_md_was_frozen_at_judge_calibration_pr_issue_2_directory_diagram_5_modules_reality_10_modules_pending_downstream_section_listed_3_4_5_6_7_as_future_work_all_closed
+  - rewrote_to_full_10_module_directory_diagram_plus_per_layer_sections_for_3_4_5_6_plus_cli_surface_section_plus_cross_cutting_surfaces_section_15_17_24_19_22
+  - new_tests_test_architecture_doc_py_three_invariants_with_star_added_to_placeholder_skip_for_tests_test_cli_pattern_eval_harness_specific
+  - known_shipped_issues_1_2_3_4_5_6_7_15_17_excluded_19_20_22_24_27_each_locked_separately_by_own_dedicated_snapshot_regression_test
+  - banned_phrases_this_pr_pending_downstream_unfiled_to_be_filed
+  - tamper_verified_three_axes_each_fires_with_specific_drift_quoted
+  - fourteenth_post_v0_1_drift_or_doc_fix_in_portfolio_pattern_fifth_architecture_doc_lock_test_in_this_session_after_mcp_cookbook_emb_shootout_vss_nextjs_ai_app
+  - portfolio_now_eight_repos_with_architecture_doc_lock_tests
+  - issue_filed_mid_session_as_priority_med_then_closed_in_same_session_per_session_prompt_loop_protocol
+  - first_repo_in_build_sequence_eval_harness_was_natural_next_target_after_emb_shootout_pos_5_and_vss_pos_7
+decisions_made: []
+followups: []
+---
