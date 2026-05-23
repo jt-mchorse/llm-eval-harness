@@ -310,3 +310,26 @@ context_for_next_session:
 decisions_made: []
 followups: []
 ---
+
+---
+session: 2026-05-23T15:15Z
+duration_min: 25
+issue: 31
+focus: arch_doc_lock_active_decision_range_axis_caught_real_d_007_misattribution_plus_d_010_d_011_d_012_omissions
+decisions_made: []
+delta:
+  files_changed: 2   # tests/test_architecture_doc.py (+axis), docs/architecture.md (+4 D-NNN backfills, 1 correction)
+  files_added: 0
+  tests_added: 3   # test_decisions_file_exists, test_every_active_decision_referenced, test_min_active_decision_id_hard_pin
+  test_pass_rate: "179/179"
+context_for_next_session:
+  - active_decision_range_upper_bound_axis_pattern_now_at_5_of_12_repos_arch_doc_locks_was_4_before_this_pr
+  - real_drift_caught_three_omissions_plus_one_mis_attribution_d_007_was_pointing_at_judge_calibrate_alias_actually_d_011_d_007_is_answer_source_protocol_separation
+  - d_007_backfilled_to_layer_2_judge_calibration_section_alongside_d_004_judge_backend_protocol
+  - d_010_backfilled_to_layer_6_sticky_comment_action_paragraph_where_diff_json_is_described
+  - d_011_now_correctly_cites_calibrate_alias_replacing_the_d_007_mis_attribution_in_cli_surface_section
+  - d_012_backfilled_to_layer_5_pytest_plugin_paragraph_alongside_d_013
+  - pycache_gotcha_for_constant_changes_pytest_caches_compiled_module_so_first_run_after_constant_flip_still_shows_old_value_clear_with_rm_rf_tests_pycache_before_re_run
+  - sister_pr_targets_in_same_loop_embedding_model_shootout_vector_search_at_scale_prompt_regression_suite_agent_orchestration_platform_each_has_arch_doc_test_with_3_invariants_not_4
+followups: []
+---
