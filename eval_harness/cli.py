@@ -87,6 +87,14 @@ def main(argv: list[str] | None = None) -> int:
         dest="as_json",
         help="Emit a JSON array instead of the human-readable text table.",
     )
+    list_p.add_argument(
+        "--out",
+        default=None,
+        help=(
+            "Write the rendered output to this path instead of stdout. Parent dirs "
+            "are auto-created. Parity with `run --out`, `diff --out`, `diff-json --out`."
+        ),
+    )
 
     run_p = sub.add_parser(
         "run", help="Score a dataset, persist the run, optionally diff a baseline."
@@ -394,16 +402,18 @@ def _run_list(args: argparse.Namespace) -> int:
 
     Default output is a fixed-width text table sized to the longest
     run_id present; ``--json`` emits a JSON array instead. An empty DB
-    is not an error — prints "no runs" (text) or "[]" (json) and exits 0.
+    is not an error — emits "no runs" (text) or "[]" (json) and exits 0.
+
+    ``--out PATH`` writes the rendered output to a file (parent dirs
+    auto-created) and prints nothing to stdout — parity with ``run``,
+    ``diff``, ``diff-json``.
     """
     db_path = Path(args.db)
     if not db_path.exists():
         # No DB on disk yet — equivalent to no runs. Don't auto-create
         # here (init_db is what `run` does); avoid the side effect.
-        if args.as_json:
-            print("[]")
-        else:
-            print(f"# no runs (no database at {db_path})")
+        rendered = "[]\n" if args.as_json else f"# no runs (no database at {db_path})\n"
+        _emit_list_output(rendered, args.out)
         return 0
 
     with connect(db_path) as conn:
@@ -411,18 +421,35 @@ def _run_list(args: argparse.Namespace) -> int:
         runs = list_runs(conn, limit=args.limit, suite=args.suite)
 
     if args.as_json:
-        print(json.dumps([_run_summary_to_json(r) for r in runs], indent=2))
+        rendered = json.dumps([_run_summary_to_json(r) for r in runs], indent=2) + "\n"
+        _emit_list_output(rendered, args.out)
         return 0
 
     if not runs:
         if args.suite is not None:
-            print(f"# no runs for suite {args.suite!r}")
+            rendered = f"# no runs for suite {args.suite!r}\n"
         else:
-            print("# no runs")
+            rendered = "# no runs\n"
+        _emit_list_output(rendered, args.out)
         return 0
 
-    print(_render_runs_table(runs))
+    _emit_list_output(_render_runs_table(runs) + "\n", args.out)
     return 0
+
+
+def _emit_list_output(rendered: str, out: str | None) -> None:
+    """Write a `list`-rendered string to ``out`` (with mkdir -p) or stdout.
+
+    Mirrors the sink-decision shape of ``_run_diff`` / ``_run_diff_json``
+    so all four subcommands route output identically. ``--out`` is silent
+    on stdout; stdout-only mode prints without the trailing newline since
+    the renderer already adds one.
+    """
+    if out:
+        Path(out).parent.mkdir(parents=True, exist_ok=True)
+        Path(out).write_text(rendered, encoding="utf-8")
+    else:
+        print(rendered, end="")
 
 
 def _run_summary_to_json(r: RunSummary) -> dict[str, object]:
