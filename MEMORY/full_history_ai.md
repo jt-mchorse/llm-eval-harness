@@ -376,3 +376,25 @@ context_for_next_session:
   - opportunistic_fix_after_phase_a_merged_pr_33_capture_demo_for_issue_20
 followups: []
 ---
+
+---
+session: 2026-05-24T15:30Z
+duration_min: 30
+issue: 36
+focus: list_subcommand_out_flag_closes_four_subcommand_out_parity
+delta:
+  files_changed: 1   # eval_harness/cli.py
+  files_added: 1     # tests/test_cli_list_out.py
+  tests_added: 5
+  test_pass_rate: "193/193"
+decisions_made: []
+context_for_next_session:
+  - list_was_the_last_subcommand_with_no_out_flag_after_35_brought_diff_in_line_run_and_diff_json_already_had_it
+  - prior_session_pr_35_landed_test_count_at_193_my_5_tests_brought_it_to_193_again_because_pr_35_count_in_its_own_description_overstated_the_post_merge_total
+  - actual_pre_36_baseline_was_188_post_36_is_193_pinned_in_pr_description_after_initial_misclaim
+  - _run_list_refactored_to_build_rendered_string_once_then_dispatch_through_single_emit_list_output_sink_mirrors_run_diff_run_diff_json_shape
+  - missing_db_short_circuit_routes_through_out_too_so_callers_asserting_runs_json_exists_dont_trip_on_absence_when_db_hasnt_been_created_yet
+  - opportunistic_fix_after_phase_a_merged_10_prs_in_30_minutes_first_phase_bc_target_in_day_session_with_180_min_cap
+  - file_count_for_eval_harness_subcommand_out_parity_now_complete_calibrate_doesnt_need_it_its_a_workflow_command_not_a_data_command
+followups: []
+---

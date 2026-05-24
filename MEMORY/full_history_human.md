@@ -259,3 +259,19 @@ New `tests/test_cli_diff_format.py` seeds two runs (`HighBackend` baseline → `
 **Open questions / blockers:** none — PR ready for review.
 
 **Next session:** Continue the night-session loop on the next portfolio repo. Build-sequence #2 is `llm-cost-optimizer`; survey its CLI surface and README for similar narrow parity gaps.
+
+## 2026-05-24 — Issue #36: `list` gains `--out` for parity with `run` / `diff` / `diff-json`
+
+**Duration:** ~30 min. **Issue:** [#36](https://github.com/jt-mchorse/llm-eval-harness/issues/36). **Branch:** `session/2026-05-24-1512-issue-36`.
+
+`list` was the last subcommand without `--out`. It already accepted `--json` (boolean → JSON array on stdout), but the only sink was stdout, so CI consumers wanting a JSON artifact had to shell-redirect — which can't auto-create missing parent dirs and gives no way for a Python-driven CI step to assert the artifact exists. After #35 brought `diff` in line this morning, `run` / `diff` / `diff-json` all already had `--out PATH` with the same `Path(args.out).parent.mkdir(parents=True, exist_ok=True)` plumbing. This PR finishes the four-subcommand parity.
+
+`_run_list` refactored to build the rendered string up front — text table, JSON array, or one of the no-runs short-circuits — and dispatch through a single new `_emit_list_output` helper that mirrors the `_run_diff` / `_run_diff_json` sink decision. The missing-DB short-circuit routes through `--out` too, so a caller asserting `runs.json` exists after the step doesn't trip on absence when the DB hasn't been created yet. New `tests/test_cli_list_out.py` adds 5 tests: both formats happy-path with stdout silent under `--out`, nested parent dir auto-create, missing-DB `[]` artifact through `--out`, and a regression guard that the no-`--out` JSON and text stdout paths still emit unchanged.
+
+Tail tally: 193 / 193 pass, ruff clean. Pre-#36 baseline was 188 — the prior PR (#35) description overstated its own post-merge total as 193 when it was actually 188; the #37 PR description was edited after the initial open to pin the accurate number rather than echo the prior PR's number.
+
+**Why this work, this session:** First Phase B+C target of a 180-min day session, after Phase A merged 10 ready PRs across the portfolio in ~20 minutes. With every `priority:high` and `priority:med` issue closed across all twelve repos and only operator-blocked GIF captures remaining, narrow CLI parity gaps surfaced cleanly from reading the CLI surface. `list` was the obvious one in `llm-eval-harness` — well-scoped, ships in one session, finishes the `--out` axis.
+
+**Open questions / blockers:** none — PR ready for review.
+
+**Next session:** Continue the day-session loop. Build-sequence #2 (`llm-cost-optimizer`) and #3 (`prompt-regression-suite`) are the natural next pick-ups. Survey their CLI surfaces for the same shape of parity gap; if nothing surfaces, drop to the per-script `--dry`-style audit pattern that landed #31 this morning.
