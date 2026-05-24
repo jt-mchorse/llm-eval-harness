@@ -199,3 +199,69 @@ class TestRenderDeltaAscii:
         assert "q1" in out
         assert "q2" in out
         assert "summary:" in out
+
+
+# ----------------------------------------------------------------------
+# threshold_drop validation (#38)
+# ----------------------------------------------------------------------
+# `_status_for(delta, threshold_drop)` flips the sign: `delta < -threshold_drop`.
+# A negative `threshold_drop` silently inverts regression detection (passing
+# PRs reported as failing and vice versa). `diff_runs` is the single library
+# boundary every CLI surface (`run`, `diff`, `diff-json`) funnels through, so
+# the guard lives there.
+
+
+def _make_two_runs_for_diff(tmp_path: Path) -> tuple:
+    """Helper: produce two persisted runs the diff layer can compare."""
+    dataset = tmp_path / "ds.jsonl"
+    _write_sample_dataset(dataset)
+    db = tmp_path / "runs.db"
+    baseline_judge = Judge(backend=PromptMatchBackend({"france": 0.9, "japan": 0.9}))
+    current_judge = Judge(backend=PromptMatchBackend({"france": 0.7, "japan": 0.9}))
+    run_suite(
+        RunSpec("s", dataset, baseline_judge, DatasetEchoSource()),
+        db_path=db,
+        started_at="2026-05-15T18:00:00Z",
+        run_id="b1",
+    )
+    run_suite(
+        RunSpec("s", dataset, current_judge, DatasetEchoSource()),
+        db_path=db,
+        started_at="2026-05-15T19:00:00Z",
+        run_id="c1",
+    )
+    with connect(db) as conn:
+        return read_run(conn, "c1"), read_run(conn, "b1")
+
+
+def test_diff_runs_rejects_negative_threshold_drop(tmp_path: Path) -> None:
+    cur, base = _make_two_runs_for_diff(tmp_path)
+    with pytest.raises(ValueError, match=r"threshold_drop must be >= 0\.0; got -0\.01"):
+        diff_runs(cur, base, threshold_drop=-0.01)
+
+
+def test_diff_runs_accepts_zero_threshold_drop(tmp_path: Path) -> None:
+    # Boundary case: zero means "flag any drop, no tolerance". Valid setting
+    # — pins that the guard is `< 0`, not `<= 0`.
+    cur, base = _make_two_runs_for_diff(tmp_path)
+    report = diff_runs(cur, base, threshold_drop=0.0)
+    # q1 dropped 0.9 → 0.7; with zero tolerance any drop flags.
+    flagged_ids = {r.example_id for r in report.rows if r.flagged}
+    assert flagged_ids == {"q1"}
+    assert report.threshold_drop == 0.0
+
+
+def test_diff_runs_accepts_positive_threshold_drop(tmp_path: Path) -> None:
+    # Regression pin: existing canonical positive value continues to work.
+    cur, base = _make_two_runs_for_diff(tmp_path)
+    report = diff_runs(cur, base, threshold_drop=0.05)
+    assert report.threshold_drop == 0.05
+    # 0.2 drop > 0.05 tolerance — q1 still flagged.
+    assert any(r.flagged for r in report.rows if r.example_id == "q1")
+
+
+@pytest.mark.parametrize("bad", [-1e-6, -0.001, -0.5, -1.0])
+def test_diff_runs_negative_sweep_all_raise(tmp_path: Path, bad: float) -> None:
+    cur, base = _make_two_runs_for_diff(tmp_path)
+    with pytest.raises(ValueError, match=r"threshold_drop must be >= 0\.0"):
+        diff_runs(cur, base, threshold_drop=bad)
