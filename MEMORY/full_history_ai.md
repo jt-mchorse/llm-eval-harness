@@ -398,3 +398,24 @@ context_for_next_session:
   - file_count_for_eval_harness_subcommand_out_parity_now_complete_calibrate_doesnt_need_it_its_a_workflow_command_not_a_data_command
 followups: []
 ---
+
+---
+session: 2026-05-24T20:00Z
+duration_min: 25
+issue: 38
+focus: diff_runs_rejects_negative_threshold_drop_at_library_boundary
+delta:
+  files_changed: 1   # eval_harness/runner.py
+  files_added: 0
+  tests_added: 7
+  test_pass_rate: "200/200"
+decisions_made: []
+context_for_next_session:
+  - status_for_at_runner_py_282_flips_sign_as_delta_lt_negative_threshold_drop_so_a_negative_threshold_drop_silently_inverts_regression_detection
+  - cli_exposes_threshold_drop_three_times_run_diff_diff_json_no_argparse_validator_diff_runs_funnels_all_three_plus_programmatic_calls
+  - guard_at_library_boundary_keeps_one_canonical_raise_site_argparse_layer_validator_would_split_the_contract_across_two_layers
+  - tests_pin_negative_raises_with_message_zero_accepted_boundary_positive_pin_parametrized_sweep
+  - sister_to_today_llm_cost_optimizer_32_uncertainty_router_signal_name_uniqueness_construction_time_guard_same_value_domain_validation_parity_family
+  - fourth_phase_bc_target_in_today_180_min_day_session_after_phase_a_8_pr_merge_plus_cost_optimizer_32
+followups: []
+---

@@ -275,3 +275,16 @@ Tail tally: 193 / 193 pass, ruff clean. Pre-#36 baseline was 188 — the prior P
 **Open questions / blockers:** none — PR ready for review.
 
 **Next session:** Continue the day-session loop. Build-sequence #2 (`llm-cost-optimizer`) and #3 (`prompt-regression-suite`) are the natural next pick-ups. Survey their CLI surfaces for the same shape of parity gap; if nothing surfaces, drop to the per-script `--dry`-style audit pattern that landed #31 this morning.
+
+## 2026-05-24 — Issue #38: diff_runs rejects negative threshold_drop at the library boundary
+**Duration:** ~25 min · **Branch:** `session/2026-05-24-issue-38`
+
+- `_status_for(delta, threshold_drop)` flips the sign at `runner.py:282` as `delta < -threshold_drop`. A user typing `--threshold-drop=-0.05` got a silently corrupted regression report — passing PRs reported as failing and vice versa. The CLI exposes `--threshold-drop` three times (`run`, `diff`, `diff-json`) with no argparse-level validator.
+- Added a single `if threshold_drop < 0.0: raise ValueError(...)` at the top of `diff_runs`. Library-boundary guard funnels every CLI path plus programmatic use through one canonical check; comment in source documents the sign-flip failure mode.
+- Seven new tests in `tests/test_runner.py` under a `#38` block: negative raises with the offending value in the message; zero accepted (boundary — "flag any drop"); existing positive 0.05 still works (regression pin); parametrized sweep over `-1e-6, -0.001, -0.5, -1.0` all raise. A `_make_two_runs_for_diff` helper was hoisted from the existing `TestDelta` to keep the new tests dependency-free.
+
+**Why this work, this session:** Sister to today's `llm-cost-optimizer` #32 (`UncertaintyRouter` validates signal names at construction). Same value-domain validation parity family — the rest of the eval-harness surface raises at boundaries (`_load` empty-dataset, `EmptyTagFilterError`, `JudgeScore.__post_init__` score-in-range, `comment.upsert_sticky_comment` marker check); `threshold_drop` was the one user-supplied magnitude flowing through to math layer unchecked.
+
+**Open questions / blockers:** none — PR ready for review.
+
+**Next session:** Continue the day-session loop. Build sequence #3 (`prompt-regression-suite`) and #4 (`rag-production-kit`) are the next viable hunting grounds; both have similar Protocol-or-CLI value-domain surfaces worth scanning.

@@ -296,6 +296,13 @@ def diff_runs(
     threshold_drop: float = DEFAULT_THRESHOLD_DROP,
 ) -> DeltaReport:
     """Per-row delta with threshold flagging and a summary block."""
+    # `_status_for` flips the sign (`delta < -threshold_drop`), so a negative
+    # `threshold_drop` silently inverts regression detection — passing PRs
+    # would be reported as failing and vice versa. The CLI exposes this as
+    # `--threshold-drop` three times (`run`, `diff`, `diff-json`); raising
+    # here funnels every path through one canonical guard.
+    if threshold_drop < 0.0:
+        raise ValueError(f"threshold_drop must be >= 0.0; got {threshold_drop}")
     if current.suite != baseline.suite:
         raise ValueError(
             f"cannot diff across suites: current={current.suite} baseline={baseline.suite}"
