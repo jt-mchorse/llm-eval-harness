@@ -245,3 +245,17 @@ First issue picked under the day-session "issue genuinely actionable by Claude" 
 **Open questions / blockers:** AC1 + AC2 require operator action (screen recorder + README embed). The PR is ready for review on AC3 standalone — issue #20 stays open until JT records the capture.
 
 **Next session:** Continue the day-session loop on the next demo-capture issue. `nextjs-streaming-ai-patterns` #16 and `ai-app-integration-tests` #16 already reference capture scripts in their titles (so the AC3 row is already done there — those are pure AC1/AC2 operator blockers). The four remaining options with AC3 still open are `llm-cost-optimizer` #18, `prompt-regression-suite` #15, `rag-production-kit` #25, `mcp-server-cookbook` #16; build-sequence picks `llm-cost-optimizer` #18 next.
+
+## 2026-05-24 — Issue #34: `diff` gains `--format markdown` and `--out`
+
+**Duration:** ~20 min. **Issue:** [#34](https://github.com/jt-mchorse/llm-eval-harness/issues/34). **Branch:** `session/2026-05-24-0311-issue-34`.
+
+`eval-harness diff` (SQLite-backed) was missing `--format markdown` and `--out`, both of which `eval-harness diff-json` (JSON-file-based) already had. The renderers (`render_delta_markdown`) and the parent-dir-creating `--out` plumbing already shipped on `diff-json` under D-010 — so this was a pure surface-parity dispatch, no new renderer and no new tradeoff. The asymmetry forced anyone with SQLite run history to detour through `run --out` + `diff-json` to get a markdown table for a PR comment, instead of just diffing the runs they already had.
+
+New `tests/test_cli_diff_format.py` seeds two runs (`HighBackend` baseline → `LowBackend` current, every row flagged), reads back the `run_id`s from SQLite in `started_at` order — the first use of that pattern in this repo — then exercises `diff` under `ascii` / `json` / `markdown`, plus `--out` writing to a nested tmpdir, plus `--format json --out` for completeness. The markdown test pins the GFM table by row lines starting with `| ` rather than exact column count, since that's the renderer's contract, not the CLI's.
+
+**Why this work, this session:** Opportunistic post-PR-A pick after merging the five capture-demo PRs (including this repo's #33 for issue #20). With every `priority:high`/`med` issue closed across the portfolio and only operator-blocked GIF captures remaining, a CLI parity gap surfaced cleanly from reading `eval_harness/cli.py` — narrow, well-scoped, ships in one session.
+
+**Open questions / blockers:** none — PR ready for review.
+
+**Next session:** Continue the night-session loop on the next portfolio repo. Build-sequence #2 is `llm-cost-optimizer`; survey its CLI surface and README for similar narrow parity gaps.
