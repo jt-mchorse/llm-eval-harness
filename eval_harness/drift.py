@@ -326,6 +326,17 @@ def compute_drift(
     if not candidate_inputs:
         raise ValueError("candidate_inputs must be non-empty")
 
+    # JSD is base-2 and bounded [0, 1] per D-014. A threshold outside that
+    # range silently disables (threshold > 1.0) or always-fires (threshold < 0)
+    # the per-axis gate. Validate at the boundary so the failure is proximate.
+    for _name, _value in (
+        ("length_threshold", length_threshold),
+        ("embedding_threshold", embedding_threshold),
+        ("judge_threshold", judge_threshold),
+    ):
+        if not (0.0 <= _value <= 1.0):
+            raise ValueError(f"{_name} must be in [0.0, 1.0]; got {_value}")
+
     # --- Length axis ----------------------------------------------------
     g_len_hist = _length_histogram(golden_inputs)
     c_len_hist = _length_histogram(candidate_inputs)
