@@ -355,3 +355,24 @@ context_for_next_session:
   - nextjs_streaming_ai_patterns_16_and_ai_app_integration_tests_16_titles_already_reference_capture_demo_scripts_meaning_those_scripts_already_exist_so_only_ac1_remains_for_those_two
 followups: []
 ---
+
+---
+session: 2026-05-24T03:15Z
+duration_min: 20
+issue: 34
+focus: diff_subcommand_format_markdown_and_out_for_parity_with_diff_json
+delta:
+  files_changed: 1   # eval_harness/cli.py
+  files_added: 1     # tests/test_cli_diff_format.py
+  tests_added: 5
+  test_pass_rate: "193/193"
+decisions_made: []
+context_for_next_session:
+  - diff_subcommand_was_ascii_or_json_only_diff_json_already_had_ascii_json_markdown_plus_out
+  - render_delta_markdown_and_path_mkdir_parents_already_existed_on_run_diff_json_so_change_is_dispatch_only_no_new_renderer
+  - asymmetry_was_a_quiet_bug_anyone_with_sqlite_history_had_to_detour_through_run_out_then_diff_json
+  - test_seeds_two_runs_then_queries_sqlite_for_run_ids_in_started_at_order_first_use_of_that_pattern_in_this_repo
+  - test_pins_markdown_via_table_row_lines_starting_with_pipe_space_not_exact_column_count_renderer_contract_not_cli_contract
+  - opportunistic_fix_after_phase_a_merged_pr_33_capture_demo_for_issue_20
+followups: []
+---
