@@ -120,7 +120,10 @@ def main(argv: list[str] | None = None) -> int:
     diff_p.add_argument("--baseline", required=True)
     diff_p.add_argument("--db", default=str(DEFAULT_DB_PATH))
     diff_p.add_argument("--threshold-drop", type=float, default=DEFAULT_THRESHOLD_DROP)
-    diff_p.add_argument("--format", choices=["ascii", "json"], default="ascii")
+    diff_p.add_argument("--format", choices=["ascii", "json", "markdown"], default="ascii")
+    diff_p.add_argument(
+        "--out", default=None, help="Write the rendered delta to this path (otherwise stdout)."
+    )
 
     # `diff-json` is SQLite-free: takes two RunResult JSON files (the format
     # `eval-harness run --out` writes) and emits a DeltaReport JSON, ascii
@@ -317,9 +320,16 @@ def _run_diff(args: argparse.Namespace) -> int:
         baseline = read_run(conn, args.baseline)
         report = diff_runs(current, baseline, threshold_drop=args.threshold_drop)
     if args.format == "json":
-        print(json.dumps(report.to_json(), indent=2, sort_keys=True))
+        rendered = json.dumps(report.to_json(), indent=2, sort_keys=True) + "\n"
+    elif args.format == "markdown":
+        rendered = render_delta_markdown(report)
     else:
-        print(render_delta_ascii(report))
+        rendered = render_delta_ascii(report) + "\n"
+    if args.out:
+        Path(args.out).parent.mkdir(parents=True, exist_ok=True)
+        Path(args.out).write_text(rendered, encoding="utf-8")
+    else:
+        print(rendered, end="")
     return 1 if report.summary["n_flagged"] > 0 else 0
 
 
