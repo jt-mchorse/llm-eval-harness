@@ -419,3 +419,26 @@ context_for_next_session:
   - fourth_phase_bc_target_in_today_180_min_day_session_after_phase_a_8_pr_merge_plus_cost_optimizer_32
 followups: []
 ---
+
+---
+session: 2026-05-24T23:30Z
+duration_min: 20
+issue: 40
+focus: compute_drift_validates_threshold_range_at_boundary
+delta:
+  files_changed: 1   # eval_harness/drift.py
+  files_added: 0
+  tests_added: 24   # 2 parametrized blocks: (3 axes x 5 bad values) + (3 axes x 3 good values)
+  test_pass_rate: "224/224"
+decisions_made: []
+context_for_next_session:
+  - compute_drift_at_drift_py_302_three_thresholds_length_embedding_judge_each_used_as_drift_gt_threshold_gate_with_no_validation
+  - jsd_is_bounded_zero_to_one_per_d_014_so_threshold_gt_one_silently_disables_gate_and_threshold_lt_zero_always_fires
+  - mirrored_runner_diff_runs_fix_38_39_single_loop_at_function_entry_raises_value_error_with_offending_param_name_and_violated_bound
+  - inclusive_bounds_zero_and_one_accepted_zero_means_any_drift_trips_gate_one_is_upper_bound_of_jsd_itself_and_gate_then_cant_fire_but_value_is_meaningful
+  - validation_runs_before_any_histogram_embedding_or_kmeans_work_no_wasted_compute_on_bad_config
+  - parametrized_decorator_stacking_pattern_lets_one_test_function_cover_three_axes_times_five_bad_values_one_test_funcs_24_collected_cases
+  - test_count_eval_harness_now_at_224_was_200_after_38_39_24_new_collected_cases_in_test_drift_py
+  - second_phase_bc_target_in_180_min_day_session_after_phase_a_5_pr_merge_first_was_via_phase_a_review_of_pr_39
+followups: []
+---

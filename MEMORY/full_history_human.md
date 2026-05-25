@@ -288,3 +288,16 @@ Tail tally: 193 / 193 pass, ruff clean. Pre-#36 baseline was 188 — the prior P
 **Open questions / blockers:** none — PR ready for review.
 
 **Next session:** Continue the day-session loop. Build sequence #3 (`prompt-regression-suite`) and #4 (`rag-production-kit`) are the next viable hunting grounds; both have similar Protocol-or-CLI value-domain surfaces worth scanning.
+
+## 2026-05-24 — Issue #40: compute_drift validates threshold range at boundary
+**Duration:** ~20 min · **Branch:** `session/2026-05-24-issue-40`
+
+- `compute_drift` exposes three thresholds (`length_threshold`, `embedding_threshold`, `judge_threshold`, each defaulting `0.10`) that gate `AxisReport.status` as `drift > threshold`. JSD is bounded `[0, 1]` per D-014, so any threshold outside that range silently breaks the gate: `threshold > 1.0` makes it un-trippable; `threshold < 0.0` makes it trip on every input including identical golden/candidate sets. The harm reaches every consumer of the public surface (`eval_harness/__init__.py:40,100`) including the `drift` CLI subcommand.
+- Added a single-loop validator at function entry that raises `ValueError(f"{name} must be in [0.0, 1.0]; got {value}")` for any out-of-range threshold, mirroring the error shape at `drift.py:152,183` and the recent `runner.diff_runs` guard from PR #39. Validation runs before any histogram / hash-embed / k-means work so bad config fails fast.
+- Two parametrized test blocks in `tests/test_drift.py` under a `#40` comment header: one over `(axis-name, bad-value)` proving each axis raises with its own parameter name in the message; one over `(axis-name, good-value)` proving the inclusive bounds `0.0` and `1.0` are accepted alongside `0.5`. Net 24 new collected cases.
+
+**Why this work, this session:** Direct extension of the #38/#39 pattern that landed earlier today. Same harm class (numeric threshold, single comparison gate, no boundary validation), same fix shape, slightly broader (3 parameters × 1 function vs 1 parameter × 3 entrypoints). With every `priority:high`/`priority:med` issue closed across the portfolio, this kind of contract-tightening sweep is the right autonomous-session work.
+
+**Open questions / blockers:** none — PR ready for review.
+
+**Next session:** Continue the day-session loop. Build sequence #2 (`llm-cost-optimizer`) and #3 (`prompt-regression-suite`) are the natural next pickups after this one merges; scan their public-surface threshold/range parameters for the same shape of gap.

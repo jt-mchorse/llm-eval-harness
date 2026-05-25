@@ -153,6 +153,31 @@ def test_compute_drift_rejects_empty_inputs():
         compute_drift(["hi"], [])
 
 
+# Issue #40: JSD is bounded [0, 1] per D-014; thresholds outside that range
+# silently disable (> 1.0) or always-fire (< 0.0) the per-axis gate. Validate
+# at the function boundary so the failure is proximate to the misconfiguration.
+@pytest.mark.parametrize(
+    "kwarg",
+    ["length_threshold", "embedding_threshold", "judge_threshold"],
+)
+@pytest.mark.parametrize("bad_value", [-0.01, -1.0, 1.01, 1.5, 2.0])
+def test_compute_drift_rejects_out_of_range_threshold(kwarg: str, bad_value: float):
+    with pytest.raises(ValueError, match=rf"{kwarg} must be in \[0\.0, 1\.0\]"):
+        compute_drift(["alpha"], ["beta"], **{kwarg: bad_value})
+
+
+@pytest.mark.parametrize(
+    "kwarg",
+    ["length_threshold", "embedding_threshold", "judge_threshold"],
+)
+@pytest.mark.parametrize("good_value", [0.0, 0.5, 1.0])
+def test_compute_drift_accepts_inclusive_bound_thresholds(kwarg: str, good_value: float):
+    # Boundary check should accept the closed interval. 0.0 means "any drift trips it";
+    # 1.0 is the upper bound of JSD itself and the gate then never fires — both meaningful.
+    report = compute_drift(["alpha"], ["beta"], **{kwarg: good_value})
+    assert report.length.status in {"ok", "drifted"}
+
+
 def test_compute_drift_representative_examples_are_furthest_first():
     golden = _read("golden_inputs.jsonl")
     candidate = _read("shifted.jsonl")
