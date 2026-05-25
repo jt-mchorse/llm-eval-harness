@@ -119,7 +119,23 @@ def _row_from_dict(line_no: int, obj: dict) -> CalibrationRow:
 
 
 def binarize(score: float, threshold: float = 0.5) -> int:
-    """Map a continuous score to {0, 1} via threshold. >= threshold maps to 1."""
+    """Map a continuous score to {0, 1} via threshold. >= threshold maps to 1.
+
+    `threshold` must be a finite number in `[0, 1]` — the same value domain
+    as `JudgeScore.score`. NaN previously caused every comparison to be
+    False so every row binarized to 0 (silent κ=0 via the degenerate
+    `pe == 1.0` branch in `cohens_kappa`). `bool` was silently coerced to
+    0/1. Out-of-range values gave a silent constant-rater result.
+    """
+    if (
+        not isinstance(threshold, (int, float))
+        or isinstance(threshold, bool)
+        or math.isnan(threshold)
+        or math.isinf(threshold)
+    ):
+        raise ValueError(f"threshold must be a finite number; got {threshold!r}")
+    if not 0.0 <= threshold <= 1.0:
+        raise ValueError(f"threshold must be in [0, 1]; got {threshold!r}")
     return 1 if score >= threshold else 0
 
 
@@ -204,7 +220,29 @@ def calibrate(judge: Judge, rows: Iterable[CalibrationRow]) -> CalibrationResult
 def render_report(
     result: CalibrationResult, *, judge_model: str, threshold_kappa: float = 0.6
 ) -> str:
-    """Format the calibration result as the markdown that lands in `docs/calibration_report.md`."""
+    """Format the calibration result as the markdown that lands in `docs/calibration_report.md`.
+
+    `threshold_kappa` gates the report's PASS/FAIL. Cohen's κ ranges in
+    `[-1, 1]`; finite values outside that range cannot ever match (`> 1`
+    always FAIL; `< -1` always PASS) so the gate is silently broken.
+    `NaN` made every comparison False (always FAIL); `inf`/`-inf` were
+    similarly silent. Reject all of those at the boundary so a CI
+    misconfig surfaces as a clear ValueError instead of a misleading
+    PASS/FAIL line in the markdown.
+    """
+    if (
+        not isinstance(threshold_kappa, (int, float))
+        or isinstance(threshold_kappa, bool)
+        or math.isnan(threshold_kappa)
+        or math.isinf(threshold_kappa)
+    ):
+        raise ValueError(
+            f"threshold_kappa must be a finite number; got {threshold_kappa!r}"
+        )
+    if not -1.0 <= threshold_kappa <= 1.0:
+        raise ValueError(
+            f"threshold_kappa must be in [-1, 1]; got {threshold_kappa!r}"
+        )
     pass_fail = "PASS" if result.cohens_kappa >= threshold_kappa else "FAIL"
     lines = [
         "# Judge calibration report",
