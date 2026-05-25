@@ -327,3 +327,16 @@ Tail tally: 193 / 193 pass, ruff clean. Pre-#36 baseline was 188 — the prior P
 **Open questions / blockers:** none — PR ready for review.
 
 **Next session:** Continue the multi-issue loop. Deferred follow-ups from `rag-production-kit#41` (`generator.max_chunks`, `embedder.dim`, `streaming.PhaseTimings.percentile`) and `embedding-model-shootout#34` (`hash_embedder.dim/ngram`, `synthesize_queries n/min/max`) are the next natural targets — both repos explicitly named them in PR bodies, both fit the same active pattern.
+
+## 2026-05-26 — Issue #46: Bounded-float validation on calibration thresholds
+**Duration:** ~20 min · **Branch:** `session/2026-05-25-1900-issue-46`
+
+- `binarize(threshold)` and `render_report(threshold_kappa)` now use the bounded-float validator shape established by `compute_drift` in #40: reject `NaN`/`inf`/`-inf`/`bool`/non-numeric, then enforce the explicit value-domain range (`[0, 1]` for `binarize.threshold` to match `JudgeScore.score`; `[-1, 1]` for `threshold_kappa` to match Cohen's κ).
+- Closes two silent-failure modes documented in #45's deferred list: `threshold=NaN` silently produced κ=0 via the degenerate `pe == 1.0` branch in `cohens_kappa`; `threshold_kappa=NaN`/`-2` silently broke or disabled the CI gate.
+- 47 new parametrize tests across both sites. Full suite 261 → 285. Ruff clean.
+
+**Why this work, this session:** Fourth Phase B+C target in today's 180-min DAY session and second PR in this repo today. PR #45 (`AnthropicBackend.max_tokens`) explicitly named these two calibration boundaries as "Out of scope (file separately if needed)" — closing them in the same session keeps the deferred-list-closure narrative consistent across the day's PRs (`rag-production-kit#43`, `embedding-model-shootout#36`, and now this one).
+
+**Open questions / blockers:** none — PR ready for review.
+
+**Next session:** With four explicit deferred-lists now closed in one day (`llm-eval-harness#45` for judge max_tokens, `rag-production-kit#43` for three deferred sites, `embedding-model-shootout#36` for five deferred sites, and this PR for two calibration sites), the active validation-sweep arc has no remaining named follow-ups. Next sessions can pivot to discovery passes on repos not yet touched today (`prompt-regression-suite`, `chunking-strategies-lab`, `vector-search-at-scale`, `python-async-llm-pipelines`, `agent-orchestration-platform`, `mcp-server-cookbook`, `nextjs-streaming-ai-patterns`, `ai-app-integration-tests`) or pivot away from validation entirely.
