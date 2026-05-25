@@ -27,6 +27,7 @@ Delta semantics:
 from __future__ import annotations
 
 import json
+import math
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -301,8 +302,14 @@ def diff_runs(
     # would be reported as failing and vice versa. The CLI exposes this as
     # `--threshold-drop` three times (`run`, `diff`, `diff-json`); raising
     # here funnels every path through one canonical guard.
-    if threshold_drop < 0.0:
-        raise ValueError(f"threshold_drop must be >= 0.0; got {threshold_drop}")
+    #
+    # NaN and +/-Infinity also need to be rejected (#42): a sign-only check
+    # passes them through, then `delta < -NaN` is always false → every row
+    # is silently non-flagged → the CI regression gate silently disables.
+    # Same shape as the sweep landed in ai-app-integration-tests #24 and
+    # sister repos.
+    if not math.isfinite(threshold_drop) or threshold_drop < 0.0:
+        raise ValueError(f"threshold_drop must be a finite number >= 0.0; got {threshold_drop}")
     if current.suite != baseline.suite:
         raise ValueError(
             f"cannot diff across suites: current={current.suite} baseline={baseline.suite}"

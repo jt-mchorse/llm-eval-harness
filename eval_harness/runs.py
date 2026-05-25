@@ -246,8 +246,12 @@ def list_runs(
     consumers always print or serialize the full set; streaming buys
     nothing at typical history sizes (<= a few thousand runs per DB).
     """
-    if limit <= 0:
-        raise ValueError(f"limit must be positive, got {limit}")
+    # Pre-#42 the sign-only `limit <= 0` accepted NaN (NaN <= 0 is false) and
+    # floats (`0.5` silently truncates to `0` in SQLite's LIMIT integer
+    # coercion → no rows returned; `NaN` propagates into the LIMIT bind and
+    # surfaces as a cryptic sqlite3.InterfaceError). Require int + positive.
+    if not isinstance(limit, int) or isinstance(limit, bool) or limit <= 0:
+        raise ValueError(f"limit must be a positive integer, got {limit!r}")
     query = (
         "SELECT run_id, started_at, suite, dataset_version, judge_model, "
         "       judge_kappa, mean_score, n_rows, git_sha "

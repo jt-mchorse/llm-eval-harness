@@ -236,8 +236,27 @@ def _make_two_runs_for_diff(tmp_path: Path) -> tuple:
 
 def test_diff_runs_rejects_negative_threshold_drop(tmp_path: Path) -> None:
     cur, base = _make_two_runs_for_diff(tmp_path)
-    with pytest.raises(ValueError, match=r"threshold_drop must be >= 0\.0; got -0\.01"):
+    # Error message was tightened in #42 from "must be >= 0.0" to "must be
+    # a finite number >= 0.0" so the contract covers NaN/+Infinity too.
+    with pytest.raises(
+        ValueError, match=r"threshold_drop must be a finite number >= 0\.0; got -0\.01"
+    ):
         diff_runs(cur, base, threshold_drop=-0.01)
+
+
+# Issue #42: extend the sign-only threshold_drop check to finiteness. NaN
+# slipped past `threshold_drop < 0.0` (NaN comparisons are always false),
+# then `delta < -NaN` is also always false → every row silently classified
+# as non-flagged → the CI regression gate silently disabled. Same shape in
+# sister repo ai-app-integration-tests #24 finiteness sweep.
+@pytest.mark.parametrize(
+    "bad_value",
+    [float("nan"), float("inf"), float("-inf")],
+)
+def test_diff_runs_rejects_non_finite_threshold_drop(tmp_path: Path, bad_value: float) -> None:
+    cur, base = _make_two_runs_for_diff(tmp_path)
+    with pytest.raises(ValueError, match=r"threshold_drop must be a finite number >= 0\.0"):
+        diff_runs(cur, base, threshold_drop=bad_value)
 
 
 def test_diff_runs_accepts_zero_threshold_drop(tmp_path: Path) -> None:
@@ -263,5 +282,6 @@ def test_diff_runs_accepts_positive_threshold_drop(tmp_path: Path) -> None:
 @pytest.mark.parametrize("bad", [-1e-6, -0.001, -0.5, -1.0])
 def test_diff_runs_negative_sweep_all_raise(tmp_path: Path, bad: float) -> None:
     cur, base = _make_two_runs_for_diff(tmp_path)
-    with pytest.raises(ValueError, match=r"threshold_drop must be >= 0\.0"):
+    # Message tightened in #42 to "must be a finite number >= 0.0".
+    with pytest.raises(ValueError, match=r"threshold_drop must be a finite number >= 0\.0"):
         diff_runs(cur, base, threshold_drop=bad)

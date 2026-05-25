@@ -140,3 +140,40 @@ class TestLatestForSuite:
         init_db(db)
         with connect(db) as conn:
             assert latest_run_id_for_suite(conn, "anything") is None
+
+
+# Issue #42: list_runs limit validation extended from sign-only `<= 0`
+# to integer + positive. Pre-#42 NaN passed (NaN <= 0 is false) and
+# propagated into SQLite's LIMIT bind as a cryptic InterfaceError; 0.5
+# silently truncated to 0 in SQLite's integer coercion → no rows.
+class TestListRunsLimitValidation:
+    def _seeded(self, tmp_path: Path):
+        from eval_harness.runs import list_runs
+
+        db = tmp_path / "runs.db"
+        init_db(db)
+        return list_runs, db
+
+    @pytest.mark.parametrize(
+        "bad_value",
+        [0, -1, 0.5, 1.5, float("nan"), float("inf"), float("-inf"), "10", True, False],
+    )
+    def test_rejects_non_positive_or_non_int_limit(self, tmp_path: Path, bad_value) -> None:
+        list_runs, db = self._seeded(tmp_path)
+        with (
+            connect(db) as conn,
+            pytest.raises(ValueError, match=r"limit must be a positive integer"),
+        ):
+            list_runs(conn, limit=bad_value)  # type: ignore[arg-type]
+
+    def test_accepts_positive_integer_limit(self, tmp_path: Path) -> None:
+        list_runs, db = self._seeded(tmp_path)
+        with connect(db) as conn:
+            _seed_run(
+                conn,
+                run_id="r1",
+                suite="s",
+                started_at="2026-05-15T19:00:00Z",
+                rows=[("ex", 0.5, "meh")],
+            )
+            assert len(list_runs(conn, limit=1)) == 1
