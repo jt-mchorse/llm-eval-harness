@@ -301,3 +301,16 @@ Tail tally: 193 / 193 pass, ruff clean. Pre-#36 baseline was 188 — the prior P
 **Open questions / blockers:** none — PR ready for review.
 
 **Next session:** Continue the day-session loop. Build sequence #2 (`llm-cost-optimizer`) and #3 (`prompt-regression-suite`) are the natural next pickups after this one merges; scan their public-surface threshold/range parameters for the same shape of gap.
+
+## 2026-05-25 — Issue #42: extend sign-only guards on diff_runs.threshold_drop and list_runs.limit to finiteness
+**Duration:** ~25 min · **Branch:** `session/2026-05-24-issue-42`
+
+- Two existing sign-only range checks let `NaN` and `+/-Infinity` through. `runner.diff_runs.threshold_drop` (#38-shipped guard at `runner.py:304`) accepted `NaN`; `_status_for` then computed `delta < -NaN` = always false, so every row was classified as non-flagged regression → the CI regression gate that `--threshold-drop` drives silently disabled. `+Infinity` had the inverse silent-degradation shape. `runs.list_runs.limit` accepted `NaN` (propagated into the SQLite `LIMIT` bind as a cryptic `sqlite3.InterfaceError`) and floats (`0.5` silently truncated to `0` in SQLite's integer coercion → zero rows returned).
+- Tightened both: `threshold_drop` now requires `math.isfinite(x)`; `limit` now requires `isinstance(x, int) and not isinstance(x, bool) and x > 0` (the explicit `bool` exclusion exists because Python's `bool` subclasses `int`). Error messages updated from "must be >= 0.0" / "must be positive" to "must be a finite number >= 0.0" / "must be a positive integer" so callers can grep the new contract. Two pre-existing tests that pinned the old message strings updated in place.
+- 14 new tests: `tests/test_runner.py` parametrized over `[NaN, +Infinity, -Infinity]` for `threshold_drop`; `tests/test_runs.py` new `TestListRunsLimitValidation` class parametrized over `[0, -1, 0.5, 1.5, NaN, +Inf, -Inf, "10", True, False]` plus boundary acceptance. Test count 238 (was 224 after #40). Ruff clean.
+
+**Why this work, this session:** Sixth Phase B+C target in the 360-min night session. Brings llm-eval-harness's existing sign-only contract checks (from #38/#39/#40) into the same finiteness contract that landed across the portfolio tonight: `ai-app-integration-tests#24`, `nextjs-streaming-ai-patterns#24`, `mcp-server-cookbook#32`, `agent-orchestration-platform#29`, `prompt-regression-suite#35`. Second PR in this repo tonight; the first was via the Phase A fixup-merge of PR #41 (#40 D-014 `compute_drift` threshold validation).
+
+**Open questions / blockers:** none — PR ready for review.
+
+**Next session:** Continue the loop. `llm-cost-optimizer` and `rag-production-kit` are natural next targets for a second iteration tonight — both already had a contract-tightening PR fixup-merge today but the deeper validation gap pattern (silent-clamp removal, finiteness extension) hasn't been swept through their cost dataclasses comprehensively.
