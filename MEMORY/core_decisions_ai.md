@@ -126,3 +126,12 @@
   reversibility: cheap
   related_issues: [#4]
   superseded_by: null
+
+- id: D-015
+  date: 2026-05-26
+  decision: atomic_write_helpers_live_in_package_level_io_utils_module_not_file_private
+  rationale: portfolio_standard_emerged_from_2026_05_26_atomic_write_arc_rag_kit_io_utils_atomic_write_text_was_first_in_pr_44_45_other_repos_followed_keeping_helper_private_in_cli_py_was_the_outlier
+  alternatives_rejected: [keep_helper_file_private_in_cli_py, split_into_one_helper_per_call_site_file, ship_a_separate_distribution_package]
+  reversibility: cheap
+  related_issues: [#48, #50]
+  superseded_by: null
