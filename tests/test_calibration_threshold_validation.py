@@ -44,8 +44,8 @@ from eval_harness.calibration import (
         math.nan,
         math.inf,
         -math.inf,
-        True,           # bool: silently coerced to 1.0 — surprising threshold.
-        False,          # bool: silently coerced to 0.0.
+        True,  # bool: silently coerced to 1.0 — surprising threshold.
+        False,  # bool: silently coerced to 0.0.
         None,
         "0.5",
         [],

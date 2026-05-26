@@ -236,13 +236,9 @@ def render_report(
         or math.isnan(threshold_kappa)
         or math.isinf(threshold_kappa)
     ):
-        raise ValueError(
-            f"threshold_kappa must be a finite number; got {threshold_kappa!r}"
-        )
+        raise ValueError(f"threshold_kappa must be a finite number; got {threshold_kappa!r}")
     if not -1.0 <= threshold_kappa <= 1.0:
-        raise ValueError(
-            f"threshold_kappa must be in [-1, 1]; got {threshold_kappa!r}"
-        )
+        raise ValueError(f"threshold_kappa must be in [-1, 1]; got {threshold_kappa!r}")
     pass_fail = "PASS" if result.cohens_kappa >= threshold_kappa else "FAIL"
     lines = [
         "# Judge calibration report",
