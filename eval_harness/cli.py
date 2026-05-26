@@ -20,8 +20,11 @@ Plus two consumer-workflow subcommands:
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
+import os
 import sys
+import tempfile
 from pathlib import Path
 
 from eval_harness.calibration import calibrate, load_calibration, render_report
@@ -45,6 +48,42 @@ from eval_harness.runner import (
 from eval_harness.runs import RunSummary, connect, init_db_on, list_runs, read_run
 
 DEFAULT_DB_PATH = Path.home() / ".eval-harness" / "runs.db"
+
+
+def _atomic_write_text(path: str | Path, text: str) -> None:
+    # `Path.write_text` is not atomic (#48): SIGINT/SIGTERM/disk-full/OOM
+    # between the implicit `open(..., "w")` truncate and `close()` flush
+    # leaves the destination zero-length or partial. Downstream
+    # `diff-json`/`comment` then parse a half-written JSON and either
+    # crash with a cryptic JSONDecodeError or, in the GitHub Action
+    # workflow (D-006), post a corrupt sticky comment.
+    #
+    # Pattern: write to a sibling temp file in the same directory,
+    # fsync, then `os.replace` (atomic on POSIX within the same FS).
+    # Same-directory placement guarantees same filesystem so the rename
+    # cannot fall back to a copy.
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=target.parent,
+            prefix=f".{target.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as tmp:
+            tmp_path = Path(tmp.name)
+            tmp.write(text)
+            tmp.flush()
+            os.fsync(tmp.fileno())
+        os.replace(tmp_path, target)
+        tmp_path = None
+    finally:
+        if tmp_path is not None:
+            with contextlib.suppress(FileNotFoundError):
+                tmp_path.unlink()
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -298,8 +337,7 @@ def _run_run(args: argparse.Namespace) -> int:
         return 2
     json_text = render_run_json(result)
     if args.out:
-        Path(args.out).parent.mkdir(parents=True, exist_ok=True)
-        Path(args.out).write_text(json_text, encoding="utf-8")
+        _atomic_write_text(args.out, json_text)
     else:
         print(json_text)
 
@@ -334,8 +372,7 @@ def _run_diff(args: argparse.Namespace) -> int:
     else:
         rendered = render_delta_ascii(report) + "\n"
     if args.out:
-        Path(args.out).parent.mkdir(parents=True, exist_ok=True)
-        Path(args.out).write_text(rendered, encoding="utf-8")
+        _atomic_write_text(args.out, rendered)
     else:
         print(rendered, end="")
     return 1 if report.summary["n_flagged"] > 0 else 0
@@ -352,8 +389,7 @@ def _run_diff_json(args: argparse.Namespace) -> int:
     else:
         rendered = render_delta_ascii(report)
     if args.out:
-        Path(args.out).parent.mkdir(parents=True, exist_ok=True)
-        Path(args.out).write_text(rendered, encoding="utf-8")
+        _atomic_write_text(args.out, rendered)
     else:
         print(rendered, end="")
     return 1 if report.summary["n_flagged"] > 0 else 0
@@ -446,8 +482,7 @@ def _emit_list_output(rendered: str, out: str | None) -> None:
     the renderer already adds one.
     """
     if out:
-        Path(out).parent.mkdir(parents=True, exist_ok=True)
-        Path(out).write_text(rendered, encoding="utf-8")
+        _atomic_write_text(out, rendered)
     else:
         print(rendered, end="")
 
