@@ -51,6 +51,17 @@ class AnthropicBackend:
     """
 
     def __init__(self, model: str | None = None, max_tokens: int = 512) -> None:
+        # Validate before the lazy `import anthropic` so misconfig fails fast
+        # without the `judge` extra installed. Mirrors `runs.list_runs.limit`
+        # (#42) and the portfolio-wide positive-int contract sweep.
+        # `bool` is rejected explicitly: `bool` subclasses `int`, so `True`
+        # silently bound `self.max_tokens = True` → API received `max_tokens=1`
+        # → 1-token judge response → `parse_judge_output` raised
+        # `JudgeParseError` far from the misconfig site. `0` / negatives /
+        # floats reached the API and surfaced as opaque 400s.
+        if not isinstance(max_tokens, int) or isinstance(max_tokens, bool) or max_tokens <= 0:
+            raise ValueError(f"max_tokens must be a positive integer; got {max_tokens!r}")
+
         try:
             import anthropic  # type: ignore[import-not-found]
         except ImportError as e:

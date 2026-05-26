@@ -314,3 +314,16 @@ Tail tally: 193 / 193 pass, ruff clean. Pre-#36 baseline was 188 — the prior P
 **Open questions / blockers:** none — PR ready for review.
 
 **Next session:** Continue the loop. `llm-cost-optimizer` and `rag-production-kit` are natural next targets for a second iteration tonight — both already had a contract-tightening PR fixup-merge today but the deeper validation gap pattern (silent-clamp removal, finiteness extension) hasn't been swept through their cost dataclasses comprehensively.
+
+## 2026-05-25 — Issue #44: `AnthropicBackend(max_tokens=...)` value-domain validation
+**Duration:** ~25 min · **Branch:** `session/2026-05-25-issue-44`
+
+- Hoisted a positive-integer validator above the lazy `import anthropic` in `AnthropicBackend.__init__`, matching the `runs.list_runs.limit` shape from #42 (`not isinstance(int) or isinstance(bool) or <= 0`). Construction now fails fast with `ValueError("max_tokens must be a positive integer; got ...")` regardless of whether the optional `judge` extra is installed.
+- Closed three silent failure modes: `max_tokens=True` silently bound `1` and returned a 1-token judge response (surfaced far downstream as `JudgeParseError`); `0`/negative reached the Anthropic API as opaque 400s; `0.5`/`NaN`/`inf` slipped sign-only checks and either reached the API or behaved as `False` (NaN <= 0 is False).
+- Added `tests/test_judge_max_tokens_validation.py`: 16-value reject matrix (bool/zero/negative/float/NaN/inf/None/str/list/tuple/dict), boundary acceptance for `1/2/256/512/100_000`, and a pinning test proving validator-runs-before-lazy-import (asserts `ValueError` rather than `ImportError` in an env without the extra). 23 new tests; full suite 238 → 261.
+
+**Why this work, this session:** First Phase B+C target in today's 180-min DAY session after the Phase A pass squash-merged three ready PRs (`rag-production-kit#41`, `embedding-model-shootout#34`, `llm-cost-optimizer#39`) — all three were the same portfolio-wide positive-int contract sweep. Extending that same sweep into `judge.py` lands the first validator in the judge module and matches the construction-site pattern from `embedding-model-shootout#34` (validator above lazy import).
+
+**Open questions / blockers:** none — PR ready for review.
+
+**Next session:** Continue the multi-issue loop. Deferred follow-ups from `rag-production-kit#41` (`generator.max_chunks`, `embedder.dim`, `streaming.PhaseTimings.percentile`) and `embedding-model-shootout#34` (`hash_embedder.dim/ngram`, `synthesize_queries n/min/max`) are the next natural targets — both repos explicitly named them in PR bodies, both fit the same active pattern.
