@@ -17,6 +17,7 @@ eval_harness/
 ├── pytest_plugin.py    ← #5: @pytest.mark.eval(...) parametrization (D-013)
 ├── comment.py          ← #6: sticky-comment renderer + marker-based upsert (D-009)
 ├── cli.py              ← #7: argparse entry point binding every layer
+├── io_utils.py         ← cross-cutting: atomic_write_text (D-015)
 └── __init__.py         ← public surface (#24)
 ```
 
@@ -171,6 +172,11 @@ alias was visible in `--help`, locked by
   `tests/test_readme_snapshot.py` and
   `tests/test_readme_defaults_snapshot.py` lock the README's quoted
   defaults / identifier claims to the source.
+- **Atomic writes (`io_utils.atomic_write_text`, #50).** Every
+  `--out` write across `cli.py`, `dataset.py`, and `drift.py` goes
+  through one package-level helper (D-015) that writes to
+  `<dest>.tmp`, `fsync`s, and `os.replace`s — operators never see a
+  half-written report from a Ctrl-C mid-run.
 
 ## What's deliberately not in the harness
 
