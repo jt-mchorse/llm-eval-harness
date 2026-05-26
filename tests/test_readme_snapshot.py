@@ -31,6 +31,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 README = REPO_ROOT / "README.md"
+DECISIONS = REPO_ROOT / "MEMORY" / "core_decisions_ai.md"
 
 
 def _live_cli_subcommands() -> list[str]:
@@ -123,6 +124,58 @@ def test_referenced_files_exist() -> None:
     assert not missing, (
         f"README references files that don't exist: {missing}. "
         "Either fix the link or commit the file."
+    )
+
+
+def _max_active_decision_id() -> int:
+    """Highest non-superseded ``D-NNN`` in ``MEMORY/core_decisions_ai.md``.
+
+    The README's architecture-section summary cites a range like
+    ``D-002…D-NNN``; this is the NNN that must be current. A new decision
+    landing without the README being updated fails the sister test below.
+    """
+    text = DECISIONS.read_text(encoding="utf-8")
+    blocks = re.split(r"\n(?=- id:)", text)
+    best = 0
+    for block in blocks:
+        id_match = re.search(r"- id:\s*D-(\d+)", block)
+        if not id_match:
+            continue
+        sup_match = re.search(r"superseded_by:\s*(\S+)", block)
+        is_active = (sup_match is None) or (sup_match.group(1).strip().lower() == "null")
+        if is_active:
+            n = int(id_match.group(1))
+            if n > best:
+                best = n
+    return best
+
+
+def test_decision_range_cites_latest_active() -> None:
+    """README's architecture-section summary must cite the active-decision
+    range as ``D-002…D-NNN`` with NNN equal to the highest active
+    (non-superseded) ``D-NNN`` in ``MEMORY/core_decisions_ai.md``.
+
+    Sister to ``chunking-strategies-lab`` ``test_readme_snapshot.py``'s
+    ``test_decision_range_cites_latest_active`` — the same lock catches
+    the drift class where a new D-NNN lands without the README's range
+    bound being bumped (this exact shape surfaced in #51 when D-015
+    landed without ``docs/architecture.md`` being updated).
+    """
+    body = _readme()
+    pattern = re.compile(r"D-0*2\s*(?:…|\.\.\.)\s*D-0*(\d+)")
+    matches = pattern.findall(body)
+    assert matches, (
+        "README.md must cite the active-decision range as "
+        "`D-002…D-NNN` somewhere (the architecture-section summary "
+        "paragraph by convention). Not found."
+    )
+    cited = max(int(m) for m in matches)
+    latest = _max_active_decision_id()
+    assert cited == latest, (
+        f"README.md cites decision range up to D-{cited:03d}, but the "
+        f"highest active D-NNN in MEMORY/core_decisions_ai.md is "
+        f"D-{latest:03d}. Update the README's architecture-section "
+        f"summary to D-002…D-{latest:03d}."
     )
 
 
