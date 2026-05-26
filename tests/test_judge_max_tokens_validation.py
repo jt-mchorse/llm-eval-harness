@@ -29,20 +29,20 @@ from eval_harness.judge import AnthropicBackend
 @pytest.mark.parametrize(
     "bad_max_tokens",
     [
-        True,             # bool: subclass of int; would silently bind max_tokens=1.
-        False,            # bool: would silently bind max_tokens=0.
-        0,                # zero: API rejects with opaque 400.
-        -1,               # negative: API rejects.
-        -512,             # negative larger magnitude.
-        0.5,              # float: API rejects or coerces; non-int contract.
-        1.0,              # whole float: still not int.
-        512.0,            # whole float at the default value.
-        math.nan,         # NaN: NaN <= 0 is False, would slip a sign-only check.
-        math.inf,         # +inf: would slip sign-only and hit the API.
-        -math.inf,        # -inf: matches the negative path but via float.
-        None,             # explicitly typed `int`, None not allowed.
-        "512",            # string of digits — not int.
-        [],               # arbitrary non-int.
+        True,  # bool: subclass of int; would silently bind max_tokens=1.
+        False,  # bool: would silently bind max_tokens=0.
+        0,  # zero: API rejects with opaque 400.
+        -1,  # negative: API rejects.
+        -512,  # negative larger magnitude.
+        0.5,  # float: API rejects or coerces; non-int contract.
+        1.0,  # whole float: still not int.
+        512.0,  # whole float at the default value.
+        math.nan,  # NaN: NaN <= 0 is False, would slip a sign-only check.
+        math.inf,  # +inf: would slip sign-only and hit the API.
+        -math.inf,  # -inf: matches the negative path but via float.
+        None,  # explicitly typed `int`, None not allowed.
+        "512",  # string of digits — not int.
+        [],  # arbitrary non-int.
         (1,),
         {"value": 1},
     ],

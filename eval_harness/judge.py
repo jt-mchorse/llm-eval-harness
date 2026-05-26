@@ -59,14 +59,8 @@ class AnthropicBackend:
         # → 1-token judge response → `parse_judge_output` raised
         # `JudgeParseError` far from the misconfig site. `0` / negatives /
         # floats reached the API and surfaced as opaque 400s.
-        if (
-            not isinstance(max_tokens, int)
-            or isinstance(max_tokens, bool)
-            or max_tokens <= 0
-        ):
-            raise ValueError(
-                f"max_tokens must be a positive integer; got {max_tokens!r}"
-            )
+        if not isinstance(max_tokens, int) or isinstance(max_tokens, bool) or max_tokens <= 0:
+            raise ValueError(f"max_tokens must be a positive integer; got {max_tokens!r}")
 
         try:
             import anthropic  # type: ignore[import-not-found]
