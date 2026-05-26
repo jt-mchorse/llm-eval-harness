@@ -367,3 +367,15 @@ Tail tally: 193 / 193 pass, ruff clean. Pre-#36 baseline was 188 — the prior P
 **Open questions / blockers:** none — PR ready for review.
 
 **Next session:** Continue the multi-issue DAY loop — pick a different repo. Candidate harm classes the portfolio hasn't yet covered: (a) input-trust on external API responses (Anthropic, embeddings, etc. — what if the response is missing fields or has unexpected shape?), (b) resource leaks on error paths (file handles, sqlite connections, subprocess handles), (c) determinism guarantees in tests (pinned seeds, no clock-dependent fixtures), (d) extending the io_utils promotion to other repos that still have a file-private atomic-write helper. (d) is the lowest-friction next move since the pattern is identical and the value is portfolio-coherence.
+
+## 2026-05-26 — Issue #52: README decision-range upper-bound lock
+**Duration:** ~15 min · **Branch:** `session/2026-05-26-2319-issue-52`
+
+- Added `test_decision_range_cites_latest_active` and `_max_active_decision_id` helper to `tests/test_readme_snapshot.py`. Sister lock to chunking-strategies-lab's same-named invariant, which caught real drift this session.
+- Bumped README's architecture-section to cite `D-002…D-015` (D-015 = the io_utils package-level decision from #51).
+
+**Why this work, this session:** Authoring this lock in chunking-strategies-lab this session caught D-011 → D-012 drift; propagating the invariant to the other 10 portfolio repos closes the same drift class portfolio-wide. llm-eval-harness was first because it had also just gained a new decision (D-015) without the README being updated — exactly the failure mode the test guards.
+
+**Open questions / blockers:** none.
+
+**Next session:** Continue propagating the lock to the remaining nine repos (llm-cost-optimizer next per build sequence).
