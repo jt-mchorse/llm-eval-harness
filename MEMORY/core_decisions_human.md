@@ -193,3 +193,17 @@ Strategic decisions for this repo, with reasoning. Append-only — superseded de
 **Reversibility:** Cheap. The metric is one function (`jensen_shannon`) called from three call sites; swapping to a different metric is a localized rewrite.
 
 **Related issues:** #4
+
+## D-015 — Atomic-write helpers live in package-level `io_utils`, not file-private (2026-05-26)
+**Decision:** Atomic-write helpers in this repo (and the wider portfolio) live in a package-level `io_utils` module — for `llm-eval-harness` that is `eval_harness/io_utils.py` exposing `atomic_write_text(path, text, encoding="utf-8")`. File-private helpers like the `_atomic_write_text` PR #49 originally placed in `cli.py` are an anti-pattern: they prevent other modules in the same package from reaching the helper, and they fragment the test surface so each importing module has to monkey-patch a different `<mod>.os.replace`.
+
+**Why:** The 2026-05-26 atomic-write arc landed similar helpers across six repos. `rag-production-kit#44/#45` led with a package-level `rag_kit/io_utils.atomic_write_text` and three call sites; `prompt-regression-suite#40` followed in `prompt_regression/io.py`; `mcp-server-cookbook#37` used a separate `atomic_write.ts` module. Only `llm-eval-harness#49` kept the helper file-private, on the theory that "only cli.py needs it." That theory broke immediately: this issue (#50) found three additional call sites in `drift.py`, `dataset.py`, and a fifth in `cli.py` itself that the private placement either obscured or couldn't reach. Promoting the helper centralizes the test surface (one `io_utils.os` to monkeypatch) and gives every module in the package a path to atomicity guarantees without re-implementing the pattern.
+
+**Alternatives considered:**
+- Keep the helper file-private in `cli.py` — rejected; the call sites in `drift.py` and `dataset.py` would have to either duplicate the helper or import a private symbol across module boundaries (anti-pattern flagged by every linter).
+- Split into one helper per call-site file — rejected; the pattern is identical across all five sites, so duplication has no upside and several downsides (each copy can drift, each needs its own test suite).
+- Ship a separate distribution package — rejected; gross over-engineering for ~25 lines that has exactly one consumer.
+
+**Reversibility:** Cheap. The helper is two dozen lines and a stable API; if a future evolution wants per-module variants, the public symbol can call into private ones.
+
+**Related issues:** #48, #50
