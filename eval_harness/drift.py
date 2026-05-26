@@ -41,6 +41,8 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from eval_harness.io_utils import atomic_write_text
+
 # ----------------------------------------------------------------------
 # Public types
 # ----------------------------------------------------------------------
@@ -676,7 +678,7 @@ def cli(argv: Sequence[str] | None = None) -> int:
         judge_score_fn=judge_fn,
         cluster_k=args.cluster_k,
     )
-    Path(args.output).write_text(render_html(report), encoding="utf-8")
+    atomic_write_text(args.output, render_html(report))
     summary = (
         f"wrote {args.output}: "
         f"length={report.length.drift_score:.3f} ({report.length.status}), "

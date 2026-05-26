@@ -38,6 +38,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, ClassVar
 
+from eval_harness.io_utils import atomic_write_text
+
 
 class DatasetLoadError(ValueError):
     """Raised when a JSONL dataset line fails to parse or validate.
@@ -142,7 +144,7 @@ class Dataset:
             json.dumps(ex.to_dict(), sort_keys=True, ensure_ascii=False, separators=(",", ":"))
             for ex in self.examples
         )
-        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        atomic_write_text(path, "\n".join(lines) + "\n")
 
 
 # --- loader -----------------------------------------------------------------

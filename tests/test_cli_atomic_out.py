@@ -1,4 +1,4 @@
-"""Atomicity contract for `eval-harness --out` writes (issue #48).
+"""Atomicity contract for `eval-harness --out` CLI writes (issue #48).
 
 `Path.write_text` is not atomic: SIGINT/SIGTERM/disk-full/OOM between
 the implicit `open(..., "w")` truncate and `close()` flush leaves the
@@ -9,19 +9,18 @@ a corrupt sticky comment.
 
 The fix routes all four CLI write sites — `run --out`,
 `diff --out`, `diff-json --out`, `list --out` — through
-`_atomic_write_text`, which writes to a sibling temp file in the same
-directory, `fsync`s, then `os.replace`s. The temp's same-directory
-placement is load-bearing: it guarantees same filesystem so the rename
-can't fall back to a copy.
+`atomic_write_text` (now public in `eval_harness.io_utils` per issue #50;
+was private `_atomic_write_text` in `cli.py` per issue #48).
 
 What this file pins:
 
-- The helper itself: happy path, overwrite, parent-dir creation, plus
-  the two invariants — destination unchanged when `os.replace` raises,
-  no leftover `.tmp` siblings after failure.
 - Integration through the CLI: each subcommand's `--out` survives a
   simulated `os.replace` failure without ever touching the destination,
   proving the four call sites all route through the helper.
+
+Unit tests on the helper itself live next to the helper in
+`tests/test_io_utils_atomic_write.py` (moved there when the helper was
+promoted to a package-level public symbol in issue #50).
 """
 
 from __future__ import annotations
@@ -33,110 +32,15 @@ from unittest.mock import patch
 
 import pytest
 
-from eval_harness import cli as cli_mod
-from eval_harness.cli import _atomic_write_text, main
+from eval_harness import io_utils as io_utils_mod
+from eval_harness.cli import main
 
 ROOT = Path(__file__).resolve().parent.parent
 SAMPLE_DATASET = Path("fixtures/sample_factuality_v1.jsonl")
 
 
 # ---------------------------------------------------------------------------
-# Unit tests on the helper itself.
-# ---------------------------------------------------------------------------
-
-
-def test_atomic_write_text_happy_path(tmp_path: Path) -> None:
-    out = tmp_path / "out.txt"
-    _atomic_write_text(out, "hello\nworld\n")
-    assert out.read_text(encoding="utf-8") == "hello\nworld\n"
-
-
-def test_atomic_write_text_creates_parent_dirs(tmp_path: Path) -> None:
-    out = tmp_path / "deep" / "nested" / "x.json"
-    assert not out.parent.exists()
-    _atomic_write_text(out, "{}")
-    assert out.read_text(encoding="utf-8") == "{}"
-
-
-def test_atomic_write_text_overwrites_existing_file(tmp_path: Path) -> None:
-    """Existing destination with stale content is replaced wholly — never appended."""
-    out = tmp_path / "out.txt"
-    out.write_text("STALE-CONTENT-MUST-NOT-SURVIVE", encoding="utf-8")
-    _atomic_write_text(out, "fresh")
-    body = out.read_text(encoding="utf-8")
-    assert body == "fresh"
-    assert "STALE" not in body
-
-
-def test_atomic_write_text_replace_failure_leaves_destination_absent(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Load-bearing atomicity invariant.
-
-    If `os.replace` raises (simulating an `EXDEV` cross-device error,
-    a SIGINT delivered between fsync and rename, or any
-    `PermissionError`), the destination must not exist. The helper must
-    never touch the destination directly — only via the atomic rename.
-    """
-    out = tmp_path / "result.json"
-
-    def boom(*_args, **_kwargs):
-        raise OSError("simulated mid-rename failure")
-
-    monkeypatch.setattr(cli_mod.os, "replace", boom)
-    with pytest.raises(OSError, match="simulated mid-rename failure"):
-        _atomic_write_text(out, '{"k": "v"}')
-
-    assert not out.exists(), "destination must remain absent when os.replace fails"
-
-
-def test_atomic_write_text_replace_failure_cleans_up_tmp_files(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """No leftover `.tmp` siblings after a failed atomic write.
-
-    The temp file lives in the destination's parent directory so the
-    rename is same-filesystem; on rename failure the helper must
-    unlink it. Otherwise a long-running CI workflow accumulates
-    `.<name>.<token>.tmp` litter alongside legitimate artifacts.
-    """
-    out = tmp_path / "artifacts" / "delta.json"
-    out.parent.mkdir(parents=True, exist_ok=True)
-
-    def boom(*_args, **_kwargs):
-        raise OSError("simulated mid-rename failure")
-
-    monkeypatch.setattr(cli_mod.os, "replace", boom)
-    with pytest.raises(OSError, match="simulated mid-rename failure"):
-        _atomic_write_text(out, '{"k": "v"}')
-
-    siblings = list(out.parent.iterdir())
-    assert siblings == [], f"expected no temp leftovers in {out.parent}, got {siblings}"
-
-
-def test_atomic_write_text_destination_unchanged_when_overwriting_fails(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """When overwriting an existing file, a failed `os.replace` must
-    leave the pre-existing destination contents intact — not zero-length,
-    not partial, not the new content. This is the property the broken
-    `Path.write_text` implementation can never offer.
-    """
-    out = tmp_path / "existing.json"
-    out.write_text('{"keep": true}', encoding="utf-8")
-
-    def boom(*_args, **_kwargs):
-        raise OSError("simulated")
-
-    monkeypatch.setattr(cli_mod.os, "replace", boom)
-    with pytest.raises(OSError, match="simulated"):
-        _atomic_write_text(out, '{"overwrite": true}')
-
-    assert out.read_text(encoding="utf-8") == '{"keep": true}'
-
-
-# ---------------------------------------------------------------------------
-# Integration: each `--out` CLI surface routes through `_atomic_write_text`.
+# Integration: each `--out` CLI surface routes through atomic_write_text.
 #
 # Pattern mirrors `tests/test_cli_diff_format.py` — swap `AnthropicBackend`
 # for a deterministic stub so the suite stays hermetic.
@@ -210,7 +114,7 @@ def test_run_out_routes_through_atomic_helper(
 ) -> None:
     """`eval-harness run --out` must not touch the destination on
     `os.replace` failure. Verifies cli.py:_run_run is wired through
-    `_atomic_write_text`.
+    `atomic_write_text`.
     """
     db = tmp_path / "runs.db"
     out = tmp_path / "result.json"
@@ -218,7 +122,7 @@ def test_run_out_routes_through_atomic_helper(
     def boom(*_args, **_kwargs):
         raise OSError("simulated rename failure")
 
-    monkeypatch.setattr(cli_mod.os, "replace", boom)
+    monkeypatch.setattr(io_utils_mod.os, "replace", boom)
 
     with (
         patch("eval_harness.cli.AnthropicBackend", _HighBackend),
@@ -246,7 +150,7 @@ def test_diff_out_routes_through_atomic_helper(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """`eval-harness diff --out` must route through the atomic helper.
-    Verifies cli.py:_run_diff is wired through `_atomic_write_text`.
+    Verifies cli.py:_run_diff is wired through `atomic_write_text`.
     """
     db = tmp_path / "runs.db"
     baseline_id, current_id = _seed_two_runs(db)
@@ -255,7 +159,7 @@ def test_diff_out_routes_through_atomic_helper(
     def boom(*_args, **_kwargs):
         raise OSError("simulated rename failure")
 
-    monkeypatch.setattr(cli_mod.os, "replace", boom)
+    monkeypatch.setattr(io_utils_mod.os, "replace", boom)
     with pytest.raises(OSError, match="simulated rename failure"):
         main(
             [
@@ -330,7 +234,7 @@ def test_diff_json_out_routes_through_atomic_helper(
     def boom(*_args, **_kwargs):
         raise OSError("simulated rename failure")
 
-    monkeypatch.setattr(cli_mod.os, "replace", boom)
+    monkeypatch.setattr(io_utils_mod.os, "replace", boom)
     with pytest.raises(OSError, match="simulated rename failure"):
         main(
             [
@@ -366,7 +270,7 @@ def test_list_out_routes_through_atomic_helper(
     def boom(*_args, **_kwargs):
         raise OSError("simulated rename failure")
 
-    monkeypatch.setattr(cli_mod.os, "replace", boom)
+    monkeypatch.setattr(io_utils_mod.os, "replace", boom)
     with pytest.raises(OSError, match="simulated rename failure"):
         main(["list", "--db", str(db), "--json", "--out", str(out)])
 
