@@ -379,3 +379,25 @@ Tail tally: 193 / 193 pass, ruff clean. Pre-#36 baseline was 188 — the prior P
 **Open questions / blockers:** none.
 
 **Next session:** Continue propagating the lock to the remaining nine repos (llm-cost-optimizer next per build sequence).
+
+## 2026-05-27 — Issue #54: CONTRIBUTING.md cadence-wording propagation
+**Duration:** ~3 min · **Branch:** propagation branch · **PR:** #55
+
+- Replaced pre-D-008 `~60-minute session cap` line with D-008 (180/360 min, multi-issue loop) and D-004 (Phase A PR auto-merge) wording, matching the bootstrap template post-portfolio-ops#3.
+
+**Why this work, this session:** Iteration in the autonomous NIGHT session propagation arc for portfolio-ops#3.
+
+**Open questions / blockers:** none.
+
+**Next session:** continue portfolio propagation.
+
+## 2026-05-27 — Issue #54: CONTRIBUTING.md cadence-wording propagation
+**Duration:** ~3 min · **PR:** #55
+
+- Replaced pre-D-008 `~60-minute session cap` line with D-008 (180/360 min, multi-issue loop) and D-004 (Phase A PR auto-merge) wording, matching the bootstrap template post-portfolio-ops#3.
+
+**Why this work, this session:** Iteration in the autonomous NIGHT session propagation arc for portfolio-ops#3.
+
+**Open questions / blockers:** none.
+
+**Next session:** continue portfolio propagation.
