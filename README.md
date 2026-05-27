@@ -60,7 +60,9 @@ pretending to be a multi-rater gold standard.
 
 ## Architecture
 
-See [`docs/architecture.md`](docs/architecture.md). The shape:
+See [`docs/architecture.md`](docs/architecture.md) for the integrated flow,
+per-layer detail, and the design decisions behind each one (D-002…D-015).
+The shape:
 
 ```mermaid
 flowchart LR

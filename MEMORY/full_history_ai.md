@@ -576,3 +576,20 @@ context_for_next_session:
   - load_bearing_test_dataset_dump_jsonl_overwrite_invariant_pre_existing_file_intact_on_replace_failure_proves_the_helper_routing_preserves_atomicity_through_two_layers_of_indirection
 followups: []
 ---
+
+---
+session: 2026-05-26T23:25Z
+duration_min: 15
+issue: 52
+focus: readme_decision_range_upper_bound_lock
+delta:
+  files_changed: 2
+  tests_added: 1   # test_decision_range_cites_latest_active
+context_for_next_session:
+  - readme_lock_pattern_now_two_repos_ahead_chunking_strategies_lab_llm_eval_harness
+  - ten_more_portfolio_repos_still_missing_this_invariant_llm_cost_optimizer_prompt_regression_suite_rag_production_kit_embedding_model_shootout_vector_search_at_scale_python_async_llm_pipelines_agent_orchestration_platform_mcp_server_cookbook_nextjs_streaming_ai_patterns_ai_app_integration_tests
+  - max_active_decision_id_helper_scans_memory_core_decisions_ai_md_for_non_superseded_entries_same_shape_as_chunking_lab_module_scoped_fixture
+  - pattern_authoring_caught_real_drift_d_015_landed_without_readme_range_being_bumped
+decisions_made: []
+followups: []
+---
