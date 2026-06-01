@@ -24,7 +24,12 @@ import json
 import sys
 from pathlib import Path
 
-from eval_harness.calibration import calibrate, load_calibration, render_report
+from eval_harness.calibration import (
+    calibrate,
+    load_calibration,
+    render_report,
+    validate_calibration,
+)
 from eval_harness.comment import (
     STICKY_MARKER,
     render_delta_markdown,
@@ -162,10 +167,12 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     # `validate` lints a JSONL golden dataset without spending judge
-    # tokens (#56). Collects every malformed row in one pass rather than
-    # failing on the first like load_jsonl does.
+    # tokens (#56). `--calibration` routes to the calibration-schema
+    # validator (#58) — same ValidationReport shape so JSON consumers and
+    # CI exit codes are uniform across kinds.
     validate_p = sub.add_parser(
-        "validate", help="Lint a JSONL golden dataset; report every malformed row in one pass."
+        "validate",
+        help="Lint a JSONL golden dataset (or --calibration set); report every malformed row in one pass.",
     )
     validate_p.add_argument("dataset", help="Path to a JSONL dataset.")
     validate_p.add_argument(
@@ -173,6 +180,11 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         dest="as_json",
         help="Emit the report as JSON instead of the human-readable summary.",
+    )
+    validate_p.add_argument(
+        "--calibration",
+        action="store_true",
+        help="Treat the file as a calibration JSONL (human_score/prompt/response/rubric schema).",
     )
 
     # `drift` measures distribution drift between a golden set and a
@@ -511,21 +523,25 @@ def _render_runs_table(runs: list[RunSummary]) -> str:
 
 
 def _run_validate(args: argparse.Namespace) -> int:
-    """Lint a JSONL golden dataset; exit 0 clean / 1 findings / 2 I/O error.
+    """Lint a JSONL golden (or --calibration) dataset; exit 0 clean / 1 findings / 2 I/O error.
 
     The exit-code shape matches ``scripts/audit_phase_a.py`` in
     portfolio-ops so consumers can chain validators uniformly. The
     human-readable summary prints one line per finding followed by a
     one-line totals row; ``--json`` emits the full ``ValidationReport``
-    dict for machine consumption.
+    dict for machine consumption. ``--calibration`` swaps the validator
+    to ``validate_calibration`` so the calibration-side schema is the
+    one being checked.
     """
+    validator = validate_calibration if args.calibration else validate_dataset
+    kind = "calibration" if args.calibration else "dataset"
     try:
-        report = validate_dataset(args.dataset)
+        report = validator(args.dataset)
     except FileNotFoundError as e:
-        print(f"::error::dataset not found: {e}", file=sys.stderr)
+        print(f"::error::{kind} not found: {e}", file=sys.stderr)
         return 2
     except OSError as e:
-        print(f"::error::failed to read dataset {args.dataset}: {e}", file=sys.stderr)
+        print(f"::error::failed to read {kind} {args.dataset}: {e}", file=sys.stderr)
         return 2
 
     if args.as_json:
@@ -535,7 +551,11 @@ def _run_validate(args: argparse.Namespace) -> int:
             line_label = f"line {finding.line_no}" if finding.line_no else "file"
             print(f"{line_label} [{finding.code}]: {finding.reason}", file=sys.stderr)
         status = "ok" if report.ok else "fail"
-        version = report.dataset_version or "(no valid rows)"
+        # Calibration has no `dataset_version`; show kind instead so the
+        # totals row stays informative without the "(no valid rows)" noise.
+        version = (
+            "calibration" if args.calibration else (report.dataset_version or "(no valid rows)")
+        )
         print(
             f"{status}: {args.dataset} rows={report.n_rows} valid={report.n_valid} "
             f"findings={len(report.findings)} version={version}"

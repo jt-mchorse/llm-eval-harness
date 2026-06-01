@@ -54,6 +54,14 @@ code. Nine closed issues map to nine pieces of surface:
     version-drift). Exits 0 clean / 1 findings / 2 I/O error so a CI
     step can gate `run` on a clean dataset without spending judge
     tokens to discover shape errors.
+11. **Calibration validator** (#58) — `eval-harness validate
+    --calibration <path>` runs the same collecting-mode walk against
+    the calibration JSONL schema (`human_score` / `prompt` / `response`
+    / `rubric`), with a calibration-specific `score_range` finding code
+    for `human_score` outside `[0, 1]`. Returns the same
+    `ValidationReport` JSON shape so CI consumers can route both kinds
+    uniformly. Pre-flight gate for `eval-harness calibrate` (D-005),
+    closing the same lint-without-tokens loop on the κ-gating set.
 
 The framework is opinionated about two things. **No fabricated
 benchmarks** — the calibration κ number lands in
@@ -89,6 +97,7 @@ flowchart LR
   JUDGE -.->|"@pytest.mark.eval"| PYTEST["Pytest plugin (#5)"]
   DS --> EXAMPLES["examples/ (#17)<br/>four hermetic scripts"]
   DS --> VALIDATE["validate (#56)<br/>collecting-mode lint"]
+  CAL --> VALIDATE_CAL["validate --calibration (#58)<br/>collecting-mode lint"]
 ```
 
 ## Quickstart
@@ -166,6 +175,27 @@ Finding codes (`parse` / `schema` / `duplicate_id` / `version_drift` /
 `empty`) are stable so CI consumers can route on shape without parsing
 the human-readable reason. The library entry point is
 `eval_harness.validate_dataset(path) -> ValidationReport`.
+
+### Calibration validator (#58)
+
+The calibration set (`fixtures/calibration.jsonl`) has its own schema
+(`human_score` / `prompt` / `response` / `rubric` / `provenance` /
+`id`). `--calibration` routes the same `validate` subcommand to a
+calibration-aware walker so the κ-gating dataset gets the same
+lint-without-tokens treatment as the golden datasets:
+
+```bash
+eval-harness validate --calibration fixtures/calibration.jsonl
+# → stdout: ok: fixtures/calibration.jsonl rows=8 valid=8 findings=0 version=calibration
+# → exit 0
+```
+
+Calibration-specific finding codes: `parse` / `schema` /
+`duplicate_id` / `score_range` (for `human_score` outside `[0, 1]`) /
+`empty`. The return type is the same `ValidationReport`, with
+`dataset_version=None` and `tag_counts=()` (no equivalent fields on
+the calibration schema). Library entry point:
+`eval_harness.validate_calibration(path) -> ValidationReport`.
 
 ### Regression runner
 

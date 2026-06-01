@@ -32,6 +32,7 @@ from pathlib import Path
 
 import pytest
 
+from eval_harness.calibration import validate_calibration
 from eval_harness.dataset import (
     ValidationFinding,
     ValidationReport,
@@ -40,6 +41,7 @@ from eval_harness.dataset import (
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 FACTUALITY_FIXTURE = REPO_ROOT / "fixtures" / "sample_factuality_v1.jsonl"
+CALIBRATION_FIXTURE = REPO_ROOT / "fixtures" / "calibration.jsonl"
 
 
 def _write_jsonl(path: Path, rows: list[dict]) -> None:
@@ -328,3 +330,277 @@ def test_validation_report_dataclass_round_trip(tmp_path: Path) -> None:
     assert again == report
     # And dataclass field types match the contract.
     assert isinstance(report, ValidationReport)
+
+
+# --- calibration validator (#58) -------------------------------------------
+
+
+def _good_calib_row(**overrides) -> dict:
+    base = {
+        "id": "cap_001",
+        "prompt": "What is the capital of France?",
+        "response": "Paris.",
+        "rubric": "Score how faithful the RESPONSE is to the PROMPT.",
+        "human_score": 1.0,
+        "provenance": {"labeled_by": "test"},
+    }
+    base.update(overrides)
+    return base
+
+
+def test_calibration_happy_path_shipped_fixture_returns_clean_report() -> None:
+    """The shipped ``fixtures/calibration.jsonl`` is well-formed; the
+    calibration validator returns ``ok=True``, ``dataset_version=None``,
+    ``tag_counts=()``."""
+    report = validate_calibration(CALIBRATION_FIXTURE)
+    assert report.ok, f"calibration fixture should validate clean; got findings={report.findings}"
+    assert report.findings == ()
+    assert report.n_rows == report.n_valid
+    assert report.n_rows > 0
+    assert report.dataset_version is None
+    assert report.tag_counts == ()
+
+
+def test_calibration_accumulates_every_bad_row(tmp_path: Path) -> None:
+    """One pass surfaces parse + schema + score_range + valid in order."""
+    path = tmp_path / "mixed_calib.jsonl"
+    rows: list[dict] = [
+        _good_calib_row(id="line1_placeholder"),  # spliced to garbage
+        {"id": "missing_fields", "prompt": "p"},  # line 2: schema
+        _good_calib_row(id="bad_score", human_score=1.5),  # line 3: score_range
+        _good_calib_row(id="valid_one"),  # line 4: valid
+    ]
+    _write_jsonl(path, rows)
+    body = path.read_text(encoding="utf-8").splitlines()
+    body[0] = "{not valid json"
+    path.write_text("\n".join(body) + "\n", encoding="utf-8")
+
+    report = validate_calibration(path)
+    assert not report.ok
+    assert report.n_rows == 4
+    assert report.n_valid == 1
+    assert [f.code for f in report.findings] == ["parse", "schema", "score_range"]
+    assert [f.line_no for f in report.findings] == [1, 2, 3]
+
+
+def test_calibration_score_range_bool_is_not_a_number(tmp_path: Path) -> None:
+    """``human_score: true`` is rejected as schema (the loader uses
+    ``isinstance(score, bool)`` to keep bool from sneaking in as int).
+
+    The reason text mentions ``human_score must be a number`` so the
+    code stays ``schema`` (not ``score_range``) — the range check
+    fires only for true numeric out-of-bounds values.
+    """
+    path = tmp_path / "boolscore.jsonl"
+    _write_jsonl(path, [_good_calib_row(id="boolscore", human_score=True)])
+    report = validate_calibration(path)
+    assert not report.ok
+    assert len(report.findings) == 1
+    assert report.findings[0].code == "schema"
+    assert "human_score must be a number" in report.findings[0].reason
+
+
+def test_calibration_duplicate_id_is_a_finding(tmp_path: Path) -> None:
+    """Calibration-side duplicate-id detection mirrors validate_dataset."""
+    path = tmp_path / "calib_dups.jsonl"
+    _write_jsonl(
+        path,
+        [
+            _good_calib_row(id="cap_001"),
+            _good_calib_row(id="cap_002"),
+            _good_calib_row(id="cap_001"),  # duplicate
+        ],
+    )
+    report = validate_calibration(path)
+    assert len(report.findings) == 1
+    finding = report.findings[0]
+    assert finding.code == "duplicate_id"
+    assert finding.line_no == 3
+    assert "first seen at line 1" in finding.reason
+    assert report.n_valid == 2  # shadow row excluded
+
+
+def test_calibration_schema_missing_required_field(tmp_path: Path) -> None:
+    """Missing required field surfaces as schema finding (one per row)."""
+    path = tmp_path / "missing.jsonl"
+    row = _good_calib_row()
+    del row["rubric"]
+    _write_jsonl(path, [row])
+    report = validate_calibration(path)
+    assert not report.ok
+    assert len(report.findings) == 1
+    assert report.findings[0].code == "schema"
+    assert "rubric" in report.findings[0].reason
+
+
+def test_calibration_schema_unknown_top_level_field(tmp_path: Path) -> None:
+    """Calibration's loader rejects unknown top-level keys (no tags
+    column on this schema). Same code, distinct reason text."""
+    path = tmp_path / "extra.jsonl"
+    _write_jsonl(path, [_good_calib_row(extra_key="surprise")])
+    report = validate_calibration(path)
+    assert not report.ok
+    assert report.findings[0].code == "schema"
+    assert "extra_key" in report.findings[0].reason or "unknown" in report.findings[0].reason
+
+
+def test_calibration_schema_non_object_row(tmp_path: Path) -> None:
+    """A JSON array (or scalar) row is a schema finding, not a parse
+    finding — JSON parsed fine, the shape is wrong."""
+    path = tmp_path / "non_object.jsonl"
+    path.write_text("[1, 2, 3]\n", encoding="utf-8")
+    report = validate_calibration(path)
+    assert not report.ok
+    assert report.findings[0].code == "schema"
+    assert "not a JSON object" in report.findings[0].reason
+
+
+def test_calibration_empty_file_is_one_empty_finding(tmp_path: Path) -> None:
+    """Zero-row file → ``empty`` finding with ``line_no=0``, matching
+    validate_dataset semantics."""
+    path = tmp_path / "empty.jsonl"
+    path.write_text("", encoding="utf-8")
+    report = validate_calibration(path)
+    assert not report.ok
+    assert report.n_rows == 0
+    assert len(report.findings) == 1
+    assert report.findings[0].code == "empty"
+    assert report.findings[0].line_no == 0
+
+
+def test_calibration_missing_file_raises_file_not_found(tmp_path: Path) -> None:
+    """Missing path raises ``FileNotFoundError`` (the CLI translates to
+    exit 2; the library lets it bubble)."""
+    with pytest.raises(FileNotFoundError):
+        validate_calibration(tmp_path / "missing.jsonl")
+
+
+def test_calibration_report_to_dict_shape_matches_dataset_contract(tmp_path: Path) -> None:
+    """``validate_calibration`` returns the same ``ValidationReport``
+    dataclass as ``validate_dataset`` so machine consumers can treat
+    both outputs uniformly."""
+    path = tmp_path / "ok_calib.jsonl"
+    _write_jsonl(path, [_good_calib_row(id="a"), _good_calib_row(id="b")])
+    report = validate_calibration(path)
+    payload = report.to_dict()
+    assert set(payload) == {
+        "path",
+        "ok",
+        "n_rows",
+        "n_valid",
+        "dataset_version",
+        "tag_counts",
+        "findings",
+    }
+    assert payload["ok"] is True
+    assert payload["n_rows"] == 2
+    assert payload["dataset_version"] is None
+    assert payload["tag_counts"] == []
+    assert payload["findings"] == []
+
+
+# --- CLI: --calibration end-to-end ------------------------------------------
+
+
+def test_cli_calibration_flag_on_shipped_fixture_exits_zero() -> None:
+    """``eval-harness validate --calibration fixtures/calibration.jsonl``
+    is the gating pre-flight before ``eval-harness calibrate``."""
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "eval_harness.cli",
+            "validate",
+            "--calibration",
+            str(CALIBRATION_FIXTURE),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.startswith("ok:"), result.stdout
+    # The summary line references the calibration kind so the operator
+    # can tell at a glance which validator ran.
+    assert "version=calibration" in result.stdout
+
+
+def test_cli_calibration_flag_surfaces_score_range_finding(tmp_path: Path) -> None:
+    """A malformed calibration file routes through the right validator;
+    exit 1 with the calibration-specific ``score_range`` code on stderr."""
+    path = tmp_path / "bad_calib.jsonl"
+    _write_jsonl(
+        path,
+        [
+            _good_calib_row(id="a"),
+            _good_calib_row(id="b", human_score=1.7),
+        ],
+    )
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "eval_harness.cli",
+            "validate",
+            "--calibration",
+            str(path),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 1
+    assert "score_range" in result.stderr
+    assert result.stdout.startswith("fail:")
+
+
+def test_cli_calibration_json_emits_report_dict(tmp_path: Path) -> None:
+    """``--calibration --json`` emits the same ``to_dict()`` shape as
+    the golden-dataset path; CI consumers can route uniformly."""
+    path = tmp_path / "bad_calib.jsonl"
+    _write_jsonl(
+        path,
+        [_good_calib_row(id="a", human_score=-0.1)],
+    )
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "eval_harness.cli",
+            "validate",
+            "--calibration",
+            "--json",
+            str(path),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 1
+    payload = json.loads(result.stdout)
+    assert payload["ok"] is False
+    assert payload["findings"][0]["code"] == "score_range"
+    # Calibration-specific contract: no version, no tags.
+    assert payload["dataset_version"] is None
+    assert payload["tag_counts"] == []
+
+
+def test_cli_calibration_missing_file_exits_two_with_calibration_kind() -> None:
+    """Missing-file path under ``--calibration`` surfaces the
+    calibration kind in the error message so operators don't think
+    they're running the golden-dataset validator."""
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "eval_harness.cli",
+            "validate",
+            "--calibration",
+            "/this/path/does/not/exist.jsonl",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 2
+    assert "calibration not found" in result.stderr

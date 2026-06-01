@@ -74,6 +74,7 @@ def test_what_this_is_section_lists_nine_closed_issues_in_order() -> None:
         "(#15)",
         "(#17)",
         "(#56)",
+        "(#58)",
     ]
     found_order: list[str] = []
     for ref in expected:

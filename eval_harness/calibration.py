@@ -17,6 +17,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
+from eval_harness.dataset import ValidationFinding, ValidationReport
 from eval_harness.judge import FAITHFULNESS_RUBRIC, Judge, JudgeScore
 
 
@@ -45,9 +46,13 @@ class CalibrationResult:
 
 
 class CalibrationLoadError(ValueError):
-    def __init__(self, line_no: int, reason: str) -> None:
+    def __init__(self, line_no: int, reason: str, code: str = "schema") -> None:
         self.line_no = line_no
         self.reason = reason
+        # `code` distinguishes shape — schema | score_range — so the
+        # collecting-mode validator can route findings without re-parsing
+        # the reason text. Default "schema" covers missing/extra/type.
+        self.code = code
         super().__init__(f"line {line_no}: {reason}")
 
 
@@ -101,7 +106,11 @@ def _row_from_dict(line_no: int, obj: dict) -> CalibrationRow:
         raise CalibrationLoadError(line_no, "human_score must be a number")
     score_f = float(score)
     if not (0.0 <= score_f <= 1.0):
-        raise CalibrationLoadError(line_no, f"human_score must be in [0, 1]; got {score_f}")
+        raise CalibrationLoadError(
+            line_no,
+            f"human_score must be in [0, 1]; got {score_f}",
+            code="score_range",
+        )
 
     return CalibrationRow(
         id=obj["id"],
@@ -110,6 +119,114 @@ def _row_from_dict(line_no: int, obj: dict) -> CalibrationRow:
         rubric=obj["rubric"],
         human_score=score_f,
         provenance=obj["provenance"],
+    )
+
+
+# ----------------------------------------------------------------------
+# Validator (#58) — calibration-side analog of `validate_dataset` (#56)
+# ----------------------------------------------------------------------
+
+
+def validate_calibration(path: str | Path) -> ValidationReport:
+    """Walk a calibration JSONL file in *collecting* mode.
+
+    Mirrors ``eval_harness.dataset.validate_dataset``: returns one
+    ``ValidationFinding`` per malformed row in a single pass, so an
+    operator can fix every issue before ``eval-harness calibrate`` spends
+    judge tokens up to the first bad row.
+
+    Finding codes:
+
+    - ``parse``         — blank line or JSON decode failure.
+    - ``schema``        — missing/extra required fields, wrong types,
+                          or a row that isn't a JSON object.
+    - ``duplicate_id``  — a row's ``id`` collides with a prior row's.
+    - ``score_range``   — ``human_score`` outside ``[0, 1]``.
+    - ``empty``         — file contains zero valid rows (the loader
+                          treats this as a hard error and so does the
+                          validator — one finding with ``line_no=0``).
+
+    ``dataset_version`` is always ``None`` (calibration has no version
+    field) and ``tag_counts`` is always ``()`` (no tags). Reusing the
+    same ``ValidationReport`` keeps the JSON contract and CLI exit codes
+    uniform with the golden-dataset validator.
+    """
+    path = Path(path)
+    if not path.exists():
+        raise FileNotFoundError(path)
+
+    findings: list[ValidationFinding] = []
+    seen_ids: dict[str, int] = {}
+    n_rows = 0
+    n_valid = 0
+
+    with path.open("r", encoding="utf-8") as fh:
+        for line_no, raw_line in enumerate(fh, start=1):
+            n_rows += 1
+            stripped = raw_line.strip()
+            if not stripped:
+                findings.append(
+                    ValidationFinding(
+                        line_no=line_no,
+                        reason="blank line; calibration must have one JSON object per line",
+                        code="parse",
+                    )
+                )
+                continue
+            try:
+                parsed = json.loads(stripped)
+            except json.JSONDecodeError as e:
+                findings.append(
+                    ValidationFinding(
+                        line_no=line_no, reason=f"invalid JSON: {e.msg}", code="parse"
+                    )
+                )
+                continue
+            if not isinstance(parsed, dict):
+                findings.append(
+                    ValidationFinding(
+                        line_no=line_no, reason="row is not a JSON object", code="schema"
+                    )
+                )
+                continue
+            try:
+                row = _row_from_dict(line_no, parsed)
+            except CalibrationLoadError as e:
+                findings.append(ValidationFinding(line_no=line_no, reason=e.reason, code=e.code))
+                continue
+
+            if row.id in seen_ids:
+                findings.append(
+                    ValidationFinding(
+                        line_no=line_no,
+                        reason=(
+                            f"duplicate id {row.id!r}; first seen at line "
+                            f"{seen_ids[row.id]}; ids must be unique within a file"
+                        ),
+                        code="duplicate_id",
+                    )
+                )
+                # Don't count the shadow row as valid; mirrors validate_dataset.
+                continue
+            seen_ids[row.id] = line_no
+            n_valid += 1
+
+    if n_valid == 0 and not findings:
+        findings.append(
+            ValidationFinding(
+                line_no=0,
+                reason=f"calibration file {path} contains no rows",
+                code="empty",
+            )
+        )
+
+    return ValidationReport(
+        path=str(path),
+        n_rows=n_rows,
+        n_valid=n_valid,
+        findings=tuple(findings),
+        dataset_version=None,
+        tag_counts=(),
     )
 
 
