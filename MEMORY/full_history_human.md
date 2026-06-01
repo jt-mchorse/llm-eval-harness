@@ -401,3 +401,17 @@ Tail tally: 193 / 193 pass, ruff clean. Pre-#36 baseline was 188 — the prior P
 **Open questions / blockers:** none.
 
 **Next session:** continue portfolio propagation.
+
+## 2026-06-01 — Issue #56: `eval-harness validate` subcommand
+**Duration:** ~60 min · **Branch:** `session/2026-06-01-1515-issue-56`
+
+- Added `validate_dataset(path) -> ValidationReport` to `eval_harness/dataset.py`. Walks a JSONL golden in *collecting* mode (vs. `load_jsonl`'s fail-fast) so one command surfaces every malformed row instead of the operator running, fixing, re-running until clean. Five stable finding codes: `parse`, `schema`, `duplicate_id`, `version_drift`, `empty`. `ValidationReport` is a frozen dataclass with `n_rows`, `n_valid`, `dataset_version`, `tag_counts` (desc-by-count then alpha tiebreak), and a tuple of `ValidationFinding` entries. Duplicate-id and version-drift rows are excluded from the tag histogram so shadow rows don't skew coverage signal.
+- Wired `eval-harness validate <path> [--json]` in `eval_harness/cli.py`. Exit codes 0/1/2 (clean / findings / I/O error) match the convention `scripts/audit_phase_a.py` set in portfolio-ops#19 — CI consumers can chain validators uniformly. Re-exported `validate_dataset`, `ValidationReport`, `ValidationFinding` from `eval_harness/__init__.py`.
+- 14 tests in `tests/test_validate.py`: factuality fixture happy path (verifies tag histogram and dataset_version), accumulating-errors path (three different bad shapes interleaved with a valid row, findings reported in line-number order), duplicate-id detection with first-seen-line reference, version-drift, empty-file (single `empty` finding at line 0), missing file → `FileNotFoundError` → CLI exit 2, `to_dict` shape stability, frozen-dataclass round trip, and CLI end-to-end across clean / malformed / `--json` / missing-file paths.
+- README "What this is" extended to a tenth bullet (#56) and CLI surface bullet (#7) extended to include `validate`. `docs/architecture.md` cross-cutting section gained the new surface. `tests/test_architecture_doc.py::KNOWN_SHIPPED_ISSUES` and its hard-pin assertion both updated to include 56; `tests/test_readme_snapshot.py` expected-sequence in `test_what_this_is_section_lists_nine_closed_issues_in_order` extended too (name of the test is now technically a misnomer — left as-is to preserve git blame; happy to rename in a follow-up).
+
+**Why this work, this session:** First DAY-session iteration of 2026-06-01. All twelve portfolio repos at zero priority:high open issues at session start; per build-sequence rule and the "file an issue if none exists" fallback, `llm-eval-harness` was earliest in the sequence and the most natural gap was a pre-flight dataset linter — every other CLI surface costs API tokens to exercise.
+
+**Open questions / blockers:** none — full pytest pass, ruff clean, live CLI smoke against `fixtures/sample_factuality_v1.jsonl` returns the expected `ok:` summary at exit 0.
+
+**Next session:** the validator could grow a `--allow-tags '<a,b,c>'` flag that flags rows tagged with anything outside the allowlist — useful for repos that want to enforce a closed tag vocabulary. Not in scope for #56; would be a clean follow-up.

@@ -30,6 +30,7 @@ from eval_harness.comment import (
     render_delta_markdown,
     upsert_sticky_comment,
 )
+from eval_harness.dataset import validate_dataset
 from eval_harness.io_utils import atomic_write_text
 from eval_harness.judge import AnthropicBackend, Judge
 from eval_harness.runner import (
@@ -160,6 +161,20 @@ def main(argv: list[str] | None = None) -> int:
         help="Render and print the markdown without calling the GitHub API.",
     )
 
+    # `validate` lints a JSONL golden dataset without spending judge
+    # tokens (#56). Collects every malformed row in one pass rather than
+    # failing on the first like load_jsonl does.
+    validate_p = sub.add_parser(
+        "validate", help="Lint a JSONL golden dataset; report every malformed row in one pass."
+    )
+    validate_p.add_argument("dataset", help="Path to a JSONL dataset.")
+    validate_p.add_argument(
+        "--json",
+        action="store_true",
+        dest="as_json",
+        help="Emit the report as JSON instead of the human-readable summary.",
+    )
+
     # `drift` measures distribution drift between a golden set and a
     # candidate sample of production inputs (#4).
     drift_p = sub.add_parser(
@@ -195,6 +210,8 @@ def main(argv: list[str] | None = None) -> int:
         return _run_comment(args)
     if args.command == "drift":
         return _run_drift(args)
+    if args.command == "validate":
+        return _run_validate(args)
     parser.error(f"unknown command {args.command!r}")
     return 2  # unreachable
 
@@ -491,6 +508,39 @@ def _render_runs_table(runs: list[RunSummary]) -> str:
     for row in rows:
         lines.append(fmt.format(*row))
     return "\n".join(lines)
+
+
+def _run_validate(args: argparse.Namespace) -> int:
+    """Lint a JSONL golden dataset; exit 0 clean / 1 findings / 2 I/O error.
+
+    The exit-code shape matches ``scripts/audit_phase_a.py`` in
+    portfolio-ops so consumers can chain validators uniformly. The
+    human-readable summary prints one line per finding followed by a
+    one-line totals row; ``--json`` emits the full ``ValidationReport``
+    dict for machine consumption.
+    """
+    try:
+        report = validate_dataset(args.dataset)
+    except FileNotFoundError as e:
+        print(f"::error::dataset not found: {e}", file=sys.stderr)
+        return 2
+    except OSError as e:
+        print(f"::error::failed to read dataset {args.dataset}: {e}", file=sys.stderr)
+        return 2
+
+    if args.as_json:
+        print(json.dumps(report.to_dict(), indent=2, sort_keys=True))
+    else:
+        for finding in report.findings:
+            line_label = f"line {finding.line_no}" if finding.line_no else "file"
+            print(f"{line_label} [{finding.code}]: {finding.reason}", file=sys.stderr)
+        status = "ok" if report.ok else "fail"
+        version = report.dataset_version or "(no valid rows)"
+        print(
+            f"{status}: {args.dataset} rows={report.n_rows} valid={report.n_valid} "
+            f"findings={len(report.findings)} version={version}"
+        )
+    return 0 if report.ok else 1
 
 
 if __name__ == "__main__":

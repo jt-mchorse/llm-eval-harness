@@ -143,7 +143,7 @@ needs one current-vs-baseline pair.
 `cli.py` is the single argparse entry point binding all of the above:
 
 ```
-eval-harness run | list | calibrate | diff | diff-json | comment | drift
+eval-harness run | list | calibrate | diff | diff-json | comment | drift | validate
 ```
 
 Each subcommand has a `--help`; the suite of CLI smoke tests
@@ -172,6 +172,12 @@ alias was visible in `--help`, locked by
   `tests/test_readme_snapshot.py` and
   `tests/test_readme_defaults_snapshot.py` lock the README's quoted
   defaults / identifier claims to the source.
+- **Dataset validator (#56).** `validate_dataset(path)` walks a JSONL
+  golden in *collecting* mode, surfacing every malformed row in one
+  pass (vs `load_jsonl`'s fail-fast). Exposed as `eval-harness
+  validate <path>` with stable finding codes (`parse` / `schema` /
+  `duplicate_id` / `version_drift` / `empty`) so CI consumers can gate
+  `run` on a clean dataset without spending judge tokens.
 - **Atomic writes (`io_utils.atomic_write_text`, #50).** Every
   `--out` write across `cli.py`, `dataset.py`, and `drift.py` goes
   through one package-level helper (D-015) that writes to

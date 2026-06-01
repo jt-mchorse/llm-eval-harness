@@ -25,7 +25,10 @@ from eval_harness.dataset import (
     DatasetLoadError,
     Example,
     ExpectedOutput,
+    ValidationFinding,
+    ValidationReport,
     load_jsonl,
+    validate_dataset,
 )
 from eval_harness.drift import (
     DEFAULT_EMBEDDING_THRESHOLD,
@@ -86,7 +89,10 @@ __all__ = [
     "DatasetLoadError",
     "Example",
     "ExpectedOutput",
+    "ValidationFinding",
+    "ValidationReport",
     "load_jsonl",
+    "validate_dataset",
     # Drift
     "AxisReport",
     "ClusterStats",
