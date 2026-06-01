@@ -56,7 +56,7 @@ MIN_ACTIVE_DECISION_ID = 2
 #   - #24  Public surface lock — locked by tests/test_public_surface.py
 #   - #27  CLI alias visibility fix — runtime gate locked by
 #          tests/test_cli_judge_alias.py
-KNOWN_SHIPPED_ISSUES = (1, 2, 3, 4, 5, 6, 7, 15, 17, 56)
+KNOWN_SHIPPED_ISSUES = (1, 2, 3, 4, 5, 6, 7, 15, 17, 56, 58)
 
 # Drift shapes specific to issue #29's pre-fix state. Lowercase
 # substring match. Pinned in a tuple so a future loose edit of the
@@ -204,7 +204,7 @@ def test_banned_phrases_hard_pin_set() -> None:
 
 
 def test_known_shipped_issues_hard_pin_set() -> None:
-    assert KNOWN_SHIPPED_ISSUES == (1, 2, 3, 4, 5, 6, 7, 15, 17, 56)
+    assert KNOWN_SHIPPED_ISSUES == (1, 2, 3, 4, 5, 6, 7, 15, 17, 56, 58)
 
 
 def test_resolvable_prefixes_hard_pin_set() -> None:

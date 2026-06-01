@@ -178,6 +178,14 @@ alias was visible in `--help`, locked by
   validate <path>` with stable finding codes (`parse` / `schema` /
   `duplicate_id` / `version_drift` / `empty`) so CI consumers can gate
   `run` on a clean dataset without spending judge tokens.
+- **Calibration validator (#58).** `validate_calibration(path)` is the
+  calibration-side analog: same `ValidationReport` shape, same exit
+  codes, but walks the calibration schema (`human_score` / `prompt` /
+  `response` / `rubric`) and surfaces a calibration-specific
+  `score_range` finding for `human_score` outside `[0, 1]`. CLI is
+  `eval-harness validate --calibration <path>`. Pre-flight gate for
+  `calibrate` (D-005), closing the same lint-without-tokens loop on
+  the κ-gating dataset.
 - **Atomic writes (`io_utils.atomic_write_text`, #50).** Every
   `--out` write across `cli.py`, `dataset.py`, and `drift.py` goes
   through one package-level helper (D-015) that writes to
