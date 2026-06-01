@@ -39,8 +39,8 @@ code. Nine closed issues map to nine pieces of surface:
    Downstream repos use `eval-harness diff-json` + `eval-harness
    comment` to do the same on their own PRs.
 7. **CLI** (#7) — `eval-harness run | list | calibrate | diff |
-   diff-json | comment | drift` (plus `judge calibrate` as a hidden
-   backwards-compat alias).
+   diff-json | comment | drift | validate` (plus `judge calibrate` as a
+   hidden backwards-compat alias).
 8. **--tags row-level subset filter** (#15) — set-union match over the
    dataset's per-row `tags`; exit code 2 with the dataset's tag
    inventory on stderr when the filter matches zero rows.
@@ -48,6 +48,12 @@ code. Nine closed issues map to nine pieces of surface:
    scripts (judge + calibration stub; regression run + diff; drift
    report; pytest-eval pattern) each smoke-tested in CI so the
    snippets can't bitrot.
+10. **Dataset validator** (#56) — `eval-harness validate <path>` walks
+    a JSONL golden in *collecting* mode and surfaces every malformed
+    row in one pass (parse errors, schema errors, duplicate ids,
+    version-drift). Exits 0 clean / 1 findings / 2 I/O error so a CI
+    step can gate `run` on a clean dataset without spending judge
+    tokens to discover shape errors.
 
 The framework is opinionated about two things. **No fabricated
 benchmarks** — the calibration κ number lands in
@@ -82,6 +88,7 @@ flowchart LR
   DRIFT --> HTML[("Drift report<br/>single-file HTML")]
   JUDGE -.->|"@pytest.mark.eval"| PYTEST["Pytest plugin (#5)"]
   DS --> EXAMPLES["examples/ (#17)<br/>four hermetic scripts"]
+  DS --> VALIDATE["validate (#56)<br/>collecting-mode lint"]
 ```
 
 ## Quickstart
@@ -136,6 +143,29 @@ runs end-to-end on a fresh clone without an API key (stub backends and
 Each example swaps cleanly to the live Anthropic backend by replacing the stub
 with `AnthropicBackend()` (which requires the `judge` extra and an
 `ANTHROPIC_API_KEY`); the rest of the wiring is identical.
+
+### Dataset validator (#56)
+
+Lint a JSONL dataset without spending judge tokens. Walks the file in
+*collecting* mode so a single command reports every malformed row
+rather than the first:
+
+```bash
+eval-harness validate fixtures/sample_factuality_v1.jsonl
+# → stdout: ok: fixtures/sample_factuality_v1.jsonl rows=8 valid=8 findings=0 version=factuality-v0.1
+# → exit 0
+```
+
+```bash
+eval-harness validate fixtures/broken.jsonl --json
+# → stdout: { "ok": false, "n_rows": …, "n_valid": …, "findings": [...] }
+# → exit 1 (any findings); exit 2 (file missing / I/O error)
+```
+
+Finding codes (`parse` / `schema` / `duplicate_id` / `version_drift` /
+`empty`) are stable so CI consumers can route on shape without parsing
+the human-readable reason. The library entry point is
+`eval_harness.validate_dataset(path) -> ValidationReport`.
 
 ### Regression runner
 

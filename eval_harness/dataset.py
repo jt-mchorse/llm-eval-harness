@@ -33,6 +33,7 @@ silently accepting them, because eval semantics depend on the kind.
 from __future__ import annotations
 
 import json
+from collections import Counter
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -316,3 +317,188 @@ def collect_tag_inventory(examples: Iterable[Example]) -> list[str]:
     for ex in examples:
         inv.update(ex.tags)
     return sorted(inv)
+
+
+# --- validator (#56) --------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class ValidationFinding:
+    """One row-level issue surfaced by ``validate_dataset``.
+
+    Mirrors the ``DatasetLoadError`` shape — ``line_no`` is 1-indexed and
+    points at the offending line, ``reason`` is the same human-readable
+    string the loader produces. ``code`` distinguishes shapes the JSON
+    consumer can route on without parsing prose.
+    """
+
+    line_no: int
+    reason: str
+    code: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"line_no": self.line_no, "reason": self.reason, "code": self.code}
+
+
+@dataclass(frozen=True)
+class ValidationReport:
+    """Result of walking a dataset in collecting mode.
+
+    ``ok`` is true iff zero findings AND the file contained at least one
+    valid example (an empty file is a finding shape, not a healthy state).
+
+    ``dataset_version`` is the first ``dataset_version`` observed on a
+    valid line, or ``None`` if no valid lines were parsed. ``tag_counts``
+    is computed over the valid examples only — invalid rows can't
+    contribute tag-presence signal without conflating shape errors with
+    coverage gaps.
+    """
+
+    path: str
+    n_rows: int
+    n_valid: int
+    findings: tuple[ValidationFinding, ...]
+    dataset_version: str | None
+    tag_counts: tuple[tuple[str, int], ...]
+
+    @property
+    def ok(self) -> bool:
+        return not self.findings and self.n_valid > 0
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "path": self.path,
+            "ok": self.ok,
+            "n_rows": self.n_rows,
+            "n_valid": self.n_valid,
+            "dataset_version": self.dataset_version,
+            "tag_counts": [{"tag": t, "count": c} for t, c in self.tag_counts],
+            "findings": [f.to_dict() for f in self.findings],
+        }
+
+
+def validate_dataset(path: str | Path) -> ValidationReport:
+    """Walk a JSONL golden dataset in *collecting* mode.
+
+    Unlike ``load_jsonl``, which raises on the first ``DatasetLoadError``,
+    this surfaces every malformed row in one pass so the operator can
+    fix all of them before the next ``eval-harness run`` invocation
+    (which would otherwise spend judge tokens up to the first bad row).
+
+    Detected finding shapes:
+
+    - ``parse``         — JSON decode failure or blank line.
+    - ``schema``        — record-level validation failure (missing fields,
+                          bad types, unknown ``expected_outputs.kind``,
+                          unknown top-level fields). Mirrors ``load_jsonl``'s
+                          ``_validate_record`` checks.
+    - ``duplicate_id``  — a row's ``id`` collides with a prior row's.
+    - ``version_drift`` — a row's ``dataset_version`` doesn't match the
+                          first valid row's. (Datasets are atomic units;
+                          mixed-version files belong in separate files.)
+    - ``empty``         — file contains zero valid examples; the loader
+                          treats this as a hard error and so does the
+                          validator (one finding with ``line_no=0``).
+
+    A ``FileNotFoundError`` (missing path) propagates so the CLI can
+    surface it as exit 2 alongside other I/O errors.
+    """
+    path = Path(path)
+    if not path.exists():
+        raise FileNotFoundError(path)
+
+    findings: list[ValidationFinding] = []
+    seen_ids: dict[str, int] = {}
+    version: str | None = None
+    n_rows = 0
+    n_valid = 0
+    valid_examples: list[Example] = []
+
+    with path.open("r", encoding="utf-8") as fh:
+        for line_no, raw_line in enumerate(fh, start=1):
+            n_rows += 1
+            stripped = raw_line.strip()
+            if not stripped:
+                findings.append(
+                    ValidationFinding(
+                        line_no=line_no,
+                        reason="blank line; dataset must have one JSON object per line",
+                        code="parse",
+                    )
+                )
+                continue
+            try:
+                parsed = json.loads(stripped)
+            except json.JSONDecodeError as e:
+                findings.append(
+                    ValidationFinding(
+                        line_no=line_no, reason=f"invalid JSON: {e.msg}", code="parse"
+                    )
+                )
+                continue
+            try:
+                ex = _validate_record(parsed, line_no)
+            except DatasetLoadError as e:
+                findings.append(ValidationFinding(line_no=line_no, reason=e.reason, code="schema"))
+                continue
+
+            if ex.id in seen_ids:
+                findings.append(
+                    ValidationFinding(
+                        line_no=line_no,
+                        reason=(
+                            f"duplicate id {ex.id!r}; first seen at line "
+                            f"{seen_ids[ex.id]}; ids must be unique within a file"
+                        ),
+                        code="duplicate_id",
+                    )
+                )
+                # Don't add the duplicate to valid_examples — it shadows
+                # the original and would skew the tag histogram.
+                continue
+            seen_ids[ex.id] = line_no
+
+            if version is None:
+                version = ex.dataset_version
+            elif ex.dataset_version != version:
+                findings.append(
+                    ValidationFinding(
+                        line_no=line_no,
+                        reason=(
+                            f"dataset_version {ex.dataset_version!r} does not match "
+                            f"file version {version!r}"
+                        ),
+                        code="version_drift",
+                    )
+                )
+                # Version-drifted rows are dropped from `valid_examples`
+                # so the tag histogram reflects the file's nominal version.
+                continue
+
+            valid_examples.append(ex)
+            n_valid += 1
+
+    if n_valid == 0 and not findings:
+        # File was empty (no lines at all). Surface as a single finding so
+        # `ok` is False without an extra `empty=True` flag on the report.
+        findings.append(
+            ValidationFinding(
+                line_no=0, reason=f"dataset file {path} contains no examples", code="empty"
+            )
+        )
+
+    tag_counter: Counter[str] = Counter()
+    for ex in valid_examples:
+        tag_counter.update(ex.tags)
+    # Sort by descending count, then alphabetically — deterministic for
+    # JSON snapshots and useful for the operator (most-common tag first).
+    tag_counts = tuple(sorted(tag_counter.items(), key=lambda kv: (-kv[1], kv[0])))
+
+    return ValidationReport(
+        path=str(path),
+        n_rows=n_rows,
+        n_valid=n_valid,
+        findings=tuple(findings),
+        dataset_version=version,
+        tag_counts=tag_counts,
+    )

@@ -63,7 +63,18 @@ def test_what_this_is_section_lists_nine_closed_issues_in_order() -> None:
     start = body.index("## What this is")
     end = body.index("##", start + 1)
     section = body[start:end]
-    expected = ["(#1)", "(#2)", "(#3)", "(#4)", "(#5)", "(#6)", "(#7)", "(#15)", "(#17)"]
+    expected = [
+        "(#1)",
+        "(#2)",
+        "(#3)",
+        "(#4)",
+        "(#5)",
+        "(#6)",
+        "(#7)",
+        "(#15)",
+        "(#17)",
+        "(#56)",
+    ]
     found_order: list[str] = []
     for ref in expected:
         if ref in section:
