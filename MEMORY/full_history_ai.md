@@ -672,3 +672,24 @@ context_for_next_session:
 decisions_made: []
 followups: []
 ---
+
+---
+session: 2026-06-17T19:15Z
+duration_min: 25
+issue: 60
+focus: workflow_yaml_parseability_lock_propagation_from_portfolio_ops_30
+phase: day_session_phase_b_iteration_1
+delta:
+  files_added: 1   # tests/test_workflows_yaml_parseable.py
+  files_changed: 1 # pyproject.toml ([dev] adds pyyaml>=6.0)
+  tests_added: 5   # 1 smoke + 2 parse + 2 jobs across ci.yml and eval.yml
+context_for_next_session:
+  - propagation_of_portfolio_ops_30_31_yaml_parseability_lock_to_llm_eval_harness_inverse_safety_net_for_the_21_day_silent_ci_outage_closed_in_portfolio_ops_27_28
+  - lock_test_glob_dot_github_workflows_star_yml_only_no_workflows_slash_directory_in_this_repo_unlike_portfolio_ops_which_has_both_active_and_template_dirs
+  - assertion_split_into_isinstance_jobs_dict_and_jobs_truthy_separately_to_satisfy_ruff_pt018_versus_portfolio_ops_single_assert_pattern
+  - pyyaml_added_to_dev_extras_so_lock_runs_in_ci_not_just_locally_aligned_with_portfolio_ops_tests_yml_install_step_pattern
+  - eleven_remaining_portfolio_repos_still_need_the_same_lock_separate_issues_per_repo_planned_for_subsequent_session_loop_iterations
+  - test_count_pre_branch_358_post_branch_363_no_regressions_in_full_suite_local_pytest_plus_ruff_check_plus_ruff_format_check_all_clean
+decisions_made: []
+followups: []
+---
