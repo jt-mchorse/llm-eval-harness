@@ -430,3 +430,29 @@ Tail tally: 193 / 193 pass, ruff clean. Pre-#36 baseline was 188 — the prior P
 **Open questions / blockers:** none — full pytest + ruff green; live CLI smoke against `fixtures/calibration.jsonl` returns the expected `ok:` summary at exit 0.
 
 **Next session:** the validator could grow a `--strict-provenance` flag that checks for required provenance keys (e.g., `labeled_by`, `added_on`) — currently the loader accepts any dict. Not in scope for #58; would be a clean follow-up if the calibration set ever grows multi-labeler entries.
+
+## 2026-06-17 — Issue #60: Workflow YAML-parseability lock
+**Duration:** ~25 min · **Branch:** `session/2026-06-17-1909-issue-60`
+
+Added `tests/test_workflows_yaml_parseable.py` and pulled `pyyaml>=6.0`
+into `[project.optional-dependencies].dev`. The test parametrizes
+`yaml.safe_load` plus a non-empty `jobs:` assertion over every `*.yml`
+under `.github/workflows/` — today that's `ci.yml` and `eval.yml`, so
+5 tests total (1 smoke + 2 parse + 2 jobs). It grows naturally as
+workflow files are added.
+
+**Why this work, this session:** `portfolio-ops#27` closed a 21-day
+silent CI outage caused by a single unquoted colon-space in a `run:`
+value. GitHub Actions silently completed the workflow with zero jobs
+and `conclusion=failure`; `statusCheckRollup` stayed empty so Phase A
+auto-merge couldn't tell. `portfolio-ops#30` shipped the lock for
+`portfolio-ops` itself; the session memory explicitly called out the
+remaining 12 repos as a propagation followup. This PR is the first
+hop. `llm-eval-harness`'s workflows are safe today (they use the
+`run: |` block-scalar form) — the lock makes that *cannot* drift.
+
+**Open questions / blockers:** none — full pytest (358 → 363) + ruff
+clean locally; PR #61 open and waiting for CI.
+
+**Next session:** propagate the same lock to the other 11 portfolio
+repos (one issue + one PR per repo).
