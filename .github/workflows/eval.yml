@@ -21,6 +21,15 @@ on:
   pull_request:
     branches: [main]
 
+# Cancel an in-flight run when a newer push lands on the same ref. Same
+# rationale as ci.yml's concurrency block — the eval comment is the
+# latest-push sticky, prior runs' commits are stale by construction.
+# Distinct group from ci so the two workflows can run concurrently on
+# the same ref.
+concurrency:
+  group: eval-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   eval-comment:
     runs-on: ubuntu-latest
