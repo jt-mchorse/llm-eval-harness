@@ -469,3 +469,33 @@ repos (one issue + one PR per repo).
 **Open questions / blockers:** none. 358 → 371 pytest passes, ruff clean. PR #63 open.
 
 **Next session:** Propagate to the remaining 11 portfolio repos (one issue + one PR each, per-repo policy band override expected for the heavy-benchmark ones). After a few weekly cycles of the new audit-cron (portfolio-ops#34, this morning), consider adding a `missing-timeout` fingerprint to `scripts/audit_phase_a.py`.
+
+## 2026-06-18 — Issue #64: concurrency guard + lock test
+**Duration:** ~30 min · **Branch:** `session/2026-06-18-1515-issue-64`
+
+- Added top-level `concurrency:` block to both `ci.yml` (group
+  `ci-${{ github.ref }}`) and `eval.yml` (group `eval-${{ github.ref }}`,
+  distinct so the two workflows don't cancel each other on the same ref).
+  Both set `cancel-in-progress: true`.
+- Added `tests/test_workflows_concurrency.py` — 7 new tests: 1 smoke +
+  3 parametrized invariants × 2 workflows (`has_concurrency`,
+  `group_is_nonempty_string`, `cancel_in_progress_is_true_bool`). Same
+  PT018 split-assert pattern as the timeout-minutes lock so ruff stays
+  clean while each invariant fails on its own line.
+
+**Why this work, this session:** the audit-side fingerprint shipped in
+portfolio-ops #41 (2026-06-18 night) surfaces every workflow missing a
+top-level `concurrency:` group. Survey at the start of this session: only
+`ai-app-integration-tests` had the lock (the template); 12 of 13 portfolio
+repos with 19 workflows were unprotected. `llm-eval-harness` is the
+canonical first hop for the propagation, mirroring the timeout-minutes
+arc (#62 here → 11 follow-on per-repo PRs over the night session). Without
+a concurrency group, a rapid push-on-push burns one full CI run per push
+even when the in-flight run is immediately superseded.
+
+**Open questions / blockers:** none. Test count 371 → 378. Full pytest
+clean; ruff check + ruff format --check clean.
+
+**Next session:** propagate the same lock pattern to the remaining 11
+unprotected repos — separate issues filed through the multi-issue loop
+this session and chained across day/night sessions.

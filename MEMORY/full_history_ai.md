@@ -715,3 +715,26 @@ context_for_next_session:
 followups: [#62]
 decisions_made: []
 ---
+
+---
+session: 2026-06-18T15:15Z
+duration_min: 30
+issue: 64
+focus: workflow_concurrency_guard_plus_lock_test_third_silent_rot_lock_per_repo
+phase: day_session_phase_b_iteration_1
+delta:
+  files_added: 1   # tests/test_workflows_concurrency.py
+  files_changed: 2 # .github/workflows/{ci.yml,eval.yml} top-level concurrency block each
+  tests_added: 7   # 1 smoke + 3 parametrized x 2 workflows (has_concurrency, group_nonempty_str, cancel_in_progress_true_bool)
+context_for_next_session:
+  - third_silent_rot_lock_per_repo_after_yaml_parseable_60_and_timeout_minutes_62_now_concurrency_64_paired_with_audit_side_fingerprint_portfolio_ops_41_missing_concurrency_check_shipped_2026_06_18_night
+  - ci_yml_gets_group_ci_dollar_github_ref_eval_yml_gets_group_eval_dollar_github_ref_distinct_groups_so_the_two_workflows_dont_cancel_each_other_on_same_ref
+  - lock_three_invariants_has_concurrency_present_group_is_nonempty_string_cancel_in_progress_is_yaml_bool_true_each_failure_message_names_silent_failure_mode_quota_burn_on_push_on_push_and_template_in_ci_yml
+  - pt018_split_assert_pattern_re_used_from_timeout_minutes_lock_62_isinstance_check_then_value_check_two_asserts_share_one_msg_string
+  - dogfood_dependency_pyyaml_local_install_required_for_audit_phase_a_py_missing_concurrency_and_missing_timeout_checks_otherwise_silently_skipped_with_stderr_note_followup_for_portfolio_ops_audit_cron_yml_install_step
+  - survey_pre_pr_only_ai_app_integration_tests_had_concurrency_template_post_pr_2_of_19_workflows_protected_canonical_first_hop_for_this_propagation_arc
+  - test_count_371_to_378_seven_new_full_pytest_clean_ruff_check_plus_format_check_clean
+  - companion_locks_to_propagate_per_repo_concurrency_lock_for_remaining_11_repos_filed_as_separate_issues_through_the_session_loop
+decisions_made: []
+followups: [#64]
+---
