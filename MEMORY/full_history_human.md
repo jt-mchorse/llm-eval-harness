@@ -456,3 +456,16 @@ clean locally; PR #61 open and waiting for CI.
 
 **Next session:** propagate the same lock to the other 11 portfolio
 repos (one issue + one PR per repo).
+
+## 2026-06-17 — Issue #62: timeout-minutes guard + lock test
+**Duration:** ~30 min · **Branch:** `session/2026-06-17-2318-issue-62`
+
+- Added `timeout-minutes: 15` to all three jobs in `.github/workflows/ci.yml` (lint, test matrix, memory-check) and `timeout-minutes: 10` to the eval-comment job in `.github/workflows/eval.yml`. GitHub Actions defaults to 360 min/job when `timeout-minutes` is missing — a hung job burns the full 6-hour ceiling before being killed.
+- Added `tests/test_workflows_timeout_minutes.py` with 13 new tests: 1 discovery smoke + 3 parametrized (has-timeout, is-int with bool-subclass guard, in-band) × 4 jobs. Per-repo policy band `[1, 30]` with a comment naming what workload would justify bumping the max.
+- Filed and worked the issue in the same session. Pre-existing backlog across the 12 portfolio repos was either operator-blocked (API keys, demo captures) or empty, so per the session-prompt fallback I filed a real-content issue and worked it.
+
+**Why this work, this session:** Portfolio-wide survey today showed 1/17 workflows had `timeout-minutes` set. The other 16 ran unbounded. This is the canonical first hop in propagating the lock — same pattern as the YAML-parseability lock (#60 ← portfolio-ops#30/#31) that propagated this morning across the 12 repos. llm-eval-harness is first in the §8 build sequence, so the policy band gets calibrated here and per-repo overrides flow from there.
+
+**Open questions / blockers:** none. 358 → 371 pytest passes, ruff clean. PR #63 open.
+
+**Next session:** Propagate to the remaining 11 portfolio repos (one issue + one PR each, per-repo policy band override expected for the heavy-benchmark ones). After a few weekly cycles of the new audit-cron (portfolio-ops#34, this morning), consider adding a `missing-timeout` fingerprint to `scripts/audit_phase_a.py`.

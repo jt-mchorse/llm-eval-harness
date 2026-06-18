@@ -693,3 +693,25 @@ context_for_next_session:
 decisions_made: []
 followups: []
 ---
+
+---
+session: 2026-06-17T23:18Z
+duration_min: 30
+issue: 62
+focus: workflow_timeout_minutes_guard_plus_lock_test_silent_rot_propagation
+phase: day_session_phase_b_iteration_2
+delta:
+  files_added: 1   # tests/test_workflows_timeout_minutes.py
+  files_changed: 2 # .github/workflows/{ci.yml,eval.yml} (4 timeout-minutes inserts total)
+  tests_added: 13   # 1 smoke + 3 parametrized x 4 jobs (has-timeout, is-int, in-band)
+context_for_next_session:
+  - issue_62_filed_priority_med_in_this_session_then_worked_immediately_canonical_first_hop_for_timeout_minutes_guard_propagation_across_12_portfolio_repos
+  - github_actions_default_360_min_per_job_when_timeout_minutes_missing_a_hung_job_burns_full_6h_ceiling_before_runner_kills_it_quota_burn_operator_pays_for_regardless_of_output
+  - survey_at_write_time_1_of_17_workflows_portfolio_wide_bounded_this_pr_makes_it_4_of_17_canonical_first_hop_per_repo_band_overrides_expected_in_propagation_e_g_vector_search_at_scale_benchmark_jobs
+  - policy_band_for_this_repo_min_1_max_30_with_explicit_comment_naming_what_would_justify_bumping_max
+  - lock_three_axes_has_timeout_is_int_in_band_each_failure_message_names_silent_failure_mode_and_what_good_looks_like_pt018_split_assert_pattern_for_is_int_to_satisfy_ruff
+  - test_count_358_to_371_thirteen_new_no_existing_regressions_in_full_suite_ruff_check_plus_ruff_format_check_both_clean
+  - companion_to_test_workflows_yaml_parseable_py_60_31_same_silent_rot_prevention_arc_different_failure_mode
+followups: [#62]
+decisions_made: []
+---
