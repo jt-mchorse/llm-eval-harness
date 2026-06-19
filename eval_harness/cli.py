@@ -41,6 +41,7 @@ from eval_harness.judge import AnthropicBackend, Judge
 from eval_harness.runner import (
     DEFAULT_THRESHOLD_DROP,
     DatasetEchoSource,
+    DeltaReport,
     RunSpec,
     diff_runs,
     load_baseline,
@@ -397,34 +398,14 @@ def _run_diff_json(args: argparse.Namespace) -> int:
 
 def _run_comment(args: argparse.Namespace) -> int:
     # The delta JSON written by `diff-json --format json` is the
-    # DeltaReport.to_json() shape; reconstruct a minimal DeltaReport for
-    # rendering. We don't need the full object — just the fields the
-    # markdown renderer consults — so we accept a duck-typed shim.
+    # DeltaReport.to_json() shape; DeltaReport.from_json (#68) is the
+    # inverse — same defaulting semantics the prior SimpleNamespace
+    # shim used, now expressed on the dataclass itself so the renderer
+    # gets a properly-typed instance.
     raw = Path(args.delta_json).read_text(encoding="utf-8")
     payload = json.loads(raw)
-    # Build a minimal report-shaped object the markdown renderer will accept.
-    from types import SimpleNamespace
-
-    rows = [
-        SimpleNamespace(
-            example_id=r["example_id"],
-            baseline_score=r.get("baseline_score"),
-            current_score=r.get("current_score"),
-            delta=r.get("delta"),
-            status=r["status"],
-            flagged=r.get("flagged", False),
-        )
-        for r in payload.get("rows", [])
-    ]
-    report_shim = SimpleNamespace(
-        current_run_id=payload.get("current_run_id", "current"),
-        baseline_run_id=payload.get("baseline_run_id", "baseline"),
-        suite=payload.get("suite", "(unknown)"),
-        threshold_drop=float(payload.get("threshold_drop", DEFAULT_THRESHOLD_DROP)),
-        rows=tuple(rows),
-        summary=payload.get("summary", {}),
-    )
-    body = render_delta_markdown(report_shim)  # type: ignore[arg-type]
+    report = DeltaReport.from_json(payload)
+    body = render_delta_markdown(report)
     if args.dry_run:
         print(body, end="")
         return 0
