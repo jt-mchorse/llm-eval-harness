@@ -133,6 +133,28 @@ class RowDelta:
     status: str  # "improved" | "regressed" | "unchanged" | "new" | "removed"
     flagged: bool
 
+    @classmethod
+    def from_json(cls, payload: dict[str, Any]) -> RowDelta:
+        """Inverse of the per-row dict shape emitted by :meth:`DeltaReport.to_json`.
+
+        ``baseline_score`` / ``current_score`` / ``delta`` default to
+        ``None`` (the to_json side may emit explicit ``null`` for
+        ``new`` / ``removed`` rows; older payloads may omit the keys
+        entirely). ``flagged`` defaults to ``False`` matching the
+        previous ``SimpleNamespace`` shim's defensive read in
+        ``cli._run_comment``. ``example_id`` and ``status`` are
+        required — missing them raises :class:`KeyError` naming the
+        field.
+        """
+        return cls(
+            example_id=payload["example_id"],
+            baseline_score=payload.get("baseline_score"),
+            current_score=payload.get("current_score"),
+            delta=payload.get("delta"),
+            status=payload["status"],
+            flagged=payload.get("flagged", False),
+        )
+
 
 @dataclass(frozen=True)
 class DeltaReport:
@@ -166,6 +188,31 @@ class DeltaReport:
                 for r in self.rows
             ],
         }
+
+    @classmethod
+    def from_json(cls, payload: dict[str, Any]) -> DeltaReport:
+        """Inverse of :meth:`to_json`.
+
+        Top-level fields carry permissive defaults so the CLI's
+        delta-json read path (``cli._run_comment``) doesn't have to
+        wrap this with its own defensive ``.get(...)`` chain — the
+        previous ``SimpleNamespace`` shim's defaults move into the
+        classmethod instead. ``rows`` is rebuilt as a tuple of
+        :class:`RowDelta` (frozen-dataclass invariant). ``summary``
+        defaults to ``{}`` matching the dataclass default.
+
+        No required fields at the top level — every field has a
+        documented default. ``KeyError`` only surfaces per-row from
+        ``RowDelta.from_json`` (``example_id`` / ``status``).
+        """
+        return cls(
+            current_run_id=payload.get("current_run_id", "current"),
+            baseline_run_id=payload.get("baseline_run_id", "baseline"),
+            suite=payload.get("suite", "(unknown)"),
+            threshold_drop=float(payload.get("threshold_drop", DEFAULT_THRESHOLD_DROP)),
+            rows=tuple(RowDelta.from_json(r) for r in payload.get("rows", ())),
+            summary=dict(payload.get("summary", {})),
+        )
 
 
 def _detect_git_sha(dataset_path: Path) -> str | None:

@@ -406,3 +406,141 @@ def test_module_does_not_persist_token_globally() -> None:
     # (Sanity test against a regression where someone caches `GITHUB_TOKEN`
     # at import time and tests pollute each other.)
     assert os.environ.get("GITHUB_TOKEN") in (None, "env-token")  # one of the test states
+
+
+# ---------------------------------------------------------------------------
+# #68: DeltaReport.from_json / RowDelta.from_json round-trip parity
+# ---------------------------------------------------------------------------
+
+
+def test_row_delta_from_json_round_trips_through_to_json_dict_shape() -> None:
+    """A row dict emitted by DeltaReport.to_json must rebuild byte-identical
+    via RowDelta.from_json."""
+    original = RowDelta("qa_01", 0.8, 0.9, 0.1, "improved", False)
+    payload = {
+        "example_id": original.example_id,
+        "baseline_score": original.baseline_score,
+        "current_score": original.current_score,
+        "delta": original.delta,
+        "status": original.status,
+        "flagged": original.flagged,
+    }
+    rebuilt = RowDelta.from_json(payload)
+    assert rebuilt == original
+
+
+def test_row_delta_from_json_defaults_optional_score_fields_to_none() -> None:
+    """Older delta JSON payloads (or shim ones from the prior SimpleNamespace
+    path) may omit baseline_score / current_score / delta when the row is
+    `new` or `removed`. The reader must accept this without raising and
+    default the missing fields to None — matches the previous shim's defensive
+    `.get(...)` chain in cli._run_comment."""
+    payload = {"example_id": "qa_new", "status": "new"}
+    rebuilt = RowDelta.from_json(payload)
+    assert rebuilt.baseline_score is None
+    assert rebuilt.current_score is None
+    assert rebuilt.delta is None
+    assert rebuilt.flagged is False
+
+
+def test_row_delta_from_json_raises_on_missing_required_key() -> None:
+    """`example_id` and `status` are required; missing them must raise
+    KeyError naming the field, not silently default-fill."""
+    with pytest.raises(KeyError, match="example_id"):
+        RowDelta.from_json({"status": "improved"})
+    with pytest.raises(KeyError, match="status"):
+        RowDelta.from_json({"example_id": "qa_01"})
+
+
+def test_delta_report_from_json_round_trips_populated_payload() -> None:
+    """Full identity round-trip on a populated DeltaReport."""
+    original = _make_report(
+        rows=[
+            RowDelta("qa_01", 0.8, 0.9, 0.1, "improved", False),
+            RowDelta("qa_02", 0.7, 0.5, -0.2, "regressed", True),
+        ],
+        summary=_default_summary(mean_delta=-0.05, n_improved=1, n_regressed=1, n_flagged=1),
+    )
+    rebuilt = DeltaReport.from_json(original.to_json())
+    assert rebuilt == original
+    # Rows are rebuilt as RowDelta, not SimpleNamespace.
+    assert all(isinstance(r, RowDelta) for r in rebuilt.rows)
+    # And as a tuple — frozen-dataclass invariant.
+    assert isinstance(rebuilt.rows, tuple)
+
+
+def test_delta_report_from_json_round_trips_empty_rows() -> None:
+    """A report with no rows is a legitimate state (e.g., both run JSONs
+    were empty); must round-trip cleanly with `rows = ()`."""
+    original = _make_report(rows=[], summary=_default_summary())
+    rebuilt = DeltaReport.from_json(original.to_json())
+    assert rebuilt == original
+    assert rebuilt.rows == ()
+
+
+def test_delta_report_from_json_defaults_match_prior_shim_in_run_comment() -> None:
+    """The previous `cli._run_comment` shim defaulted top-level fields when
+    the operator handed it a hand-written delta JSON that omitted them.
+    Move that defaulting into the classmethod so the CLI doesn't need its
+    own defensive `.get(...)` chain anymore."""
+    rebuilt = DeltaReport.from_json({"rows": []})
+    assert rebuilt.current_run_id == "current"
+    assert rebuilt.baseline_run_id == "baseline"
+    assert rebuilt.suite == "(unknown)"
+    # threshold_drop falls back to DEFAULT_THRESHOLD_DROP.
+    from eval_harness.runner import DEFAULT_THRESHOLD_DROP
+
+    assert rebuilt.threshold_drop == DEFAULT_THRESHOLD_DROP
+    assert rebuilt.summary == {}
+
+
+def test_delta_report_from_json_coerces_threshold_drop_to_float() -> None:
+    """The wire shape may carry threshold_drop as an int or a numeric
+    string in older operator-hand-written payloads; force-cast to float."""
+    rebuilt = DeltaReport.from_json({"threshold_drop": 1, "rows": []})
+    assert rebuilt.threshold_drop == 1.0
+    assert isinstance(rebuilt.threshold_drop, float)
+
+
+def test_delta_report_from_json_summary_is_independent_copy() -> None:
+    """`summary` on the rebuilt report must not alias the input dict —
+    mutating the caller's payload after `from_json` must not bleed into
+    the frozen-dataclass field."""
+    payload = {"rows": [], "summary": {"n_flagged": 0}}
+    rebuilt = DeltaReport.from_json(payload)
+    payload["summary"]["n_flagged"] = 99
+    assert rebuilt.summary["n_flagged"] == 0
+
+
+def test_run_comment_cli_uses_typed_delta_report_not_shim(tmp_path, capsys) -> None:
+    """End-to-end: the `comment --dry-run` CLI path now flows through
+    DeltaReport.from_json. The rendered markdown must be byte-identical
+    to rendering against a hand-built DeltaReport — proving the type-
+    ignored SimpleNamespace shim path was structurally equivalent and
+    the swap is behavior-preserving."""
+    report = _make_report(
+        rows=[
+            RowDelta("qa_01", 0.8, 0.9, 0.1, "improved", False),
+            RowDelta("qa_02", 0.85, 0.78, -0.07, "regressed", False),
+        ],
+        summary=_default_summary(mean_delta=0.015, n_improved=1, n_regressed=1),
+    )
+    delta_json = tmp_path / "delta.json"
+    delta_json.write_text(json.dumps(report.to_json()), encoding="utf-8")
+
+    rc = cli_main(
+        [
+            "comment",
+            "--delta-json",
+            str(delta_json),
+            "--repo",
+            "jt-mchorse/llm-eval-harness",
+            "--pr",
+            "1",
+            "--dry-run",
+        ]
+    )
+    out, _ = capsys.readouterr()
+    assert rc == 0
+    direct = render_delta_markdown(report)
+    assert out == direct
