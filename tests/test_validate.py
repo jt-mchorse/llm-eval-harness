@@ -290,6 +290,93 @@ def test_cli_missing_file_exits_two() -> None:
     assert "dataset not found" in result.stderr
 
 
+# --- CLI: --out sink parity (#66) -------------------------------------------
+
+
+def test_cli_out_writes_human_summary_to_file_not_stdout(tmp_path: Path) -> None:
+    """``--out`` writes the human-readable summary to disk; stdout stays
+    silent (mirrors `list / diff / diff-json` --out behavior). The file
+    contains the same one-line summary the stdout-only path would print,
+    with a trailing newline."""
+    out = tmp_path / "report.txt"
+    result = _run_cli(str(FACTUALITY_FIXTURE), "--out", str(out))
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "", f"stdout must be silent when --out is set; got {result.stdout!r}"
+    body = out.read_text(encoding="utf-8")
+    assert body.startswith("ok:"), body
+    assert body.endswith("\n"), "trailing newline required for parity with siblings"
+
+
+def test_cli_out_writes_json_payload_to_file(tmp_path: Path) -> None:
+    """``--out`` + ``--json`` writes the report dict as JSON to disk;
+    stdout silent; the file parses cleanly and carries the expected shape."""
+    bad = tmp_path / "bad.jsonl"
+    _write_jsonl(bad, [_good_row(id="a"), _good_row(id="a")])
+    out = tmp_path / "report.json"
+    result = _run_cli(str(bad), "--json", "--out", str(out))
+    assert result.returncode == 1
+    assert result.stdout == ""
+    payload = json.loads(out.read_text(encoding="utf-8"))
+    assert payload["ok"] is False
+    assert payload["findings"][0]["code"] == "duplicate_id"
+
+
+def test_cli_out_creates_parent_dirs(tmp_path: Path) -> None:
+    """``atomic_write_text`` does ``parent.mkdir(parents=True)``; confirm
+    the validate path inherits that behavior so a nested observability
+    directory doesn't need pre-creation."""
+    out = tmp_path / "nested" / "sink" / "report.txt"
+    result = _run_cli(str(FACTUALITY_FIXTURE), "--out", str(out))
+    assert result.returncode == 0
+    assert out.exists()
+    assert out.parent.is_dir()
+
+
+def test_cli_out_overwrites_atomically(tmp_path: Path) -> None:
+    """Two successive writes to the same path leave the second payload —
+    not the concatenation, not a half-written file. No tempfile leftovers
+    under the destination's parent."""
+    out = tmp_path / "report.txt"
+    _run_cli(str(FACTUALITY_FIXTURE), "--out", str(out))
+    body1 = out.read_text(encoding="utf-8")
+
+    bad = tmp_path / "bad.jsonl"
+    _write_jsonl(bad, [_good_row(id="a"), _good_row(id="a")])
+    _run_cli(str(bad), "--out", str(out))
+    body2 = out.read_text(encoding="utf-8")
+    assert body1 != body2
+    leftovers = [p.name for p in tmp_path.iterdir() if p.name.endswith(".tmp")]
+    assert leftovers == [], leftovers
+    leftovers = [p.name for p in tmp_path.iterdir() if p.name.startswith(".report.txt.")]
+    assert leftovers == [], leftovers
+
+
+def test_cli_out_findings_still_print_to_stderr(tmp_path: Path) -> None:
+    """``--out`` covers stdout only — stderr stays the operator's
+    diagnostic channel so a CI step capturing stdout to a file still sees
+    per-finding lines on stderr. Parity with the existing
+    no-``--out``/findings/stderr contract."""
+    bad = tmp_path / "bad.jsonl"
+    _write_jsonl(bad, [_good_row(id="a"), _good_row(id="a", tags=["dup"])])
+    out = tmp_path / "report.txt"
+    result = _run_cli(str(bad), "--out", str(out))
+    assert result.returncode == 1
+    assert "duplicate_id" in result.stderr
+    assert result.stdout == ""
+    body = out.read_text(encoding="utf-8")
+    assert body.startswith("fail:"), body
+
+
+def test_cli_out_not_written_on_file_not_found(tmp_path: Path) -> None:
+    """Exit-2 (file-not-found) path raises before rendering, so ``--out``
+    must NOT touch disk — keeps the failure mode honest (no zero-byte
+    sentinel a CI step could mistake for "ran successfully")."""
+    out = tmp_path / "report.txt"
+    result = _run_cli("/this/path/does/not/exist.jsonl", "--out", str(out))
+    assert result.returncode == 2
+    assert not out.exists(), "exit-2 must not create the --out file"
+
+
 # --- finding dataclass spot check -------------------------------------------
 
 

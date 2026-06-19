@@ -186,6 +186,16 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Treat the file as a calibration JSONL (human_score/prompt/response/rubric schema).",
     )
+    validate_p.add_argument(
+        "--out",
+        default=None,
+        help=(
+            "Write the rendered output to this path instead of stdout. Parent dirs "
+            "are auto-created. Parity with `run --out`, `list --out`, `diff --out`, "
+            "`diff-json --out`. Findings still print to stderr in human-readable mode "
+            "even when --out is set, so the operator's diagnostic channel is preserved."
+        ),
+    )
 
     # `drift` measures distribution drift between a golden set and a
     # candidate sample of production inputs (#4).
@@ -545,8 +555,11 @@ def _run_validate(args: argparse.Namespace) -> int:
         return 2
 
     if args.as_json:
-        print(json.dumps(report.to_dict(), indent=2, sort_keys=True))
+        rendered = json.dumps(report.to_dict(), indent=2, sort_keys=True) + "\n"
     else:
+        # Findings go to stderr regardless of --out so the operator's diagnostic
+        # channel is preserved even when stdout is captured to a file. Same shape
+        # as `list / diff / diff-json` --out behavior.
         for finding in report.findings:
             line_label = f"line {finding.line_no}" if finding.line_no else "file"
             print(f"{line_label} [{finding.code}]: {finding.reason}", file=sys.stderr)
@@ -556,10 +569,14 @@ def _run_validate(args: argparse.Namespace) -> int:
         version = (
             "calibration" if args.calibration else (report.dataset_version or "(no valid rows)")
         )
-        print(
+        rendered = (
             f"{status}: {args.dataset} rows={report.n_rows} valid={report.n_valid} "
-            f"findings={len(report.findings)} version={version}"
+            f"findings={len(report.findings)} version={version}\n"
         )
+    if args.out:
+        atomic_write_text(args.out, rendered)
+    else:
+        print(rendered, end="")
     return 0 if report.ok else 1
 
 

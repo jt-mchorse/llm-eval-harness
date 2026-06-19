@@ -176,6 +176,19 @@ Finding codes (`parse` / `schema` / `duplicate_id` / `version_drift` /
 the human-readable reason. The library entry point is
 `eval_harness.validate_dataset(path) -> ValidationReport`.
 
+`--out PATH` writes the rendered output (text summary or `--json` payload)
+atomically to a file instead of stdout (parity with
+`run --out` / `list --out` / `diff --out` / `diff-json --out`).
+Findings still print to stderr in human-readable mode even when `--out`
+is set, so the operator's diagnostic channel is preserved when stdout
+is captured to a file:
+
+```bash
+eval-harness validate fixtures/broken.jsonl --json --out report.json
+# → atomic-writes the report dict to report.json; stdout silent
+# → exit 1 (any findings); exit 2 leaves --out untouched
+```
+
 ### Calibration validator (#58)
 
 The calibration set (`fixtures/calibration.jsonl`) has its own schema

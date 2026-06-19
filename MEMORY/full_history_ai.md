@@ -738,3 +738,24 @@ context_for_next_session:
 decisions_made: []
 followups: [#64]
 ---
+
+---
+session: 2026-06-19T03:55Z
+duration_min: 28
+issue: 66
+focus: cli_validate_out_flag_for_sink_parity_with_run_list_diff_diff_json
+phase: night_session_phase_b_iteration_2
+delta:
+  files_changed: 3 # eval_harness/cli.py + tests/test_validate.py + README.md
+  tests_added: 6   # 2 modes (human+json) + parent-dir + atomic-overwrite + stderr + exit-2
+context_for_next_session:
+  - closes_last_sink_parity_gap_in_cli_run_list_36_diff_diff_json_all_accepted_out_path_validate_was_the_only_output_producing_subcommand_without_it
+  - run_validate_routes_through_atomic_write_text_when_out_set_falls_back_to_print_rendered_end_empty_string_when_not_findings_still_print_to_stderr_in_human_mode_regardless_of_out_preserves_operator_diagnostic_channel
+  - exit_2_file_not_found_path_raises_before_rendering_so_out_leaves_no_zero_byte_sentinel_a_ci_step_could_mistake_for_ran_successfully
+  - trailing_newline_parity_both_renderers_add_newline_to_rendered_string_out_writes_full_string_atomically_stdout_uses_print_rendered_end_empty_string_matches_emit_list_output_semantics_exactly
+  - readme_dataset_validator_section_gets_one_line_out_example_no_snapshot_test_changes_needed
+  - test_count_378_to_384_six_new_full_pytest_clean_384_passed_no_skips_ruff_check_plus_format_check_clean
+  - sibling_to_36_list_out_propagation_pattern_now_unifies_all_5_output_producing_subcommands_run_list_diff_diff_json_validate
+decisions_made: []
+followups: []
+---
