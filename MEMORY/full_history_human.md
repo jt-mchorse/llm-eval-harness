@@ -525,3 +525,18 @@ open and ready.
 **Next session:** consider whether `drift --output` (positional-required
 on a different shape) should be normalized to `--out` for symmetry —
 separate consideration, behaviorally a breaking change to that CLI surface.
+
+## 2026-06-19 — Issue #68: DeltaReport.from_json + RowDelta.from_json — drop the SimpleNamespace shim
+**Duration:** ~25 min · **Branch:** `session/2026-06-19-issue-68`
+
+- Filed issue #68 during this session's Phase A loop as a direct sibling-propagation of chunking-strategies-lab #47 (PR #48): same asymmetric `to_json` without inverse, but with a louder symptom — `cli._run_comment` carried a 30-line `SimpleNamespace` shim plus a `# type: ignore[arg-type]` silencer to make the renderer accept a duck-typed object pretending to be a `DeltaReport`. Worked immediately.
+- Added `RowDelta.from_json(payload)` and `DeltaReport.from_json(payload)` classmethods, symmetric to the existing `to_json()`. Top-level `DeltaReport.from_json` defaults match exactly what the SimpleNamespace shim was applying (`current_run_id='current'`, `baseline_run_id='baseline'`, `suite='(unknown)'`, `threshold_drop=DEFAULT_THRESHOLD_DROP`) — that defaulting moves from the CLI into the dataclass classmethod so the CLI no longer needs a defensive `.get(...)` chain.
+- `threshold_drop` is float-coerced (older operator-hand-written payloads may carry it as int/string). `summary` is dict-copied (not aliased) so caller mutations don't bleed into the frozen dataclass — locked by a dedicated test.
+- `cli._run_comment` collapses from ~30 lines of shim construction plus the `types.SimpleNamespace` import plus the `# type: ignore[arg-type]` annotation to two lines: `report = DeltaReport.from_json(payload); body = render_delta_markdown(report)`. The renderer now gets a properly-typed instance.
+- 9 new tests in `tests/test_comment.py`: row-level identity, optional-field defaults, missing-required-key raises (×2 fields), report-level populated + empty round-trips, default-fill matches prior shim, threshold_drop float coercion, summary-independent-copy invariant, and an end-to-end CLI `comment --dry-run` test verifying the markdown output is byte-identical to direct `render_delta_markdown` against a hand-built `DeltaReport`. The last test is the real safety net: it proves the swap is behavior-preserving on the production CLI path, not just on synthetic dataclass round-trips.
+
+**Why this work, this session:** the portfolio is saturated and the chunking-strategies-lab #47 work I closed earlier this session named this exact pattern as a sibling-propagation candidate. The `# type: ignore[arg-type]` was an active piece of technical debt in production CLI code today, not just a missing API — strictly higher value than a synthetic API-completeness fill.
+
+**Open questions / blockers:** none. 384 → 393 pytest passes. PR #69 merged.
+
+**Next session:** the from_json propagation chain is now at two hops (chunking #47/#48 + this PR). The natural third hop is `rag-production-kit` — `PhaseTimings.to_dict()` + `Aggregate.to_dict()` shipped in earlier sessions without symmetric readers. Worth filing as a sibling issue if a future session needs substantive work in a saturated portfolio state. The `RunResult ↔ StoredRun` asymmetry in this repo's `load_run_result_from_json` is intentional (deliberate shape change for the diff path), not a from_json gap; not in scope.
