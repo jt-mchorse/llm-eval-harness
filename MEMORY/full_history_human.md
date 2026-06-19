@@ -499,3 +499,29 @@ clean; ruff check + ruff format --check clean.
 **Next session:** propagate the same lock pattern to the remaining 11
 unprotected repos — separate issues filed through the multi-issue loop
 this session and chained across day/night sessions.
+
+## 2026-06-19 — Issue #66: validate --out for sink-parity
+**Duration:** ~28 min · **Branch:** `session/2026-06-19-0318-issue-66`
+
+- Added `--out PATH` to `eval-harness validate` so its output (human
+  summary or `--json` payload) atomic-writes to disk instead of stdout.
+- `_run_validate` builds the rendered string once, then routes through
+  `atomic_write_text(args.out, rendered)` when `--out` is set, else
+  `print(rendered, end="")`. Findings continue to print to stderr in
+  human-readable mode regardless of `--out` so the operator's diagnostic
+  channel survives stdout capture.
+- Exit-2 (file-not-found) raises before any rendering, so `--out` leaves
+  no zero-byte sentinel a CI step could mistake for "ran successfully".
+- 6 new tests; README `Dataset validator` section gains a one-line
+  `--out` example.
+
+**Why this work, this session:** sibling-of-#36 propagation. After this
+PR, all 5 output-producing subcommands (`run / list / diff / diff-json /
+validate`) accept `--out` with identical atomic-write semantics.
+
+**Open questions / blockers:** none. 378 → 384 pytest passes. PR #67
+open and ready.
+
+**Next session:** consider whether `drift --output` (positional-required
+on a different shape) should be normalized to `--out` for symmetry —
+separate consideration, behaviorally a breaking change to that CLI surface.
