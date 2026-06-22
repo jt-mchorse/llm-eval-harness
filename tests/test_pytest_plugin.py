@@ -124,6 +124,35 @@ def test_marker_missing_required_kwarg_raises_at_collection(pytester: pytest.Pyt
     assert "missing required kwargs" in result.stdout.str()
 
 
+def test_marker_explicit_empty_rubric_raises_at_collection(pytester: pytest.Pytester) -> None:
+    # #75: an absent rubric defaults (covered by the other marker tests that omit
+    # it), but an explicit empty/whitespace rubric is a mistake and must fail
+    # loud rather than silently swap in FAITHFULNESS_RUBRIC.
+    pytester.makepyfile(
+        """
+        import pytest
+        from eval_harness.runner import DatasetEchoSource
+
+        class _Backend:
+            def complete(self, system, user):
+                return "SCORE: 1.0\\nREASONING: ok."
+
+        @pytest.mark.eval(
+            suite="demo",
+            dataset="unused.jsonl",
+            answer_source=DatasetEchoSource(),
+            judge_backend=_Backend(),
+            rubric="   ",
+        )
+        def test_demo():
+            pass
+        """
+    )
+    result = pytester.runpytest("-v")
+    result.assert_outcomes(errors=1)
+    assert "rubric must be a non-empty string" in result.stdout.str()
+
+
 def test_marker_empty_dataset_fails_collection(pytester: pytest.Pytester) -> None:
     empty = pytester.path / "empty.jsonl"
     empty.write_text("")
