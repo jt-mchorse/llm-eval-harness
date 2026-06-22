@@ -83,6 +83,48 @@ def test_binarize_boundary_one_default_score_behavior():
 
 
 # ======================================================================
+# binarize.score — bounded float in [0, 1] (#77)
+# ======================================================================
+# #45 guarded `threshold` but not `score`, even though both share
+# `JudgeScore.score`'s [0, 1] domain. A NaN score made `score >= threshold`
+# False → silent 0; inf / out-of-range → silent constant — either collapses a
+# rater and corrupts κ to a silent 0.0, the same failure mode closed for
+# `threshold`.
+
+
+@pytest.mark.parametrize(
+    "bad_score",
+    [
+        math.nan,
+        math.inf,
+        -math.inf,
+        True,  # bool: silently coerced to 1.0.
+        False,  # bool: silently coerced to 0.0.
+        None,
+        "0.5",
+        [],
+        (0.5,),
+        {"v": 0.5},
+    ],
+)
+def test_binarize_rejects_non_finite_or_wrong_type_score(bad_score):
+    with pytest.raises(ValueError, match="score must be a finite number"):
+        binarize(bad_score, threshold=0.5)
+
+
+@pytest.mark.parametrize("bad_score", [-0.0001, -1.0, -100, 1.0001, 2.0, 100])
+def test_binarize_rejects_out_of_range_score(bad_score):
+    with pytest.raises(ValueError, match=r"score must be in \[0, 1\]"):
+        binarize(bad_score, threshold=0.5)
+
+
+@pytest.mark.parametrize("good_score", [0, 0.0, 0.25, 0.5, 0.75, 1, 1.0])
+def test_binarize_accepts_in_range_finite_score(good_score):
+    # No raise; result is a valid {0, 1} binarization.
+    assert binarize(good_score, threshold=0.5) in (0, 1)
+
+
+# ======================================================================
 # render_report.threshold_kappa — bounded float in [-1, 1]
 # ======================================================================
 
