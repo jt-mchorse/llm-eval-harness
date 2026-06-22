@@ -579,3 +579,15 @@ separate consideration, behaviorally a breaking change to that CLI surface.
 **Open questions / blockers:** none for this issue. Separately filed mcp-server-cookbook#54 (postgres-readonly `sqlGuard.stripComments` ignores string-literal boundaries) for JT to assess — not auto-fixed because the Explore agent couldn't demonstrate a working exploit and a security-guard change on an unverified exploit needs a human call.
 
 **Next session:** calibration/plugin are now hardened on the rubric path. drift/comment/dataset/runs scanned clean this session.
+
+## 2026-06-22 — Issue #77: binarize — validate score, not just threshold
+**Duration:** ~25 min · **Branch:** `session/2026-06-22-1950-issue-77`
+
+- Found via a Phase A Explore-subagent sweep over the eval-harness core (calibration/drift/judge/runner/comment/runs/dataset); llm-eval-harness picked as a priority-tier repo (build-seq pos 1) under the D-009 loop bias — the fifth dogfood fix this run. `binarize` thoroughly validates `threshold` (the #45 bounded-float guard) but left `score` unguarded, despite both sharing `JudgeScore.score`'s `[0, 1]` domain and the docstring documenting the exact NaN failure. So `binarize(NaN) → 0`, `binarize(inf) → 1`, `binarize(2.0) → 1` silently, which collapses a rater to a constant and corrupts Cohen's κ to a silent `0.0` — the same failure mode #45 closed for `threshold`.
+- Fix: apply the identical bounded-float validator to `score`. Added parametrized score-rejection + in-range-acceptance tests next to the existing threshold ones; the rejection tests fail pre-fix. Suite 435 → 458, ruff clean. PR #78 ready.
+
+**Why this work, this session:** the repo had zero open issues; a dogfood sweep of the foundational priority-tier repo surfaced a real silent-κ-corruption gap on a public, documented-contract function — completing the #40/#45 finiteness-guard arc.
+
+**Open questions / blockers:** none.
+
+**Next session:** `binarize` is now guarded on both arguments. A possible follow-on (deferred, not filed): pushing finiteness validation up into dataset `human_score` loading, so a malformed golden row is rejected at load rather than relying on `binarize`'s guard downstream.
