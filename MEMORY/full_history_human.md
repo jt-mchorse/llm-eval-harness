@@ -553,3 +553,16 @@ separate consideration, behaviorally a breaking change to that CLI surface.
 **Open questions / blockers:** none.
 
 **Next session:** `AnthropicBackend.complete` makes a single API call with no retry/backoff — a transient rate-limit or 529 overloaded aborts a whole multi-row run. Worth filing as a meatier resilience issue if a future session needs substantive work here.
+
+## 2026-06-22 — Issue #73: judge backend — retry transient API failures with capped backoff
+**Duration:** ~35 min · **Branch:** `session/2026-06-22-1055-issue-73`
+
+- Acted on the #71/#72 session's parked lead: `AnthropicBackend.complete` made a single `messages.create` call with no retry. Since `run_suite` calls the judge once per dataset row in a serial loop, a single transient `429`/`529`/connection blip aborted the entire multi-row run and discarded every row scored so far — a real, recurring failure mode that gets worse the longer the suite.
+- Fix: added an import-free transient-error classifier (`is_transient_error`, keyed on duck-typed `status_code` and connection-error class names so it runs without the `anthropic` extra), a generic capped-exponential-backoff retry loop (`retry_call`, with an injectable sleep clock), and wired both into `complete`. Permanent 4xx errors re-raise immediately; only transient failures retry. Added validated retry knobs following the repo's existing positive-int / finite-number contract.
+- 33 new hermetic tests (no `anthropic` install): classification, backoff sequence + capping, knob validation, and `complete()` end-to-end via a fake client built through `__new__`. Full suite 397 → 430, ruff clean. PR #74 ready.
+
+**Why this work, this session:** the portfolio is still saturated (only 3 open issues, all binary demo-capture tasks not doable headless). This was a concrete, high-value resilience bug already documented as the next lead in the prior session's memory — strictly better than a synthetic fill.
+
+**Open questions / blockers:** none.
+
+**Next session:** the judge backend is now resilient, but the *answer source* model in the runner (`AnswerSource`/`run_suite`) has no equivalent retry seam — a real Anthropic-backed answer source would have the same single-call fragility. Worth filing as a sibling resilience issue if a future session needs substantive work here.
