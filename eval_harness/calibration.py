@@ -258,6 +258,22 @@ def binarize(score: float, threshold: float = 0.5) -> int:
         raise ValueError(f"threshold must be a finite number; got {threshold!r}")
     if not 0.0 <= threshold <= 1.0:
         raise ValueError(f"threshold must be in [0, 1]; got {threshold!r}")
+    # `score` shares the same `[0, 1]` domain as `threshold` (and
+    # `JudgeScore.score`), but #45 only guarded `threshold`. An unguarded NaN
+    # score made `score >= threshold` False and silently binarized to 0; inf or
+    # an out-of-range value silently binarized to a constant — either collapses
+    # a rater and corrupts κ to a silent 0.0 (the degenerate `pe == 1.0` branch),
+    # exactly the failure mode the threshold guard closes. Validate it the same
+    # way so the documented contract holds on both arguments.
+    if (
+        not isinstance(score, (int, float))
+        or isinstance(score, bool)
+        or math.isnan(score)
+        or math.isinf(score)
+    ):
+        raise ValueError(f"score must be a finite number; got {score!r}")
+    if not 0.0 <= score <= 1.0:
+        raise ValueError(f"score must be in [0, 1]; got {score!r}")
     return 1 if score >= threshold else 0
 
 
