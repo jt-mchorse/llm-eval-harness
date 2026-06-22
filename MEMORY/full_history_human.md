@@ -566,3 +566,16 @@ separate consideration, behaviorally a breaking change to that CLI surface.
 **Open questions / blockers:** none.
 
 **Next session:** the judge backend is now resilient, but the *answer source* model in the runner (`AnswerSource`/`run_suite`) has no equivalent retry seam — a real Anthropic-backed answer source would have the same single-call fragility. Worth filing as a sibling resilience issue if a future session needs substantive work here.
+
+## 2026-06-22 — Issue #75: calibration/pytest-plugin — reject an empty rubric
+**Duration:** ~25 min · **Branch:** `session/2026-06-22-1549-issue-rubric-collapse`
+
+- Found via a Phase A Explore sweep over calibration/drift/comment/dataset/runs/pytest_plugin (two `x or DEFAULT` falsy-collapses, same class as the cost-optimizer #73 `or 0.0` bug). `rubric` is a **required** calibration field, but `_validate` only checked `isinstance(str)` — it accepted `""`, and `calibrate()` then ran `row.rubric or FAITHFULNESS_RUBRIC`, silently judging the row against the *default* rubric and corrupting the κ/r calibration (the trust anchor) with no diagnostic. The pytest marker had the same `or`-collapse, where rubric is documented-optional (None → default is fine) but an explicit `rubric=""` also collapsed.
+- Fix (principle: an empty rubric is malformed → fail loud; only an *absent* rubric defaults): `_validate` now rejects empty/whitespace rubric (same standard as `id`); `calibrate()` passes `row.rubric` verbatim (the `or` default is dead, removed with the now-unused import); `_read_marker` keeps None → default but raises on an explicit empty/whitespace rubric.
+- 5 new tests (3 parametrized empty/whitespace load-rejects, a recording-judge test that calibrate passes each row's rubric verbatim, and a marker-explicit-empty-rubric collection error). Verified they fail pre-fix. Suite 430 → 435, ruff clean. PR ready.
+
+**Why this work, this session:** the portfolio is saturated (only `priority:low` demo-capture issues open). This was a real silent-corruption bug in the calibration trust anchor, found by dogfooding — higher value than a synthetic fill.
+
+**Open questions / blockers:** none for this issue. Separately filed mcp-server-cookbook#54 (postgres-readonly `sqlGuard.stripComments` ignores string-literal boundaries) for JT to assess — not auto-fixed because the Explore agent couldn't demonstrate a working exploit and a security-guard change on an unverified exploit needs a human call.
+
+**Next session:** calibration/plugin are now hardened on the rubric path. drift/comment/dataset/runs scanned clean this session.
