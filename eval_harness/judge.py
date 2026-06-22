@@ -122,8 +122,12 @@ SYSTEM_TEMPLATE = (
 
 USER_TEMPLATE = "RUBRIC: {rubric}\n\nPROMPT: {prompt}\n\nRESPONSE: {response}\n"
 
-# Strict response parser. Tolerates surrounding whitespace and case.
-_SCORE_RE = re.compile(r"^\s*SCORE:\s*([0-9]*\.?[0-9]+)\s*$", re.MULTILINE | re.IGNORECASE)
+# Strict response parser. Tolerates surrounding whitespace and case. An
+# optional leading sign is accepted so an out-of-range *negative* score
+# (e.g. `SCORE: -0.1`) matches the SCORE line and reaches the clamp in
+# `parse_judge_output`, rather than failing the SCORE-line match and
+# surfacing as a misleading "missing SCORE: line" error (#71).
+_SCORE_RE = re.compile(r"^\s*SCORE:\s*([+-]?[0-9]*\.?[0-9]+)\s*$", re.MULTILINE | re.IGNORECASE)
 _REASON_RE = re.compile(r"^\s*REASONING:\s*(.+)$", re.MULTILINE | re.IGNORECASE)
 
 
@@ -153,6 +157,9 @@ def parse_judge_output(raw: str) -> JudgeScore:
     if reason_match is None:
         raise JudgeParseError(f"missing REASONING: line in judge output: {raw!r}")
     score = float(score_match.group(1))
-    score = max(0.0, min(1.0, score))  # clamp; the model occasionally returns 1.05
+    # Clamp out-of-range scores symmetrically: the model occasionally returns
+    # just over 1.0 (e.g. 1.05) or, less often, just under 0.0 (e.g. -0.1).
+    # The SCORE regex now matches a leading sign (#71) so both ends reach here.
+    score = max(0.0, min(1.0, score))
     reasoning = reason_match.group(1).strip()
     return JudgeScore(score=score, reasoning=reasoning, raw=raw)
