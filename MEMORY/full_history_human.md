@@ -540,3 +540,16 @@ separate consideration, behaviorally a breaking change to that CLI surface.
 **Open questions / blockers:** none. 384 → 393 pytest passes. PR #69 merged.
 
 **Next session:** the from_json propagation chain is now at two hops (chunking #47/#48 + this PR). The natural third hop is `rag-production-kit` — `PhaseTimings.to_dict()` + `Aggregate.to_dict()` shipped in earlier sessions without symmetric readers. Worth filing as a sibling issue if a future session needs substantive work in a saturated portfolio state. The `RunResult ↔ StoredRun` asymmetry in this repo's `load_run_result_from_json` is intentional (deliberate shape change for the diff path), not a from_json gap; not in scope.
+
+## 2026-06-22 — Issue #71: judge parser — symmetric out-of-range score clamp
+**Duration:** ~20 min · **Branch:** `session/2026-06-22-0310-issue-71`
+
+- Found during Phase A code-reading: `parse_judge_output` clamped a too-high judge score (`SCORE: 1.05` → `1.0`) but the too-low side was unreachable — the SCORE regex had no optional sign, so `SCORE: -0.2` failed the SCORE-line match and raised a misleading `missing SCORE: line` error. The `max(0.0, ...)` half of the clamp was dead code for anything the regex could match.
+- Fix: allow an optional leading sign in `_SCORE_RE` so a negative numeric score matches the SCORE line and reaches the existing `max(0.0, min(1.0, score))` clamp. Both ends now clamp symmetrically. A non-numeric SCORE line (`SCORE: high`) still raises `JudgeParseError` — the sign allowance doesn't loosen the match to non-numeric values.
+- 4 new tests: clamp-below-zero, `-0.0` in-range, explicit `+` sign, and non-numeric-still-raises. Full suite 393 → 397, ruff clean. PR #72 open and ready.
+
+**Why this work, this session:** the portfolio is saturated (almost every repo at zero open issues, no priority:high anywhere, only demo-capture tasks left). This was a real behavioral asymmetry plus dead code in the production judge path — strictly higher value than a synthetic API-completeness fill, found by reading `judge.py` directly during Phase A.
+
+**Open questions / blockers:** none.
+
+**Next session:** `AnthropicBackend.complete` makes a single API call with no retry/backoff — a transient rate-limit or 529 overloaded aborts a whole multi-row run. Worth filing as a meatier resilience issue if a future session needs substantive work here.
