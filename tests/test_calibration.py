@@ -20,6 +20,7 @@ import pytest
 
 from eval_harness.calibration import (
     CalibrationLoadError,
+    CalibrationRow,
     binarize,
     calibrate,
     cohens_kappa,
@@ -188,6 +189,64 @@ def test_load_rejects_unknown_field(tmp_path):
     p.write_text(json.dumps(obj) + "\n", encoding="utf-8")
     with pytest.raises(CalibrationLoadError, match="unknown top-level field"):
         load_calibration(p)
+
+
+@pytest.mark.parametrize("bad_rubric", ["", "   ", "\t\n"])
+def test_load_rejects_empty_rubric(tmp_path, bad_rubric):
+    # #75: rubric is the judge instruction — an empty/whitespace one is malformed
+    # and must fail loud, not silently fall back to the default rubric (which the
+    # old `row.rubric or FAITHFULNESS_RUBRIC` in calibrate() did).
+    p = tmp_path / "bad.jsonl"
+    obj = {
+        "id": "a",
+        "prompt": "p",
+        "response": "r",
+        "rubric": bad_rubric,
+        "human_score": 1.0,
+        "provenance": {},
+    }
+    p.write_text(json.dumps(obj) + "\n", encoding="utf-8")
+    with pytest.raises(CalibrationLoadError, match="rubric must be a non-empty string"):
+        load_calibration(p)
+
+
+def test_calibrate_passes_row_rubric_verbatim_to_judge():
+    # #75: calibrate() must judge each row against its own rubric, not silently
+    # swap in the default. A recording judge captures the rubric it receives.
+    from eval_harness.judge import JudgeScore
+
+    class RecordingJudge:
+        def __init__(self) -> None:
+            self.rubrics: list[str] = []
+
+        def score(self, prompt: str, response: str, *, rubric: str) -> JudgeScore:
+            self.rubrics.append(rubric)
+            return JudgeScore(score=0.5, reasoning="stub", raw="SCORE: 0.5")
+
+    rows = [
+        CalibrationRow(
+            id="r1",
+            prompt="p1",
+            response="resp1",
+            rubric="Rate strictly on citation accuracy.",
+            human_score=0.5,
+            provenance={},
+        ),
+        CalibrationRow(
+            id="r2",
+            prompt="p2",
+            response="resp2",
+            rubric="Rate on completeness only.",
+            human_score=0.5,
+            provenance={},
+        ),
+    ]
+    judge = RecordingJudge()
+    calibrate(judge, rows)
+    assert judge.rubrics == [
+        "Rate strictly on citation accuracy.",
+        "Rate on completeness only.",
+    ]
 
 
 def test_load_rejects_human_score_out_of_range(tmp_path):

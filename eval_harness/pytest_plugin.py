@@ -81,13 +81,27 @@ def _read_marker(mark: pytest.Mark) -> _EvalSpec:
             "Required: suite, dataset, answer_source, judge_backend. "
             "Optional: threshold (default 0.6), rubric (default FAITHFULNESS_RUBRIC)."
         )
+    # Rubric is optional: an *absent* rubric defaults to FAITHFULNESS_RUBRIC.
+    # But an explicitly-provided empty/whitespace rubric is a mistake, not a
+    # request for the default — `kw.get("rubric") or DEFAULT` silently swallowed
+    # it (#75). Distinguish None (default) from "" (raise).
+    raw_rubric = kw.get("rubric")
+    if raw_rubric is None:
+        rubric = FAITHFULNESS_RUBRIC
+    else:
+        rubric = str(raw_rubric)
+        if not rubric.strip():
+            raise ValueError(
+                "@pytest.mark.eval rubric must be a non-empty string when provided; "
+                "omit the kwarg to use the default FAITHFULNESS_RUBRIC."
+            )
     return _EvalSpec(
         suite=str(kw["suite"]),
         dataset_path=str(kw["dataset"]),
         answer_source=kw["answer_source"],
         judge_backend=kw["judge_backend"],
         threshold=float(kw.get("threshold", 0.6)),
-        rubric=str(kw.get("rubric") or FAITHFULNESS_RUBRIC),
+        rubric=rubric,
     )
 
 

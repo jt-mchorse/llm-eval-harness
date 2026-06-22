@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from eval_harness.dataset import ValidationFinding, ValidationReport
-from eval_harness.judge import FAITHFULNESS_RUBRIC, Judge, JudgeScore
+from eval_harness.judge import Judge, JudgeScore
 
 
 @dataclass(frozen=True)
@@ -96,8 +96,13 @@ def _row_from_dict(line_no: int, obj: dict) -> CalibrationRow:
         raise CalibrationLoadError(line_no, "prompt must be a string")
     if not isinstance(obj["response"], str):
         raise CalibrationLoadError(line_no, "response must be a string")
-    if not isinstance(obj["rubric"], str):
-        raise CalibrationLoadError(line_no, "rubric must be a string")
+    if not isinstance(obj["rubric"], str) or not obj["rubric"].strip():
+        # Rubric is the judge instruction — an empty/whitespace one is malformed,
+        # not a request to fall back to the default. Pre-fix it passed the type
+        # check and then `calibrate` silently swapped in FAITHFULNESS_RUBRIC via
+        # `row.rubric or ...`, so κ was computed against the wrong rubric with no
+        # diagnostic. Reject it loud, same standard as `id` above.
+        raise CalibrationLoadError(line_no, "rubric must be a non-empty string")
     if not isinstance(obj["provenance"], dict):
         raise CalibrationLoadError(line_no, "provenance must be an object")
 
@@ -315,9 +320,10 @@ def calibrate(judge: Judge, rows: Iterable[CalibrationRow]) -> CalibrationResult
 
     judge_scores: list[JudgeScore] = []
     for row in rows_list:
-        judge_scores.append(
-            judge.score(row.prompt, row.response, rubric=row.rubric or FAITHFULNESS_RUBRIC)
-        )
+        # `row.rubric` is guaranteed non-empty by `_validate`, so pass it
+        # verbatim — the old `or FAITHFULNESS_RUBRIC` silently swapped an empty
+        # rubric for the default and corrupted the calibration (#75).
+        judge_scores.append(judge.score(row.prompt, row.response, rubric=row.rubric))
 
     human_continuous = [r.human_score for r in rows_list]
     judge_continuous = [s.score for s in judge_scores]
