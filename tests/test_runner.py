@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -11,6 +12,7 @@ from eval_harness.runner import (
     DatasetEchoSource,
     RunSpec,
     diff_runs,
+    load_run_result_from_json,
     render_delta_ascii,
     run_suite,
 )
@@ -285,3 +287,50 @@ def test_diff_runs_negative_sweep_all_raise(tmp_path: Path, bad: float) -> None:
     # Message tightened in #42 to "must be a finite number >= 0.0".
     with pytest.raises(ValueError, match=r"threshold_drop must be a finite number >= 0\.0"):
         diff_runs(cur, base, threshold_drop=bad)
+
+
+def _write_run_json(path: Path, rows: list[dict], *, n_rows: int) -> Path:
+    payload = {
+        "run_id": "r1",
+        "started_at": "2026-06-22T00:00:00Z",
+        "suite": "s",
+        "mean_score": 0.8,
+        "n_rows": n_rows,
+        "rows": rows,
+    }
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    return path
+
+
+def test_load_run_result_rejects_duplicate_example_id(tmp_path: Path) -> None:
+    # A dict-keyed load silently overwrote the earlier row and left `n_rows`
+    # (read from the payload) disagreeing with `len(rows)`, corrupting the
+    # per-example deltas `diff_runs` computes. The loader must reject duplicate
+    # ids loudly, matching `dataset.load_jsonl`'s uniqueness contract.
+    p = _write_run_json(
+        tmp_path / "dup.json",
+        [
+            {"example_id": "q1", "score": 0.9, "reasoning": "a"},
+            {"example_id": "q2", "score": 0.8, "reasoning": "b"},
+            {"example_id": "q1", "score": 0.7, "reasoning": "c"},
+        ],
+        n_rows=3,
+    )
+    with pytest.raises(ValueError, match=r"duplicate example_id 'q1'"):
+        load_run_result_from_json(p)
+
+
+def test_load_run_result_accepts_unique_rows(tmp_path: Path) -> None:
+    # The clean path still round-trips: unique ids load with n_rows == len(rows).
+    p = _write_run_json(
+        tmp_path / "ok.json",
+        [
+            {"example_id": "q1", "score": 0.9, "reasoning": "a"},
+            {"example_id": "q2", "score": 0.8, "reasoning": "b"},
+        ],
+        n_rows=2,
+    )
+    stored = load_run_result_from_json(p)
+    assert stored.n_rows == len(stored.rows) == 2
+    assert stored.rows["q1"] == (0.9, "a")
+    assert stored.rows["q2"] == (0.8, "b")
