@@ -57,6 +57,32 @@ def test_parse_clamps_above_one():
     assert parsed.score == 1.0
 
 
+def test_parse_clamps_below_zero():
+    # A negative out-of-range score is clamped symmetrically with the high
+    # side, not surfaced as a misleading "missing SCORE: line" error (#71).
+    parsed = parse_judge_output("SCORE: -0.2\nREASONING: contradicts the prompt")
+    assert parsed.score == 0.0
+
+
+def test_parse_negative_zero_is_zero():
+    # `-0` / `-0.0` is in range; it must parse cleanly (and the sign branch
+    # of the regex must not turn a valid in-range value into a parse error).
+    parsed = parse_judge_output("SCORE: -0.0\nREASONING: zero")
+    assert parsed.score == 0.0
+
+
+def test_parse_explicit_plus_sign():
+    parsed = parse_judge_output("SCORE: +0.4\nREASONING: partial")
+    assert parsed.score == pytest.approx(0.4)
+
+
+def test_parse_non_numeric_score_still_raises():
+    # The leading-sign allowance must not loosen the match to non-numeric
+    # values: a malformed SCORE line still fails the SCORE-line match.
+    with pytest.raises(JudgeParseError, match="missing SCORE"):
+        parse_judge_output("SCORE: high\nREASONING: hi")
+
+
 def test_parse_case_insensitive():
     parsed = parse_judge_output("score: 0.5\nreasoning: half")
     assert parsed.score == 0.5
