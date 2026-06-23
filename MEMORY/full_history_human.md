@@ -615,3 +615,15 @@ separate consideration, behaviorally a breaking change to that CLI surface.
 **Open questions / blockers:** none.
 
 **Next session:** the `int(summary.get("n_*", 0))` count fields would also raise on present-null, but counts are never null in a real summary; left out of scope.
+
+## 2026-06-23 — Issue #83: load_run_result_from_json silently defaulted a missing mean_score to 0.0
+**Duration:** ~25 min · **Branch:** `session/2026-06-23-1900-issue-83`
+
+- A Phase A dogfood second-pass sweep of the loader path found that `load_run_result_from_json` read `mean_score` with a silent `float(payload.get("mean_score", 0.0))` default. Since `0.0` is a valid score, a payload missing the field (corrupt/truncated/incompatible) loaded indistinguishably from a genuine zero run.
+- `diff_runs` computes `mean_delta = current.mean_score - baseline.mean_score`, so the corruption flowed straight into the headline regression metric — a +0.2 improvement reported as a −0.6 regression, gating CI (`--threshold-drop`) and rendering in the PR comment. Made `mean_score` required (descriptive `ValueError`), matching the #79 duplicate-id guard and the loader's other bracket-accessed required fields. Suite 461 → 462, ruff clean.
+
+**Why this work, this session:** the only `priority:high` open issues elsewhere were operator-blocked (portfolio-ops #17) or deliberate `decision-revisit` security-guard work (mcp-server-cookbook #54/#55, skipped per D-007); a fresh dogfood find on a priority-tier repo was the highest-value autonomous work available.
+
+**Open questions / blockers:** none.
+
+**Next session:** the loader's remaining `.get(..., default)` reads are genuinely-optional metadata or sensibly derived (`n_rows` → `len(rows)`); not corruption-masking, left out of scope.
