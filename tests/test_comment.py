@@ -83,6 +83,15 @@ def test_render_contains_sticky_marker():
     assert md.startswith(STICKY_MARKER)
 
 
+def test_render_handles_null_mean_delta_in_summary():
+    # `from_json` passes the summary through verbatim, so a delta JSON with an
+    # explicit `"mean_delta": null` (an undefined mean Δ) reaches the renderer.
+    # It must coerce null to +0.000, not raise TypeError on the `:+.3f` format.
+    summary = {**_default_summary(), "mean_delta": None}
+    md = render_delta_markdown(_make_report([], summary))
+    assert "mean Δ **+0.000**" in md
+
+
 def test_render_includes_suite_name_in_heading():
     md = render_delta_markdown(_make_report([], _default_summary()))
     assert "# Eval delta · `demo-suite`" in md
