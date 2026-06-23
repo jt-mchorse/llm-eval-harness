@@ -479,6 +479,20 @@ def load_run_result_from_json(path: str | Path) -> StoredRun:
                 f"duplicate example_id {example_id!r} in run rows; ids must be unique within a run"
             )
         rows[example_id] = (float(r["score"]), str(r.get("reasoning", "")))
+    # `mean_score` is load-bearing: `diff_runs` computes `mean_delta` directly
+    # off it (current - baseline), and `RunResult.to_json` always emits it. A
+    # silent `.get("mean_score", 0.0)` made an absent field indistinguishable
+    # from a genuine 0.0 run, so a corrupt/incompatible payload silently turned
+    # an improvement into a fabricated regression (or masked a real one) in the
+    # CI gate and PR comment. Fail loud instead, matching the duplicate-id guard
+    # above and the required top-level fields read by bracket access.
+    if "mean_score" not in payload:
+        raise ValueError(
+            "required field 'mean_score' missing from run JSON; RunResult.to_json "
+            "always emits it, so its absence signals a corrupt or incompatible "
+            "payload — refusing to default it to 0.0, which would silently corrupt "
+            "the mean_delta diff_runs computes"
+        )
     return StoredRun(
         run_id=payload["run_id"],
         started_at=payload["started_at"],
@@ -486,7 +500,7 @@ def load_run_result_from_json(path: str | Path) -> StoredRun:
         dataset_version=payload.get("dataset_version", ""),
         judge_model=payload.get("judge_model"),
         judge_kappa=payload.get("judge_kappa"),
-        mean_score=float(payload.get("mean_score", 0.0)),
+        mean_score=float(payload["mean_score"]),
         n_rows=int(payload.get("n_rows", len(rows))),
         git_sha=payload.get("git_sha"),
         rows=rows,
