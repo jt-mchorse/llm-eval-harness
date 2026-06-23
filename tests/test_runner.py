@@ -332,5 +332,29 @@ def test_load_run_result_accepts_unique_rows(tmp_path: Path) -> None:
     )
     stored = load_run_result_from_json(p)
     assert stored.n_rows == len(stored.rows) == 2
+    assert stored.mean_score == pytest.approx(0.8)
     assert stored.rows["q1"] == (0.9, "a")
     assert stored.rows["q2"] == (0.8, "b")
+
+
+def test_load_run_result_rejects_missing_mean_score(tmp_path: Path) -> None:
+    # `mean_score` is always emitted by `RunResult.to_json`, so an absent field
+    # is corruption. Defaulting it to 0.0 silently flipped a +0.2 improvement
+    # into a -0.6 regression in the mean_delta `diff_runs` computes off it (which
+    # gates CI and renders in the PR comment). The loader must fail loud, like
+    # the duplicate-example_id guard, instead of fabricating a score.
+    payload = {
+        "run_id": "r1",
+        "started_at": "2026-06-22T00:00:00Z",
+        "suite": "s",
+        # mean_score deliberately omitted
+        "n_rows": 2,
+        "rows": [
+            {"example_id": "q1", "score": 0.9, "reasoning": "a"},
+            {"example_id": "q2", "score": 0.7, "reasoning": "b"},
+        ],
+    }
+    p = tmp_path / "no_mean.json"
+    p.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match=r"required field 'mean_score' missing"):
+        load_run_result_from_json(p)
