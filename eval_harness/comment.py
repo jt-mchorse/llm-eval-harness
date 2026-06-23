@@ -43,7 +43,13 @@ def render_delta_markdown(report: DeltaReport) -> str:
       either "no rows" callout or the per-row table
     """
     summary = report.summary
-    mean_delta = summary.get("mean_delta", 0.0)
+    # `.get` defaults only on a MISSING key; a present-but-null mean_delta
+    # (an undefined mean Δ — e.g. an all-new suite — serialized as JSON null)
+    # would reach the `:+.3f` format below and raise TypeError, crashing the
+    # whole comment render. Coerce null → 0.0 explicitly; `is not None` (not
+    # `or`) so a legitimate falsy 0.0 mean Δ is preserved.
+    raw_mean_delta = summary.get("mean_delta", 0.0)
+    mean_delta = float(raw_mean_delta) if raw_mean_delta is not None else 0.0
     n_flag = int(summary.get("n_flagged", 0))
     n_reg = int(summary.get("n_regressed", 0))
     n_imp = int(summary.get("n_improved", 0))
