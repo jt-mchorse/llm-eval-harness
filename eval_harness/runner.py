@@ -468,7 +468,17 @@ def load_run_result_from_json(path: str | Path) -> StoredRun:
     payload = json.loads(raw)
     rows: dict[str, tuple[float, str]] = {}
     for r in payload.get("rows", []):
-        rows[r["example_id"]] = (float(r["score"]), str(r.get("reasoning", "")))
+        example_id = r["example_id"]
+        # Reject duplicates loudly rather than silently overwriting the earlier
+        # row — a silent dict-overwrite would drop a score and leave `n_rows`
+        # (read from the payload below) disagreeing with `len(rows)`, corrupting
+        # the per-example deltas `diff_runs` computes off `rows`. Mirrors the
+        # uniqueness contract `dataset.load_jsonl` already enforces on ids.
+        if example_id in rows:
+            raise ValueError(
+                f"duplicate example_id {example_id!r} in run rows; ids must be unique within a run"
+            )
+        rows[example_id] = (float(r["score"]), str(r.get("reasoning", "")))
     return StoredRun(
         run_id=payload["run_id"],
         started_at=payload["started_at"],

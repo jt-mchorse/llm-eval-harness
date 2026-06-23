@@ -591,3 +591,15 @@ separate consideration, behaviorally a breaking change to that CLI surface.
 **Open questions / blockers:** none.
 
 **Next session:** `binarize` is now guarded on both arguments. A possible follow-on (deferred, not filed): pushing finiteness validation up into dataset `human_score` loading, so a malformed golden row is rejected at load rather than relying on `binarize`'s guard downstream.
+
+## 2026-06-22 — Issue #79: runner — load_run_result_from_json silently dropped duplicate example_ids
+**Duration:** ~15 min · **Branch:** `session/2026-06-22-2351-issue-79`
+
+- Found via a Phase A dogfood Explore agent over the eval-harness core, then verified by reading + reproducing. `load_run_result_from_json` built `rows` as a dict keyed by `example_id` and read `n_rows` straight from the payload, so a duplicate `example_id` silently overwrote the earlier row, leaving `n_rows` disagreeing with `len(rows)`. `diff_runs` consumes `rows` as its source of truth, so a deduped run produced a wrong per-example delta and a wrong reported row count in the CI comment.
+- This was inconsistent with the repo's own convention: `dataset.load_jsonl` already rejects duplicate ids loudly. Fix: the run-load path now raises on a duplicate `example_id` instead of silently overwriting. 2 tests (duplicate raises — fails pre-fix; clean payload round-trips with `n_rows == len(rows)`). Suite 458 → 460, ruff clean. PR #80 ready.
+
+**Why this work, this session:** llm-eval-harness is the foundational priority-tier repo with no open issues; a dogfood sweep surfaced a silent-data-loss + state-inconsistency gap on the run-load path (which feeds the regression diff), and the fix aligns it with an explicit existing convention. Low reachability (needs an externally-produced/corrupted run JSON), filed priority:low.
+
+**Open questions / blockers:** none.
+
+**Next session:** the run-load path is now as strict as the dataset-load path on id uniqueness. The earlier deferred lead (pushing finiteness validation up into dataset `human_score` loading) remains open.
