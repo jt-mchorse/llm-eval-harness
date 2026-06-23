@@ -603,3 +603,15 @@ separate consideration, behaviorally a breaking change to that CLI surface.
 **Open questions / blockers:** none.
 
 **Next session:** the run-load path is now as strict as the dataset-load path on id uniqueness. The earlier deferred lead (pushing finiteness validation up into dataset `human_score` loading) remains open.
+
+## 2026-06-23 — Issue #81: comment render crashed on null mean_delta
+**Duration:** ~15 min · **Branch:** `session/2026-06-23-0351-issue-81`
+
+- Fixed a crash in `render_delta_markdown`. It read `mean_delta = summary.get("mean_delta", 0.0)`, whose default only applies on a missing key. A present-but-null `mean_delta` (an undefined mean Δ serialized as JSON null, which `from_json` passes through verbatim) reached the `:+.3f` format and raised `TypeError`, aborting the entire comment render in CI.
+- Coerced explicitly with `float(raw) if raw is not None else 0.0` (preserving a legitimate `0.0`). Added a null-mean_delta render test. Red pre-fix, green post-fix. Suite 460 → 461, ruff clean.
+
+**Why this work, this session:** found by a second-pass deep read in the night session's Phase A dogfood wave (first pass on this repo was clean). Same reachability tier as the merged #79 fix — a hand-edited / externally-produced delta JSON crashes the GitHub-Action comment step.
+
+**Open questions / blockers:** none.
+
+**Next session:** the `int(summary.get("n_*", 0))` count fields would also raise on present-null, but counts are never null in a real summary; left out of scope.
