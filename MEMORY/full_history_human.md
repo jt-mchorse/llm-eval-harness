@@ -669,6 +669,18 @@ separate consideration, behaviorally a breaking change to that CLI surface.
 **Next session:** belt-and-suspenders renderer-side `:.3f` guards in `comment.py` are a low-priority follow-up (loader-side rejection already makes the renderer path unreachable from corrupt input).
 
 ---
+## 2026-06-24 — Issue #91: jensen_shannon reported "no drift" (0.0) when one distribution was empty
+**Duration:** ~30 min · **Branch:** `session/2026-06-24-2315-issue-91` · **PR:** #92 (ready)
+
+- `drift.py`'s `jensen_shannon` is the exported primitive that scores every drift axis (length / embedding / judge) and gates the regression report. Its `if sp <= 0.0 or sq <= 0.0: return 0.0` guard conflated two opposite cases: two empty distributions (identical "nothing" → correctly 0.0) and *exactly one* empty distribution (the maximally-disjoint case → should be 1.0, the JSD upper bound the docstring already promised). Because a score of 0.0 reads as "no drift", an axis whose histogram collapses to all-zero on one side silently reported maximal drift as none — a false-negative bypassing the gate. Reproduced: `jensen_shannon([0,0,0],[1,2,3])` → 0.0, while the genuinely-disjoint `[1,0]`/`[0,1]` correctly returns 1.0.
+- Split the guard (both empty → 0.0, exactly one empty → 1.0) and tightened the docstring. The existing `test_jsd_handles_zero_mass` had **locked in the buggy 0.0**, so I replaced it with three tests covering empty-vectors, both-sides-zero, and one-side-zero in each direction. Full suite green (492), ruff clean. Consistent with D-014 (JSD base-2 bounded [0,1]).
+
+**Why this work, this session:** found via a Phase A dogfood Explore sweep of the numeric chokepoints and reproduced. mcp-server-cookbook was the stalest repo (~56h) but its only `priority:high` issues (#54/#55) are human-blocked `decision-revisit` security-guard items already skip-commented on 06-22/06-23 (D-007 fall-through), so selection landed on llm-eval-harness (priority tier, build-seq #1). Same dogfood→issue→PR shape as the recent finiteness sweep.
+
+**Open questions / blockers:** none.
+
+**Next session:** #93 — `_length_histogram` silently drops inputs ≥ 1M chars (the reachability mechanism for this bug), filed `priority:low`; make the top bucket open-ended or add an overflow bucket.
+
 ## 2026-06-24 — Issue #93: _length_histogram silently dropped inputs ≥ 1M chars
 **Duration:** ~20 min · **Branch:** `session/2026-06-24-2318-issue-93` · **PR:** #94 (ready)
 
