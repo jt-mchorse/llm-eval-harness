@@ -449,6 +449,19 @@ def compute_drift(
 
 
 def _clamp01(x: float) -> float:
+    """Clamp a judge score into ``[0, 1]``.
+
+    Every operator-supplied ``judge_score_fn(input)`` result passes through
+    here. Clamping is for finite-but-out-of-range values; a *non-finite*
+    score (NaN/±Inf) is corruption, not something to clamp — NaN would
+    later crash ``_judge_histogram`` cryptically at ``int(s * 10)`` and
+    ±Inf would silently clamp to 1.0/0.0, poisoning ``mean_score`` and the
+    JSD histogram. Fail loud at the choke point instead, matching the
+    finiteness guards in ``runner.load_run_result_from_json`` (#86) and
+    ``calibration.binarize`` (#45).
+    """
+    if not math.isfinite(x):
+        raise ValueError(f"judge score must be finite; got {x!r}")
     if x < 0.0:
         return 0.0
     if x > 1.0:

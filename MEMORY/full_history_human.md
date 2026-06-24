@@ -640,3 +640,17 @@ separate consideration, behaviorally a breaking change to that CLI surface.
 **Open questions / blockers:** none.
 
 **Next session:** the loader is the right choke point — `threshold_drop` finiteness is already guarded at the diff layer (#42), so no defensive NaN-delta guard was added in `diff_runs`. No reachable gap left on this path.
+
+---
+## 2026-06-24 — Issue #87: drift._clamp01 didn't reject non-finite judge scores
+**Duration:** ~28 min · **Branch:** `session/2026-06-24-0320-issue-87`
+
+- `_clamp01` (the choke point every operator-supplied `judge_score_fn` result passes through) did sign-only clamping with no finiteness check. A NaN judge score crashed `_judge_histogram` cryptically at `int(s*10)` ("cannot convert float NaN to integer"), and +Inf/-Inf silently clamped to 1.0/0.0, poisoning `mean_score` and the JSD histogram while the report rendered as if clean.
+- Added a `math.isfinite` guard raising a descriptive ValueError, matching the runner #86 and calibration #45 finiteness guards. Finite out-of-range scores still clamp to [0,1].
+- 6 new tests (parametrized NaN/±Inf on `_clamp01`, finite-clamp regression, NaN and +Inf end-to-end through `compute_drift`). Red via `git stash`, green after. Suite 467 → 473, ruff clean.
+
+**Why this work, this session:** llm-eval-harness was the next priority-tier repo by the build-sequence tie-break; the loader/calibration paths were already saturated, so a parallel dogfood sweep of the less-hardened modules (drift/dataset/io_utils) surfaced this as the highest-confidence reachable bug.
+
+**Open questions / blockers:** none.
+
+**Next session:** with `_clamp01` guarding judge scores there's no reachable non-finite path into `jensen_shannon`; the dataset.py / io_utils.py / pytest_plugin.py modules are the next dogfood frontier if this repo is picked again.
