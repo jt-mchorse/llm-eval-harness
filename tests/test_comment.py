@@ -553,3 +553,74 @@ def test_run_comment_cli_uses_typed_delta_report_not_shim(tmp_path, capsys) -> N
     assert rc == 0
     direct = render_delta_markdown(report)
     assert out == direct
+
+
+# ---------------------------------------------------------------------------
+# #89: comment-path finiteness guard — reject NaN/+/-Infinity at load time so
+# a corrupt delta artifact fails fast instead of posting '+nan'/'inf' in the PR
+# comment. Sibling to the run-data guard in load_run_result_from_json (#42).
+# ---------------------------------------------------------------------------
+
+_NON_FINITE = pytest.mark.parametrize(
+    "bad", [float("nan"), float("inf"), float("-inf")], ids=["nan", "inf", "-inf"]
+)
+
+
+@_NON_FINITE
+def test_delta_report_from_json_rejects_non_finite_mean_delta(bad: float) -> None:
+    """A present, non-null, non-finite `summary["mean_delta"]` is corruption
+    (a bare NaN/Infinity JSON token parses natively) and would render as
+    `+nan` in the posted PR comment. Reject it at load time."""
+    payload = {"rows": [], "summary": {**_default_summary(), "mean_delta": bad}}
+    with pytest.raises(ValueError, match="non-finite mean_delta"):
+        DeltaReport.from_json(payload)
+
+
+@_NON_FINITE
+def test_delta_report_from_json_rejects_non_finite_threshold_drop(bad: float) -> None:
+    """A non-finite `threshold_drop` would render as `nan` in the threshold
+    line of the PR comment. Reject it, matching the #42 run-data contract."""
+    with pytest.raises(ValueError, match="non-finite threshold_drop"):
+        DeltaReport.from_json({"threshold_drop": bad, "rows": []})
+
+
+@_NON_FINITE
+@pytest.mark.parametrize("field", ["baseline_score", "current_score", "delta"])
+def test_row_delta_from_json_rejects_non_finite_score(field: str, bad: float) -> None:
+    """A present, non-finite row score field would render as `inf`/`+nan` in
+    the per-row table of the PR comment. Reject it; the error names the field
+    and the example_id."""
+    row = {"example_id": "qa_01", "status": "regressed", field: bad}
+    with pytest.raises(ValueError, match=f"non-finite {field}.*qa_01"):
+        RowDelta.from_json(row)
+
+
+def test_delta_report_from_json_accepts_null_and_absent_mean_delta() -> None:
+    """The guard must only fire on a present, non-null, non-finite value — an
+    explicit `null` (undefined mean Δ, e.g. an all-new suite) and an absent
+    key both remain legal and still render (renderer coerces null → +0.000)."""
+    null_summary = {**_default_summary(), "mean_delta": None}
+    assert (
+        DeltaReport.from_json({"rows": [], "summary": null_summary}).summary["mean_delta"] is None
+    )
+    # Absent mean_delta key entirely.
+    assert "mean_delta" not in DeltaReport.from_json({"rows": [], "summary": {}}).summary
+
+
+def test_row_delta_from_json_still_accepts_finite_and_none_scores() -> None:
+    """Regression guard: the finiteness check must not reject legitimate finite
+    scores or the None sentinel used for `new`/`removed` rows."""
+    finite = RowDelta.from_json(
+        {
+            "example_id": "qa_01",
+            "baseline_score": 0.8,
+            "current_score": 0.9,
+            "delta": 0.1,
+            "status": "improved",
+        }
+    )
+    assert finite.baseline_score == 0.8
+    assert finite.delta == 0.1
+    none_row = RowDelta.from_json({"example_id": "qa_new", "status": "new"})
+    assert none_row.baseline_score is None
+    assert none_row.current_score is None

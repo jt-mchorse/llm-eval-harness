@@ -654,3 +654,16 @@ separate consideration, behaviorally a breaking change to that CLI surface.
 **Open questions / blockers:** none.
 
 **Next session:** with `_clamp01` guarding judge scores there's no reachable non-finite path into `jensen_shannon`; the dataset.py / io_utils.py / pytest_plugin.py modules are the next dogfood frontier if this repo is picked again.
+
+---
+## 2026-06-24 — Issue #89: non-finite values leaked into the posted PR comment
+**Duration:** ~25 min · **Branch:** `session/2026-06-24-1513-issue-89`
+
+- The `comment` command's JSON load path (`DeltaReport.from_json` / `RowDelta.from_json`) didn't validate finiteness, so a NaN/±Infinity in a delta artifact (parseable from a bare JSON token) rendered as `+nan`/`inf`/`nan` in the sticky PR comment the bot posts. The sibling run-data loader `load_run_result_from_json` was hardened against exactly this in #42; this session extended the same contract to the comment path.
+- Added a `_finite_or_none` helper for the row score fields (None passes through) and non-finite rejection of `threshold_drop` + `summary["mean_delta"]` in `DeltaReport.from_json`; explicit `null` and absent mean_delta stay legal. 17 new tests, red-without-guard / green-with, full suite + ruff clean.
+
+**Why this work, this session:** found via a Phase A dogfood sweep and reproduced end-to-end; mcp-server-cookbook was the stalest repo but its only priority:high issues are human-blocked `decision-revisit` security-guard items (D-007 fall-through), so selection landed on llm-eval-harness (priority tier, build-seq #1).
+
+**Open questions / blockers:** none.
+
+**Next session:** belt-and-suspenders renderer-side `:.3f` guards in `comment.py` are a low-priority follow-up (loader-side rejection already makes the renderer path unreachable from corrupt input).
