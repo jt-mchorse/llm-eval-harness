@@ -28,6 +28,7 @@ from eval_harness.drift import (
     jensen_shannon,
     render_html,
 )
+from eval_harness.drift import _clamp01 as clamp01
 from eval_harness.drift import _judge_stub as judge_stub
 from eval_harness.drift import _load_inputs_jsonl as load_inputs
 
@@ -306,3 +307,48 @@ def test_load_inputs_jsonl_rejects_empty_file(tmp_path: Path):
     p.write_text("\n\n")
     with pytest.raises(ValueError, match="no inputs loaded"):
         load_inputs(p)
+
+
+# ----------------------------------------------------------------------
+# Non-finite judge-score validation (#87)
+# ----------------------------------------------------------------------
+#
+# `_clamp01` is the choke point every operator-supplied judge_score_fn result
+# passes through. Sign-only clamping let NaN crash `_judge_histogram` cryptically
+# (`int(s * 10)`) and let ±Inf silently clamp to 1.0/0.0, poisoning mean_score
+# and the JSD histogram. It now fails loud, matching runner #86 / calibration #45.
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
+def test_clamp01_rejects_non_finite(bad):
+    with pytest.raises(ValueError, match="judge score must be finite"):
+        clamp01(bad)
+
+
+def test_clamp01_still_clamps_finite_out_of_range():
+    assert clamp01(-0.5) == 0.0
+    assert clamp01(1.5) == 1.0
+    assert clamp01(0.5) == 0.5
+    assert clamp01(0.0) == 0.0
+    assert clamp01(1.0) == 1.0
+
+
+def test_compute_drift_rejects_nan_judge_score_with_clear_error():
+    # Previously crashed with the cryptic "cannot convert float NaN to integer"
+    # deep in _judge_histogram; now surfaces the judge-score contract violation.
+    with pytest.raises(ValueError, match="judge score must be finite"):
+        compute_drift(
+            ["good"],
+            ["bad"],
+            judge_score_fn=lambda t: float("nan") if "bad" in t else 0.5,
+        )
+
+
+def test_compute_drift_rejects_inf_judge_score_instead_of_silent_clamp():
+    # Previously +inf silently clamped to 1.0, corrupting mean_score/histogram.
+    with pytest.raises(ValueError, match="judge score must be finite"):
+        compute_drift(
+            ["good"],
+            ["big"],
+            judge_score_fn=lambda t: float("inf") if "big" in t else 0.5,
+        )
