@@ -478,7 +478,24 @@ def load_run_result_from_json(path: str | Path) -> StoredRun:
             raise ValueError(
                 f"duplicate example_id {example_id!r} in run rows; ids must be unique within a run"
             )
-        rows[example_id] = (float(r["score"]), str(r.get("reasoning", "")))
+        score = float(r["score"])
+        # A non-finite score (NaN / +/-Infinity) is corruption, not a measurement.
+        # `json.loads` parses the bare `NaN`/`Infinity` tokens natively, so an
+        # externally-produced or hand-edited artifact can carry one. It must not
+        # load silently: in `diff_runs`, `_status_for` is a sign-only check
+        # (`delta < -t`, `delta < 0`, `delta > 0`), every comparison against NaN
+        # is False, so a NaN delta falls through to "unchanged"/not-flagged and
+        # `cli._run_diff_json` exits 0 — silently disabling the regression gate
+        # for that row. Same failure mode the #42 `threshold_drop` finiteness
+        # guard closes, here on the data side. Fail loud, like the duplicate-id
+        # guard above.
+        if not math.isfinite(score):
+            raise ValueError(
+                f"non-finite score {score} for example_id {example_id!r}; scores must be "
+                "finite — a NaN/Infinity row score silently disables the regression gate "
+                "(its delta is classified 'unchanged' and never flagged)"
+            )
+        rows[example_id] = (score, str(r.get("reasoning", "")))
     # `mean_score` is load-bearing: `diff_runs` computes `mean_delta` directly
     # off it (current - baseline), and `RunResult.to_json` always emits it. A
     # silent `.get("mean_score", 0.0)` made an absent field indistinguishable
@@ -493,6 +510,16 @@ def load_run_result_from_json(path: str | Path) -> StoredRun:
             "payload — refusing to default it to 0.0, which would silently corrupt "
             "the mean_delta diff_runs computes"
         )
+    mean_score = float(payload["mean_score"])
+    # `mean_score` feeds `diff_runs`' `mean_delta` (current - baseline) directly;
+    # a non-finite value (parseable from a raw NaN/Infinity JSON token) propagates
+    # NaN into the summary the PR comment renders and the dashboard reads. Reject
+    # it loudly, same finiteness contract as the per-row scores above.
+    if not math.isfinite(mean_score):
+        raise ValueError(
+            f"non-finite mean_score {mean_score}; mean_score must be finite — a "
+            "NaN/Infinity value corrupts the mean_delta diff_runs computes"
+        )
     return StoredRun(
         run_id=payload["run_id"],
         started_at=payload["started_at"],
@@ -500,7 +527,7 @@ def load_run_result_from_json(path: str | Path) -> StoredRun:
         dataset_version=payload.get("dataset_version", ""),
         judge_model=payload.get("judge_model"),
         judge_kappa=payload.get("judge_kappa"),
-        mean_score=float(payload["mean_score"]),
+        mean_score=mean_score,
         n_rows=int(payload.get("n_rows", len(rows))),
         git_sha=payload.get("git_sha"),
         rows=rows,

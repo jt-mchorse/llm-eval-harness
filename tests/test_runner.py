@@ -358,3 +358,62 @@ def test_load_run_result_rejects_missing_mean_score(tmp_path: Path) -> None:
     p.write_text(json.dumps(payload), encoding="utf-8")
     with pytest.raises(ValueError, match=r"required field 'mean_score' missing"):
         load_run_result_from_json(p)
+
+
+# `json.dumps`/`json.loads` round-trip the bare NaN/Infinity tokens by default
+# (allow_nan=True), so an externally-produced or hand-edited run JSON can carry
+# a non-finite score. It must not load silently: a NaN delta is classified
+# "unchanged"/not-flagged by `_status_for`, so `cli._run_diff_json` exits 0 and
+# the regression gate is silently disabled — the #42 failure mode on the data
+# side. The loader must fail loud, like the duplicate-id / missing-mean_score
+# guards in the same function.
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
+def test_load_run_result_rejects_non_finite_row_score(tmp_path: Path, bad: float) -> None:
+    p = _write_run_json(
+        tmp_path / "bad_score.json",
+        [
+            {"example_id": "q1", "score": 0.9, "reasoning": "a"},
+            {"example_id": "q2", "score": bad, "reasoning": "b"},
+        ],
+        n_rows=2,
+    )
+    with pytest.raises(ValueError, match=r"non-finite score .* for example_id 'q2'"):
+        load_run_result_from_json(p)
+
+
+def test_load_run_result_rejects_non_finite_mean_score(tmp_path: Path) -> None:
+    payload = {
+        "run_id": "r1",
+        "started_at": "2026-06-22T00:00:00Z",
+        "suite": "s",
+        "mean_score": float("nan"),
+        "n_rows": 1,
+        "rows": [{"example_id": "q1", "score": 0.9, "reasoning": "a"}],
+    }
+    p = tmp_path / "nan_mean.json"
+    p.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match=r"non-finite mean_score"):
+        load_run_result_from_json(p)
+
+
+def test_diff_runs_no_longer_swallows_a_nan_regression(tmp_path: Path) -> None:
+    # End-to-end: before the loader guard, a current run whose score went to NaN
+    # loaded clean and diffed to status='unchanged'/n_flagged=0, so the gate
+    # passed a garbage run. The loader now rejects it at read time; the clean
+    # baseline side still loads.
+    base = _write_run_json(
+        tmp_path / "base.json",
+        [{"example_id": "q1", "score": 0.9, "reasoning": "a"}],
+        n_rows=1,
+    )
+    cur = _write_run_json(
+        tmp_path / "cur.json",
+        [{"example_id": "q1", "score": float("nan"), "reasoning": "a"}],
+        n_rows=1,
+    )
+    loaded_base = load_run_result_from_json(base)
+    assert loaded_base.rows["q1"] == (0.9, "a")
+    with pytest.raises(ValueError, match=r"non-finite score"):
+        load_run_result_from_json(cur)

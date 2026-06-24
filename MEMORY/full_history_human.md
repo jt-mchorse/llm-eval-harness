@@ -627,3 +627,16 @@ separate consideration, behaviorally a breaking change to that CLI surface.
 **Open questions / blockers:** none.
 
 **Next session:** the loader's remaining `.get(..., default)` reads are genuinely-optional metadata or sensibly derived (`n_rows` → `len(rows)`); not corruption-masking, left out of scope.
+
+## 2026-06-23 — Issue #85: load_run_result_from_json accepted non-finite scores, silently disabling the regression gate
+**Duration:** ~25 min · **Branch:** `session/2026-06-23-2311-issue-85`
+
+- A Phase A dogfood code-read of the loader/diff path (immediately after the #83 required-`mean_score` fix merged) found that `load_run_result_from_json` checked presence (#83) and uniqueness (#79) of run-JSON fields but never that the numbers are *finite*. Python's `json.loads` parses the bare `NaN`/`Infinity` tokens by default, so an externally-produced or hand-edited run artifact can carry a non-finite `score`.
+- Reproduced: a current run whose `q1` score is `NaN` loaded clean, then `diff_runs` classified the NaN delta as `unchanged`/not-flagged (the sign-only `_status_for` returns False for every comparison against NaN), so `n_flagged == 0` and `cli._run_diff_json` exits 0 — the CI regression gate silently passed a garbage run. Same failure mode as the #42 `threshold_drop` finiteness guard, on the data side.
+- Added two fail-loud finiteness guards in the loader (per-row `score` naming the `example_id`, and top-level `mean_score`), matching the in-function duplicate-id and missing-mean_score guards. 5 new tests (NaN/+Inf/-Inf row score, NaN mean_score, end-to-end), red pre-fix / green post-fix. Suite 462 → 467, ruff clean.
+
+**Why this work, this session:** priority-tier repo, earliest in build sequence; the only `priority:high` issues elsewhere were operator-blocked (portfolio-ops #17) or `decision-revisit` security work already deferred to JT (mcp-server-cookbook #54/#55). A fresh dogfood find continuing this repo's fail-loud loader-hardening arc (#42/#75/#77/#79/#83) was the highest-value autonomous work available.
+
+**Open questions / blockers:** none.
+
+**Next session:** the loader is the right choke point — `threshold_drop` finiteness is already guarded at the diff layer (#42), so no defensive NaN-delta guard was added in `diff_runs`. No reachable gap left on this path.
