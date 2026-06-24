@@ -667,3 +667,16 @@ separate consideration, behaviorally a breaking change to that CLI surface.
 **Open questions / blockers:** none.
 
 **Next session:** belt-and-suspenders renderer-side `:.3f` guards in `comment.py` are a low-priority follow-up (loader-side rejection already makes the renderer path unreachable from corrupt input).
+
+---
+## 2026-06-24 — Issue #93: _length_histogram silently dropped inputs ≥ 1M chars
+**Duration:** ~20 min · **Branch:** `session/2026-06-24-2318-issue-93` · **PR:** #94 (ready)
+
+- `_length_histogram` bucketed by `(0, 32, …, 4096, 1_000_000)` with a strict `lower <= n < upper` check on every bucket, so an input of length ≥ 1,000,000 chars matched no bucket and was silently dropped. An all-huge candidate set then collapsed the histogram to all-zero, and the length drift axis reported "no drift" — the reachability mechanism for the `jensen_shannon` one-empty false-negative I fixed in #91 earlier this run. The `1_000_000` entry was already an ∞ sentinel (`render_html` labels the last bucket `4096-∞`); the histogram just wasn't honoring it.
+- Made the final bucket open-ended (`n >= lower`, no upper bound), so every input at or above 4096 is counted there and nothing is dropped. 4 tests including an end-to-end `compute_drift` that an all-huge candidate set now registers as length-`drifted`. Red→green verified, full suite green, ruff clean.
+
+**Why this work, this session:** second Phase B iteration of the same DAY run; #93 is the follow-up I filed during the #91 fix, completing the silent-drop story while context on `drift.py` was warm. Note this branch is based on `main` (which doesn't yet include #91's unmerged PR #92); the histogram fix is independent — once inputs are counted, neither histogram is all-zero, so the normal JSD path applies regardless of #91. #92 and #94 touch different functions and don't conflict.
+
+**Open questions / blockers:** none.
+
+**Next session:** the embedding/judge axes can't collapse to all-zero (every input is assigned to a cluster / scored into a bucket), so length was the only silently-droppable axis; no further histogram follow-up needed.
