@@ -124,6 +124,27 @@ class RunSpec:
     tags: tuple[str, ...] = ()  # set-union filter on Example.tags; () = no filter
 
 
+def _finite_or_none(value: Any, field_name: str, example_id: Any) -> float | None:
+    """Pass ``None`` through; reject a present-but-non-finite score.
+
+    A delta row's score fields are legitimately ``None`` (``new`` / ``removed``
+    rows). Any present value must be finite — a NaN/Infinity (parseable from a
+    bare JSON token) would render as ``inf`` / ``+nan`` in the posted PR comment
+    (#89), the comment-path analog of the run-data guard in
+    ``load_run_result_from_json`` (#42).
+    """
+    if value is None:
+        return value
+    f = float(value)
+    if not math.isfinite(f):
+        raise ValueError(
+            f"non-finite {field_name} {value} for example_id {example_id!r} in delta JSON; "
+            f"{field_name} must be finite — a NaN/Infinity value renders as 'inf'/'+nan' in "
+            "the posted PR comment"
+        )
+    return f
+
+
 @dataclass(frozen=True)
 class RowDelta:
     example_id: str
@@ -145,12 +166,25 @@ class RowDelta:
         ``cli._run_comment``. ``example_id`` and ``status`` are
         required — missing them raises :class:`KeyError` naming the
         field.
+
+        ``baseline_score`` / ``current_score`` / ``delta`` are rejected
+        when present-but-non-finite (NaN / +/-Infinity), the same
+        finiteness contract ``load_run_result_from_json`` enforces on the
+        run-data side (#42): ``json.loads`` parses the bare ``NaN`` /
+        ``Infinity`` tokens natively, so a hand-edited or externally-
+        produced delta artifact can carry one, and it would otherwise
+        render as ``inf`` / ``+nan`` in the posted PR comment (#89).
         """
+        example_id = payload["example_id"]
         return cls(
-            example_id=payload["example_id"],
-            baseline_score=payload.get("baseline_score"),
-            current_score=payload.get("current_score"),
-            delta=payload.get("delta"),
+            example_id=example_id,
+            baseline_score=_finite_or_none(
+                payload.get("baseline_score"), "baseline_score", example_id
+            ),
+            current_score=_finite_or_none(
+                payload.get("current_score"), "current_score", example_id
+            ),
+            delta=_finite_or_none(payload.get("delta"), "delta", example_id),
             status=payload["status"],
             flagged=payload.get("flagged", False),
         )
@@ -204,14 +238,37 @@ class DeltaReport:
         No required fields at the top level — every field has a
         documented default. ``KeyError`` only surfaces per-row from
         ``RowDelta.from_json`` (``example_id`` / ``status``).
+
+        ``threshold_drop`` and ``summary["mean_delta"]`` (when present
+        and non-null) are rejected when non-finite, mirroring the
+        run-data finiteness contract in ``load_run_result_from_json``
+        (#42). A bare ``NaN`` / ``Infinity`` token parses natively via
+        ``json.loads`` and would otherwise render as ``nan`` (threshold
+        line) / ``+nan`` (mean Δ) in the posted PR comment (#89).
         """
+        threshold_drop = float(payload.get("threshold_drop", DEFAULT_THRESHOLD_DROP))
+        if not math.isfinite(threshold_drop):
+            raise ValueError(
+                f"non-finite threshold_drop {threshold_drop} in delta JSON; threshold_drop "
+                "must be finite — a NaN/Infinity value renders as 'nan' in the posted PR comment"
+            )
+        summary = dict(payload.get("summary", {}))
+        mean_delta = summary.get("mean_delta")
+        # `mean_delta` may be legitimately absent or an explicit null (an
+        # undefined mean Δ, e.g. an all-new suite — the renderer coerces that
+        # to 0.0). Only a present, non-null, non-finite value is corruption.
+        if mean_delta is not None and not math.isfinite(float(mean_delta)):
+            raise ValueError(
+                f"non-finite mean_delta {mean_delta} in delta JSON summary; mean_delta must be "
+                "finite — a NaN/Infinity value renders as '+nan' in the posted PR comment"
+            )
         return cls(
             current_run_id=payload.get("current_run_id", "current"),
             baseline_run_id=payload.get("baseline_run_id", "baseline"),
             suite=payload.get("suite", "(unknown)"),
-            threshold_drop=float(payload.get("threshold_drop", DEFAULT_THRESHOLD_DROP)),
+            threshold_drop=threshold_drop,
             rows=tuple(RowDelta.from_json(r) for r in payload.get("rows", ())),
-            summary=dict(payload.get("summary", {})),
+            summary=summary,
         )
 
 
