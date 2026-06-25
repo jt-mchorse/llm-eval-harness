@@ -66,9 +66,24 @@ def test_jsd_rejects_length_mismatch():
         jensen_shannon([1, 2, 3], [1, 2])
 
 
-def test_jsd_handles_zero_mass():
-    assert jensen_shannon([0, 0, 0], [1, 2, 3]) == 0.0
+def test_jsd_empty_vectors_is_zero():
+    # Zero-length vectors (no buckets at all): nothing to compare -> 0.0.
     assert jensen_shannon([], []) == 0.0
+
+
+def test_jsd_both_sides_zero_mass_is_zero():
+    # Both histograms collapsed to all-zero = two empty distributions, which
+    # are identical "nothing" -> 0.0 (#91).
+    assert jensen_shannon([0, 0, 0], [0, 0, 0]) == 0.0
+
+
+def test_jsd_one_side_zero_mass_is_one():
+    # Exactly one side empty is the maximally-disjoint case (empty support vs a
+    # populated one) -> 1.0, identical in kind to test_jsd_disjoint above. Was
+    # silently 0.0 (read as "no drift") before #91, a regression-gate
+    # false-negative whenever an axis histogram collapses on one side only.
+    assert jensen_shannon([0, 0, 0], [1, 2, 3]) == 1.0
+    assert jensen_shannon([1, 2, 3], [0, 0, 0]) == 1.0  # symmetric
 
 
 # ----------------------------------------------------------------------

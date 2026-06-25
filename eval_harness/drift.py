@@ -118,6 +118,17 @@ def jensen_shannon(p: Sequence[float], q: Sequence[float]) -> float:
     they're normalized internally so the caller can pass raw counts.
     Returns 0.0 when distributions are identical after normalization
     and approaches 1.0 as supports become disjoint.
+
+    Empty-distribution contract (a zero-mass side can't be normalized):
+    two empty distributions are identical "nothing" -> ``0.0``; exactly
+    one empty side is the *maximally disjoint* case (empty support vs a
+    populated one, identical in kind to ``[1, 0]`` vs ``[0, 1]``) and
+    returns ``1.0``, the JSD upper bound. The earlier ``sp <= 0 or
+    sq <= 0 -> 0.0`` guard collapsed both into 0.0, so a drift axis whose
+    histogram collapsed to all-zero on one side (e.g. a `_length_histogram`
+    that silently drops every >=1M-char input) reported "no drift" when
+    drift was maximal -- a false-negative that bypassed the regression gate
+    (#91). Consistent with D-014 (JSD base-2 bounded [0, 1]).
     """
     if len(p) != len(q):
         raise ValueError(f"distributions must have equal length; got {len(p)} vs {len(q)}")
@@ -125,8 +136,12 @@ def jensen_shannon(p: Sequence[float], q: Sequence[float]) -> float:
         return 0.0
     sp = sum(p)
     sq = sum(q)
-    if sp <= 0.0 or sq <= 0.0:
+    if sp <= 0.0 and sq <= 0.0:
+        # Both empty: identical "nothing".
         return 0.0
+    if sp <= 0.0 or sq <= 0.0:
+        # Exactly one empty: disjoint supports -> JSD upper bound.
+        return 1.0
     pp = [x / sp for x in p]
     qq = [x / sq for x in q]
     m = [(a + b) / 2.0 for a, b in zip(pp, qq, strict=True)]
