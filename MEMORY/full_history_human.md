@@ -692,3 +692,15 @@ separate consideration, behaviorally a breaking change to that CLI surface.
 **Open questions / blockers:** none.
 
 **Next session:** the embedding/judge axes can't collapse to all-zero (every input is assigned to a cluster / scored into a bucket), so length was the only silently-droppable axis; no further histogram follow-up needed.
+
+## 2026-06-25 — Issue #91 (landing): rebased and merged the jensen_shannon fix
+**Duration:** ~20 min · **Branch:** `session/2026-06-24-2315-issue-91` (rebased) · **PR:** #92 (merged)
+
+- NIGHT-session Phase A surfaced two ready PRs here: #94 (issue #93, the open-ended length histogram) was clean with green CI, so I merged it first; that made #92 (issue #91, the `jensen_shannon` one-empty-side fix) conflict, since both PRs had appended test blocks to the same region of `tests/test_drift.py` and both had appended MEMORY session entries.
+- Picked #91 up as the Phase B work item (priority:med, in priority-tier llm-eval-harness, after D-007 fall-through skipped mcp-server-cookbook's human-blocked #54/#55 and portfolio-ops' operator-blocked #17). Rebased the branch onto current `main`: the `drift.py` fix applied cleanly (different function from #94), and the only conflicts were the two appended MEMORY entries — resolved by keeping both in chronological order (#91 @23:15 before #93 @23:18). Verified the merged tree (both fixes, both test sets, buggy test gone), full suite **496 passed**, ruff clean. Force-pushed, CI re-ran fully green, merged squash.
+
+**Why this work, this session:** completing already-reviewed in-flight work beats inventing new work in a saturated portfolio; #92 was a real drift-gate false-negative fix blocked only by a mechanical rebase conflict its sibling merge created.
+
+**Open questions / blockers:** none.
+
+**Next session:** when two sibling PRs branch from the same `main` and both append to a shared test file + the MEMORY logs, merging one will create append-conflicts (not code conflicts) in the other — resolve by keeping both, chronologically.
