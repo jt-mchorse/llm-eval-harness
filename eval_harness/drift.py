@@ -364,6 +364,20 @@ def compute_drift(
         if not (0.0 <= _value <= 1.0):
             raise ValueError(f"{_name} must be in [0.0, 1.0]; got {_value}")
 
+    # cluster_k <= 0 makes `_kmeans` return ([], []), so `compute_drift` takes
+    # the no-centroids branch: emb_drift=0.0, status="ok", empty histograms.
+    # That is a silent false-negative on the embedding gate -- "no drift"
+    # reported regardless of actual drift -- the same class already fixed for
+    # jensen_shannon one-empty (#91) and the length-histogram open bucket (#93).
+    # n_representative_examples < 0 turns `examples[:n]` into a negative slice
+    # that silently returns a large, wrong set (dropping the most-distant tail
+    # the list is sorted to surface). Fail loud at the choke point, matching
+    # the threshold block above and `_clamp01`'s philosophy (#96).
+    if cluster_k <= 0:
+        raise ValueError(f"cluster_k must be >= 1; got {cluster_k}")
+    if n_representative_examples < 0:
+        raise ValueError(f"n_representative_examples must be >= 0; got {n_representative_examples}")
+
     # --- Length axis ----------------------------------------------------
     g_len_hist = _length_histogram(golden_inputs)
     c_len_hist = _length_histogram(candidate_inputs)

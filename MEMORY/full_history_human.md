@@ -704,3 +704,16 @@ separate consideration, behaviorally a breaking change to that CLI surface.
 **Open questions / blockers:** none.
 
 **Next session:** when two sibling PRs branch from the same `main` and both append to a shared test file + the MEMORY logs, merging one will create append-conflicts (not code conflicts) in the other — resolve by keeping both, chronologically.
+
+---
+## 2026-06-25 — Issue #96: validate compute_drift's cluster_k / n_representative_examples
+**Duration:** ~25 min · **Branch:** `session/2026-06-25-1910-issue-96`
+
+- Third instance of the documented drift false-negative class (after #91 jensen_shannon one-empty and #93 length-histogram open bucket). `compute_drift` validated its three thresholds at the boundary but not two other numeric params. `cluster_k <= 0` made `_kmeans` return empty centroids, so the embedding axis took the no-centroids branch and reported drift `0.0`/`ok` regardless of actual drift — a silent regression-gate bypass reachable from the CLI (`drift --cluster-k 0`). `n_representative_examples < 0` turned `examples[:n]` into a negative slice that silently returned a wrong-sized set (38 of 40 instead of the default 5).
+- Added two guards in the same validation block as the existing threshold checks: `cluster_k >= 1` and `n_representative_examples >= 0`, failing loud at the choke point (matching `_clamp01`'s philosophy). 8 red-green tests; 6 fail without the fix, the two inclusive-boundary "accepts" tests pass in both versions. 496 → 504 suite green, ruff clean.
+
+**Why this work, this session:** llm-eval-harness was the top priority-tier pick (earliest in build sequence, 6 days stale) with zero open issues; dogfooding the drift core surfaced a real, reachable instance of the exact false-negative class the module's own docstrings call out.
+
+**Open questions / blockers:** none.
+
+**Next session:** the CLI `--cluster-k` could grow an argparse range guard for an earlier, friendlier error, but the library-level `ValueError` already surfaces cleanly — low priority.
