@@ -256,11 +256,21 @@ _LENGTH_BUCKETS = (0, 32, 64, 128, 256, 512, 1024, 2048, 4096, 1_000_000)
 
 
 def _length_histogram(inputs: Sequence[str]) -> tuple[int, ...]:
-    buckets = [0] * (len(_LENGTH_BUCKETS) - 1)
+    n_buckets = len(_LENGTH_BUCKETS) - 1
+    buckets = [0] * n_buckets
     for s in inputs:
         n = len(s)
-        for i in range(len(buckets)):
-            if _LENGTH_BUCKETS[i] <= n < _LENGTH_BUCKETS[i + 1]:
+        for i in range(n_buckets):
+            # The final bucket is open-ended: `_LENGTH_BUCKETS[-1]`
+            # (1_000_000) is an ∞ sentinel, not a hard ceiling — `render_html`
+            # already labels it `4096-∞`. The strict `n < upper` check dropped
+            # any input of length >= 1_000_000 chars on the floor (no matching
+            # bucket), leaving an all-zero histogram that read as "no drift"
+            # — the reachability mechanism for the jensen_shannon one-empty
+            # false-negative (#93, sibling to #91). Catch everything at or
+            # above the last lower bound so no input is silently uncounted.
+            is_last = i == n_buckets - 1
+            if _LENGTH_BUCKETS[i] <= n and (is_last or n < _LENGTH_BUCKETS[i + 1]):
                 buckets[i] += 1
                 break
     return tuple(buckets)

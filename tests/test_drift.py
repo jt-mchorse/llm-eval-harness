@@ -30,6 +30,7 @@ from eval_harness.drift import (
 )
 from eval_harness.drift import _clamp01 as clamp01
 from eval_harness.drift import _judge_stub as judge_stub
+from eval_harness.drift import _length_histogram as length_histogram
 from eval_harness.drift import _load_inputs_jsonl as load_inputs
 
 FIXTURES = Path(__file__).resolve().parent.parent / "fixtures" / "drift"
@@ -191,6 +192,53 @@ def test_compute_drift_cluster_k_is_capped_by_golden_size():
     # Tiny golden set with cluster_k larger than its size should still work.
     report = compute_drift(["alpha beta"], ["gamma delta"], cluster_k=8)
     assert report.cluster_k == 1
+
+
+# ----------------------------------------------------------------------
+# _length_histogram — open-ended top bucket (#93)
+# ----------------------------------------------------------------------
+
+
+def test_length_histogram_counts_huge_input_in_last_bucket():
+    # An input of length >= 1_000_000 has no upper bucket boundary; the final
+    # bucket is open-ended, so it must be counted there, not dropped (#93).
+    hist = length_histogram(["x" * 1_000_000])
+    assert sum(hist) == 1
+    assert hist[-1] == 1
+
+
+def test_length_histogram_counts_every_input_no_silent_drop():
+    # Total count must equal the number of inputs for any length, including
+    # one far past the sentinel — nothing falls on the floor.
+    inputs = ["", "x" * 50, "x" * 5000, "x" * 2_000_000]
+    hist = length_histogram(inputs)
+    assert sum(hist) == len(inputs)
+    # Both the 5000-char and the 2M-char input are >= 4096, so both land in the
+    # open-ended final bucket; the point is that none of the four is dropped.
+    assert hist[-1] == 2
+
+
+def test_length_histogram_normal_lengths_unchanged():
+    # Regression guard: ordinary lengths bucket exactly as before. "" -> [0,32),
+    # 50 -> [32,64), 5000 -> [4096,∞). One each in three distinct buckets.
+    hist = length_histogram(["", "x" * 50, "x" * 5000])
+    assert sum(hist) == 3
+    assert hist[0] == 1  # 0 chars
+    assert hist[1] == 1  # 50 chars
+    assert hist[-1] == 1  # 5000 chars (>= 4096)
+
+
+def test_compute_drift_flags_all_huge_candidate_as_length_drifted():
+    # End-to-end: a candidate set whose inputs are all >= 1M chars vs a
+    # normal-length golden set. Pre-#93 every candidate was dropped, leaving
+    # an all-zero candidate histogram (no drift signal); now they're counted
+    # in the open-ended bucket, so the length axis registers genuine drift.
+    golden = ["short input", "another short one", "tiny", "a normal length string here"]
+    candidate = ["x" * 1_000_000, "y" * 1_500_000, "z" * 2_000_000]
+    report = compute_drift(golden, candidate, judge_score_fn=None)
+    assert report.length_histograms[1][-1] == len(candidate)  # all in top bucket
+    assert report.length.status == "drifted", report.length
+    assert report.length.drift_score > DEFAULT_LENGTH_THRESHOLD
 
 
 # ----------------------------------------------------------------------
