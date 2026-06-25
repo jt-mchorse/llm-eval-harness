@@ -717,3 +717,16 @@ separate consideration, behaviorally a breaking change to that CLI surface.
 **Open questions / blockers:** none.
 
 **Next session:** the CLI `--cluster-k` could grow an argparse range guard for an earlier, friendlier error, but the library-level `ValueError` already surfaces cleanly — low priority.
+
+---
+## 2026-06-25 — Issue #98: reject a present n_rows that disagrees with the row count
+**Duration:** ~20 min · **Branch:** `session/2026-06-25-2316-issue-98`
+
+- `load_run_result_from_json` already failed loud on duplicate ids, non-finite scores, and a missing/non-finite `mean_score`, but trusted the payload's `n_rows` field without checking it against the rows actually loaded. The duplicate-id guard's own comment names the hazard (`n_rows` disagreeing with `len(rows)` corrupts the per-example deltas `diff_runs` computes) yet only closed the dict-overwrite path to it — a plain payload with `n_rows: 3` and two non-duplicate rows still loaded silently inconsistent. Since `n_rows` is rendered as the run table's `n=` column and persisted to SQLite, the mismatch surfaces a count disagreeing with the `rows` dict downstream consumers iterate.
+- Added a guard that rejects a *present* mismatched `n_rows`, preserving the `len(rows)` default for payloads that omit the field. Two tests (mismatch rejected, absent-field default path). 504 → 506 suite green, ruff clean.
+
+**Why this work, this session:** mcp-server-cookbook (the only 36h-stale repo) had two `decision-revisit` security-guard issues blocked on JT, and portfolio-ops #17 is operator-blocked on a secret, so selection fell through to the priority-tier tie-break — llm-eval-harness, earliest in build sequence. Dogfooding the JSON loader surfaced the last unguarded integrity field in a function whose every other field is already validated.
+
+**Open questions / blockers:** none.
+
+**Next session:** the loader's integrity guards now cover every load-bearing field; future work here is more likely on the `diff_runs`/CLI side than the loader.
