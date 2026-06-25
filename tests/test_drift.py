@@ -210,6 +210,57 @@ def test_compute_drift_cluster_k_is_capped_by_golden_size():
 
 
 # ----------------------------------------------------------------------
+# compute_drift — cluster_k / n_representative_examples boundary (#96)
+#
+# cluster_k <= 0 makes _kmeans return ([], []), so the embedding axis takes the
+# no-centroids branch (emb_drift=0.0, status="ok") and silently reports "no
+# drift" regardless of actual drift -- the false-negative class fixed for
+# jensen_shannon one-empty (#91) and the length-histogram open bucket (#93).
+# n_representative_examples < 0 turns examples[:n] into a negative slice that
+# silently returns a wrong-sized set. Both must fail loud at the boundary.
+# ----------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("bad_k", [0, -1, -8])
+def test_compute_drift_rejects_nonpositive_cluster_k(bad_k: int):
+    with pytest.raises(ValueError, match=r"cluster_k must be >= 1"):
+        compute_drift(["alpha beta"], ["gamma delta"], cluster_k=bad_k)
+
+
+def test_compute_drift_accepts_cluster_k_one():
+    # 1 is the inclusive lower bound: a single cluster is a valid (degenerate
+    # but real) clustering, not the empty-centroids false-negative.
+    report = compute_drift(["alpha beta"], ["gamma delta"], cluster_k=1)
+    assert report.cluster_k == 1
+
+
+@pytest.mark.parametrize("bad_n", [-1, -5])
+def test_compute_drift_rejects_negative_n_representative_examples(bad_n: int):
+    with pytest.raises(ValueError, match=r"n_representative_examples must be >= 0"):
+        compute_drift(["alpha"], ["beta"], n_representative_examples=bad_n)
+
+
+def test_compute_drift_accepts_zero_representative_examples():
+    # 0 is the inclusive lower bound: "surface no examples" is a legitimate ask
+    # and must yield an empty tuple, not a negative-slice surprise.
+    report = compute_drift(["alpha"], ["beta"], n_representative_examples=0)
+    assert report.representative_examples == ()
+
+
+def test_compute_drift_nonpositive_cluster_k_no_longer_masks_real_drift():
+    # Regression guard for the gate-bypass: two clearly-different distributions
+    # drift on the embedding axis under a valid cluster_k. The buggy path
+    # (cluster_k=0) used to report 0.0/"ok" for the same inputs; it now raises
+    # rather than silently masking the signal.
+    golden = [f"alpha beta gamma delta number {i}" for i in range(40)]
+    candidate = [f"zeta eta theta iota kappa lambda mu nu xi {i} {i * 7}" for i in range(40)]
+    report = compute_drift(golden, candidate, cluster_k=8)
+    assert report.embedding.drift_score > 0.0
+    with pytest.raises(ValueError, match=r"cluster_k must be >= 1"):
+        compute_drift(golden, candidate, cluster_k=0)
+
+
+# ----------------------------------------------------------------------
 # _length_histogram — open-ended top bucket (#93)
 # ----------------------------------------------------------------------
 
