@@ -234,8 +234,10 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     args = parser.parse_args(argv)
-    if args.command == "judge" and args.judge_command == "calibrate":
-        return _run_calibrate(args)
+    # The `judge calibrate` legacy alias is normalized to `calibrate` by the
+    # argv-rewrite at the top of main(), so `args.command` is never "judge"
+    # (no `judge` subparser is registered under dest="command"). The dispatch
+    # falls through to the canonical `calibrate` branch below — see #105.
     if args.command == "calibrate":
         return _run_calibrate(args)
     if args.command == "run":
