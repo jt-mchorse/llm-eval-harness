@@ -553,6 +553,19 @@ def load_run_result_from_json(path: str | Path) -> StoredRun:
                 "(its delta is classified 'unchanged' and never flagged)"
             )
         rows[example_id] = (score, str(r.get("reasoning", "")))
+    # `n_rows` is load-bearing the same way: `cli` renders it as the `n=` column
+    # of the run table and `runs.py` persists it to SQLite. The duplicate-id guard
+    # above closes one path to `n_rows` disagreeing with `len(rows)` (a dict
+    # overwrite), but a plain payload carrying `n_rows: 3` with two non-duplicate
+    # rows still loads silently inconsistent — exactly the corruption that guard's
+    # comment warns about, reached a different way. Reject a present-but-mismatched
+    # `n_rows` loudly; keep the `len(rows)` default for payloads that omit it.
+    if "n_rows" in payload and int(payload["n_rows"]) != len(rows):
+        raise ValueError(
+            f"n_rows {int(payload['n_rows'])} disagrees with the actual row count "
+            f"{len(rows)}; a mismatch signals a corrupt or incompatible payload and "
+            "would corrupt the per-example deltas diff_runs computes off rows"
+        )
     # `mean_score` is load-bearing: `diff_runs` computes `mean_delta` directly
     # off it (current - baseline), and `RunResult.to_json` always emits it. A
     # silent `.get("mean_score", 0.0)` made an absent field indistinguishable

@@ -320,6 +320,45 @@ def test_load_run_result_rejects_duplicate_example_id(tmp_path: Path) -> None:
         load_run_result_from_json(p)
 
 
+def test_load_run_result_rejects_mismatched_n_rows(tmp_path: Path) -> None:
+    # A payload whose `n_rows` field disagrees with the actual (non-duplicate)
+    # row count is corrupt: `n_rows` is rendered as the `n=` column and persisted
+    # to SQLite, so it must match the `rows` dict `diff_runs` iterates. The
+    # duplicate-id guard only closes the overwrite path to this disagreement; a
+    # plain count mismatch must also fail loud, like the mean_score guard.
+    p = _write_run_json(
+        tmp_path / "bad_count.json",
+        [
+            {"example_id": "q1", "score": 0.9, "reasoning": "a"},
+            {"example_id": "q2", "score": 0.8, "reasoning": "b"},
+        ],
+        n_rows=3,
+    )
+    with pytest.raises(ValueError, match=r"n_rows 3 disagrees with the actual row count 2"):
+        load_run_result_from_json(p)
+
+
+def test_load_run_result_defaults_n_rows_when_field_absent(tmp_path: Path) -> None:
+    # The guard only fires on a *present* mismatched field — a payload that omits
+    # `n_rows` entirely still loads, defaulting to len(rows). Keeps the loader
+    # tolerant of minimal hand-written artifacts that never claimed a count.
+    payload = {
+        "run_id": "r1",
+        "started_at": "2026-06-22T00:00:00Z",
+        "suite": "s",
+        "mean_score": 0.85,
+        # n_rows deliberately omitted
+        "rows": [
+            {"example_id": "q1", "score": 0.9, "reasoning": "a"},
+            {"example_id": "q2", "score": 0.8, "reasoning": "b"},
+        ],
+    }
+    p = tmp_path / "no_count.json"
+    p.write_text(json.dumps(payload), encoding="utf-8")
+    stored = load_run_result_from_json(p)
+    assert stored.n_rows == len(stored.rows) == 2
+
+
 def test_load_run_result_accepts_unique_rows(tmp_path: Path) -> None:
     # The clean path still round-trips: unique ids load with n_rows == len(rows).
     p = _write_run_json(
