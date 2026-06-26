@@ -754,3 +754,15 @@ separate consideration, behaviorally a breaking change to that CLI surface.
 **Open questions / blockers:** none.
 
 **Next session:** CLI error handling is now uniform across all subcommands; #105 (vestigial `judge`/`judge_command` dead branch in `main()`) is a low-priority cleanup left open.
+
+## 2026-06-26 — Issue #105: Remove vestigial judge/judge_command dead branch in cli.main()
+**Duration:** ~20 min · **Branch:** `session/2026-06-26-2310-issue-105`
+
+- `cli.main()`'s dispatch began with `if args.command == "judge" and args.judge_command == "calibrate": return _run_calibrate(args)`. That branch was unreachable: no `judge` subparser is registered (`dest="command"`), so `args.command` is never `"judge"`, and the legacy `judge calibrate` form is already normalized to `calibrate` by the argv-rewrite at the top of `main()`. The branch survived only by short-circuit evaluation (`args.judge_command` is not a real namespace attribute). Removed it; dispatch now falls through to the canonical `calibrate` branch, with an explanatory comment.
+- Added two dispatch-lock tests to `test_cli_judge_alias.py`: the `judge calibrate` alias actually reaches `_run_calibrate` via a monkeypatched sentinel (asserting `args.command == "calibrate"` and that no `judge_command` attribute exists), and the plain `calibrate` form shares the same branch. The existing alias tests already locked the `--help` surface and the argv-rewrite; these add the dispatch-layer proof so the dead-code removal can't silently break the alias. Suite 525 → 527, ruff clean.
+
+**Why this work, this session:** second issue of a multi-issue DAY run (after the Phase A merge of 4 clean PRs). All repos were fresh and only `mcp-server-cookbook` had `priority:high` issues — both `decision-revisit` security-guard items already deferred under D-007, so I respected that skip and the tie-break landed on llm-eval-harness, whose sole open issue (#105) is this cleanup, filed as a followup by the prior session.
+
+**Open questions / blockers:** none.
+
+**Next session:** the dispatch is now a flat list of one-branch-per-command; the only remaining vestige is the harmless `return 2  # unreachable` after `parser.error(...)`, deliberately left out of scope.
