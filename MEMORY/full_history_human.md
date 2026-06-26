@@ -730,3 +730,15 @@ separate consideration, behaviorally a breaking change to that CLI surface.
 **Open questions / blockers:** none.
 
 **Next session:** the loader's integrity guards now cover every load-bearing field; future work here is more likely on the `diff_runs`/CLI side than the loader.
+
+## 2026-06-26 — Issue #102: pearson_r now guards non-finite input
+**Duration:** ~20 min · **Branch:** `session/2026-06-26-1525-issue-102`
+
+- `binarize` guards finiteness on both arguments (#45) and `render_report` guards `threshold_kappa`, but the other public metric, `pearson_r`, had only empty/length/zero-variance guards. A non-finite element silently propagated to a `NaN` result (`den == 0` is False for NaN, so the zero-variance guard misses it), and `_interpret_pearson(NaN)` then rendered it as a confidently-wrong **"very strong"** correlation in the calibration report. Reproduced on main: `pearson_r([0.1, nan, 0.3], …) -> nan`, `_interpret_pearson(nan) -> "very strong"`.
+- Added a `_require_finite_numbers` guard to `pearson_r` (both lists), mirroring `binarize`'s contract — reject non-number, `bool`, `NaN`, `±inf`; no range check, since Pearson is scale-invariant. The `calibrate()` path only shielded this incidentally (`binarize` runs first), but a public metric must hold its own contract. 8 new tests; full suite 508 → 516, ruff clean.
+
+**Why this work, this session:** fourth issue of a multi-issue DAY run; llm-eval-harness is priority-tier with no open backlog, so per Phase A step 6 I filed a substantive issue from a code read. This is the same finiteness-guard pattern the module already applies elsewhere (#42, #45) — closing the one public metric that didn't hold it.
+
+**Open questions / blockers:** none.
+
+**Next session:** calibration metrics now all fail loud on degenerate/non-finite input; `_interpret_*` NaN-hardening is deliberately out of scope (no reachable NaN source remains from the metric path).
