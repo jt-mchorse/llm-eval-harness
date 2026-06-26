@@ -122,6 +122,32 @@ def test_pearson_length_mismatch_raises():
         pearson_r([1.0], [1.0, 2.0])
 
 
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
+def test_pearson_rejects_non_finite_in_xs(bad):
+    # A non-finite element silently produced a NaN result that
+    # _interpret_pearson then rendered as "very strong" (#102). Fail loud,
+    # the same contract as binarize (#45).
+    with pytest.raises(ValueError, match="xs\\[1\\] must be finite"):
+        pearson_r([0.1, bad, 0.3], [0.2, 0.3, 0.4])
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
+def test_pearson_rejects_non_finite_in_ys(bad):
+    with pytest.raises(ValueError, match="ys\\[2\\] must be finite"):
+        pearson_r([0.1, 0.2, 0.3], [0.2, 0.3, bad])
+
+
+def test_pearson_rejects_non_numeric_element():
+    with pytest.raises(ValueError, match="xs\\[0\\] must be a number"):
+        pearson_r(["x", 0.2, 0.3], [0.1, 0.2, 0.3])  # type: ignore[list-item]
+
+
+def test_pearson_rejects_bool_element():
+    # bool is an int subclass; the module rejects it in score contexts.
+    with pytest.raises(ValueError, match="ys\\[0\\] must be a number"):
+        pearson_r([0.1, 0.2, 0.3], [True, 0.2, 0.3])  # type: ignore[list-item]
+
+
 # ----------------------------------------------------------------------
 # load_calibration
 # ----------------------------------------------------------------------

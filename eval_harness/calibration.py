@@ -303,12 +303,31 @@ def cohens_kappa(rater_a: list[int], rater_b: list[int]) -> float:
     return (po - pe) / (1 - pe)
 
 
+def _require_finite_numbers(values: list[float], label: str) -> None:
+    """Reject non-numeric / bool / non-finite elements, like `binarize` (#45, #102).
+
+    A non-finite element silently propagates through the means and the
+    covariance to a `NaN` result (`den == 0` is False for NaN, so the
+    zero-variance guard doesn't catch it), and `_interpret_pearson(NaN)`
+    then renders it as a confidently-wrong "very strong" correlation. Fail
+    loud here instead. No range check: Pearson is scale-invariant, so the
+    `[0, 1]` domain `binarize` enforces does not apply to a correlation helper.
+    """
+    for i, v in enumerate(values):
+        if not isinstance(v, (int, float)) or isinstance(v, bool):
+            raise ValueError(f"{label}[{i}] must be a number; got {v!r}")
+        if not math.isfinite(v):
+            raise ValueError(f"{label}[{i}] must be finite; got {v!r}")
+
+
 def pearson_r(xs: list[float], ys: list[float]) -> float:
     """Pearson correlation coefficient. Returns 0.0 if either input has zero variance."""
     if len(xs) != len(ys):
         raise ValueError("input lists must have the same length")
     if not xs:
         raise ValueError("cannot compute r on empty input")
+    _require_finite_numbers(xs, "xs")
+    _require_finite_numbers(ys, "ys")
 
     n = len(xs)
     mean_x = sum(xs) / n
