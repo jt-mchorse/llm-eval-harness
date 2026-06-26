@@ -1127,3 +1127,22 @@ context_for_next_session:
 decisions_made: []
 followups: []
 ---
+
+---
+session: 2026-06-26T03:46Z
+duration_min: 15
+issue: 100
+focus: render_delta_ascii_tolerate_missing_null_summary_parity_with_markdown_renderer
+phase: night_session_phase_b_issue_8
+delta:
+  files_changed: 2 # eval_harness/runner.py + tests/test_runner.py
+  tests_added: 2   # empty summary + null mean_delta via from_json
+context_for_next_session:
+  - found_via_night_phase_a_dogfood_explore_agent_hand_verified_render_delta_ascii_506_511_read_summary_by_direct_subscript_s_mean_delta_etc
+  - root_cause_deltareport_from_json_256_permits_empty_partial_summary_docstring_mean_delta_may_be_legitimately_absent_or_explicit_null_coerces_to_0_0_but_ascii_renderer_subscripts_keyerror_on_missing_plus_typeerror_on_present_null_format
+  - sibling_render_delta_markdown_comment_py_46_60_already_defends_both_get_defaults_plus_none_to_0_0_coercion_89_era_fix_ascii_never_brought_to_parity
+  - fix_get_field_default_for_every_summary_field_plus_raw_mean_delta_is_not_none_else_0_0_preserving_real_0_0_mean_delta
+  - tests_from_json_empty_summary_renders_mean_delta_plus_0_000_and_zeros_plus_null_mean_delta_coerced_not_typeerror_full_suite_green_ruff_clean
+  - reachability_med_normal_diff_runs_path_always_populates_summary_gap_is_load_then_render_ascii_with_external_hand_built_delta_json
+decisions_made: []
+followups: []
