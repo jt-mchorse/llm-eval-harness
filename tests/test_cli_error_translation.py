@@ -116,7 +116,16 @@ def test_diff_json_invalid_json_exits_two(tmp_path: Path, capsys) -> None:
 
 def test_comment_missing_file_exits_two(tmp_path: Path, capsys) -> None:
     rc = main(
-        ["comment", "--repo", "o/n", "--pr", "1", "--delta-json", str(tmp_path / "d.json"), "--dry-run"]
+        [
+            "comment",
+            "--repo",
+            "o/n",
+            "--pr",
+            "1",
+            "--delta-json",
+            str(tmp_path / "d.json"),
+            "--dry-run",
+        ]
     )
     assert rc == 2
     assert "::error::" in capsys.readouterr().err
