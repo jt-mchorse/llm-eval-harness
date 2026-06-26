@@ -742,3 +742,15 @@ separate consideration, behaviorally a breaking change to that CLI surface.
 **Open questions / blockers:** none.
 
 **Next session:** calibration metrics now all fail loud on degenerate/non-finite input; `_interpret_*` NaN-hardening is deliberately out of scope (no reachable NaN source remains from the metric path).
+
+## 2026-06-26 — Issue #104: CLI read-side subcommands fail clean (::error:: + exit 2)
+**Duration:** ~35 min · **Branch:** `session/2026-06-26-1925-issue-104`
+
+- `run` and `validate` already translate their domain errors into a clean `::error::` stderr line plus a documented exit code, but the four read-side subcommands didn't: `diff` on an unknown run id leaked a `KeyError`, `diff-json`/`comment` on a missing or corrupt file leaked a `FileNotFoundError`/`ValueError`, and `list --limit 0` (or negative) leaked a `ValueError` — each as a raw traceback. That broke the CLI's `0 = clean / 1 = findings|regression / 2 = I/O or usage error` exit contract.
+- Added a small `_fail(msg)` helper (prints `::error::{msg}`, returns 2) and routed `_run_list`, `_run_diff`, `_run_diff_json`, and `_run_comment` through it. `json.JSONDecodeError` is caught before `ValueError` (it's a subclass). Two success-path guards pin the unchanged exit-0 (identical runs) and exit-1 (real regression past the 0.1 threshold) behavior so the translation can't swallow a legitimate diff. Suite 516 → 525, ruff clean.
+
+**Why this work, this session:** first issue of a DAY run after the Phase A merge pass (3 PRs merged). All 13 repos were touched in the overnight session, so no staleness floor tripped; mcp-server-cookbook's two `priority:high` issues are both `decision-revisit` security-guard items already skipped under D-007, so the rule-3 tie-break (priority-tier, earliest build sequence) landed on llm-eval-harness, which had no open backlog — I filed #104 from a code read. The prior session (#102) explicitly predicted the next gap was "more likely on the diff_runs/CLI side"; this closes it.
+
+**Open questions / blockers:** none.
+
+**Next session:** CLI error handling is now uniform across all subcommands; #105 (vestigial `judge`/`judge_command` dead branch in `main()`) is a low-priority cleanup left open.
