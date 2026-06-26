@@ -10,6 +10,7 @@ import pytest
 from eval_harness.judge import Judge
 from eval_harness.runner import (
     DatasetEchoSource,
+    DeltaReport,
     RunSpec,
     diff_runs,
     load_run_result_from_json,
@@ -201,6 +202,43 @@ class TestRenderDeltaAscii:
         assert "q1" in out
         assert "q2" in out
         assert "summary:" in out
+
+    def test_renders_empty_summary_without_keyerror(self) -> None:
+        # `from_json` permits an empty/partial summary (an all-new suite has an
+        # undefined mean Δ). render_delta_ascii used direct subscripting and
+        # raised KeyError; it must render zeros instead, matching the markdown
+        # renderer's guard (#100).
+        report = DeltaReport.from_json(
+            {
+                "current_run_id": "c1",
+                "baseline_run_id": "b1",
+                "suite": "s",
+                "threshold_drop": 0.1,
+                "summary": {},  # no mean_delta / counts
+                "rows": [],
+            }
+        )
+        out = render_delta_ascii(report)
+        assert "summary: mean Δ=+0.000" in out
+        assert "regressed=0 (flagged=0)" in out
+        assert "new=0  removed=0" in out
+
+    def test_renders_null_mean_delta_as_zero(self) -> None:
+        # A present-but-null mean_delta (explicit JSON null) must coerce to 0.0,
+        # not raise TypeError on the `:+.3f` format (parity with comment.py).
+        report = DeltaReport.from_json(
+            {
+                "current_run_id": "c1",
+                "baseline_run_id": "b1",
+                "suite": "s",
+                "threshold_drop": 0.1,
+                "summary": {"mean_delta": None, "n_regressed": 2},
+                "rows": [],
+            }
+        )
+        out = render_delta_ascii(report)
+        assert "mean Δ=+0.000" in out
+        assert "regressed=2" in out
 
 
 # ----------------------------------------------------------------------

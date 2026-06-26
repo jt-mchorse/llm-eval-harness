@@ -503,12 +503,21 @@ def render_delta_ascii(report: DeltaReport) -> str:
             sep.join([f"{r.status:9}", f"{r.example_id:12}", baseline, current, delta, flag])
         )
     s = report.summary
+    # `DeltaReport.from_json` permits an empty/partial summary (its docstring:
+    # "mean_delta may be legitimately absent or an explicit null ... coerces
+    # that to 0.0"). Direct subscripting here raised KeyError on a missing key,
+    # and `f"{None:+.3f}"` raised TypeError on a present-null mean_delta — while
+    # the sibling `render_delta_markdown` (comment.py) already defends both. Use
+    # `.get` defaults + the explicit None→0.0 coercion (`is not None`, so a real
+    # 0.0 mean Δ is preserved) to bring the two renderers to parity (#100).
+    raw_mean_delta = s.get("mean_delta", 0.0)
+    mean_delta = float(raw_mean_delta) if raw_mean_delta is not None else 0.0
     lines.append("")
     lines.append(
-        f"summary: mean Δ={s['mean_delta']:+.3f}  "
-        f"regressed={s['n_regressed']} (flagged={s['n_flagged']})  "
-        f"improved={s['n_improved']}  unchanged={s['n_unchanged']}  "
-        f"new={s['n_new']}  removed={s['n_removed']}"
+        f"summary: mean Δ={mean_delta:+.3f}  "
+        f"regressed={s.get('n_regressed', 0)} (flagged={s.get('n_flagged', 0)})  "
+        f"improved={s.get('n_improved', 0)}  unchanged={s.get('n_unchanged', 0)}  "
+        f"new={s.get('n_new', 0)}  removed={s.get('n_removed', 0)}"
     )
     return "\n".join(lines) + "\n"
 
