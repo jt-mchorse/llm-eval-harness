@@ -55,6 +55,23 @@ from eval_harness.runs import RunSummary, connect, init_db_on, list_runs, read_r
 DEFAULT_DB_PATH = Path.home() / ".eval-harness" / "runs.db"
 
 
+def _fail(message: str) -> int:
+    """Print a clean ``::error::`` line to stderr and return exit code 2.
+
+    The read-side subcommands (``list`` / ``diff`` / ``diff-json`` /
+    ``comment``) sit on top of the SQLite history, the run-JSON loader, and
+    the delta loader — all of which raise data-layer exceptions
+    (``ValueError`` / ``KeyError`` / ``FileNotFoundError`` / ``JSONDecodeError``)
+    on bad input. Letting those escape as a raw traceback is a poor operator
+    experience and breaks the CLI's ``0 = clean / 1 = findings|regression /
+    2 = I/O or usage error`` exit contract — the same contract ``validate``
+    (missing-file → 2) and ``run`` (``EmptyTagFilterError`` → 2) already honor.
+    Translate them here so every subcommand fails uniformly (#104).
+    """
+    print(f"::error::{message}", file=sys.stderr)
+    return 2
+
+
 def main(argv: list[str] | None = None) -> int:
     # `judge calibrate ...` is a backwards-compat alias for `calibrate ...`.
     # Rewrite the argv before argparse sees it so the alias resolves to the
@@ -361,11 +378,19 @@ def _run_run(args: argparse.Namespace) -> int:
 
 
 def _run_diff(args: argparse.Namespace) -> int:
-    with connect(args.db) as conn:
-        init_db_on(conn)
-        current = read_run(conn, args.current)
-        baseline = read_run(conn, args.baseline)
-        report = diff_runs(current, baseline, threshold_drop=args.threshold_drop)
+    try:
+        with connect(args.db) as conn:
+            init_db_on(conn)
+            # `read_run` raises KeyError on an unknown run id; `diff_runs` raises
+            # ValueError on a cross-suite diff or a non-finite/negative threshold.
+            current = read_run(conn, args.current)
+            baseline = read_run(conn, args.baseline)
+            report = diff_runs(current, baseline, threshold_drop=args.threshold_drop)
+    except KeyError as e:
+        # read_run's KeyError message is already specific ("no run with id 'x'").
+        return _fail(e.args[0] if e.args else str(e))
+    except ValueError as e:
+        return _fail(str(e))
     if args.format == "json":
         rendered = json.dumps(report.to_json(), indent=2, sort_keys=True) + "\n"
     elif args.format == "markdown":
@@ -380,9 +405,23 @@ def _run_diff(args: argparse.Namespace) -> int:
 
 
 def _run_diff_json(args: argparse.Namespace) -> int:
-    current = load_run_result_from_json(args.current)
-    baseline = load_run_result_from_json(args.baseline)
-    report = diff_runs(current, baseline, threshold_drop=args.threshold_drop)
+    try:
+        # load_run_result_from_json: FileNotFoundError/OSError (missing/unreadable
+        # file), json.JSONDecodeError (malformed JSON), ValueError (corrupt
+        # payload — non-finite score, n_rows mismatch, missing mean_score),
+        # KeyError (missing required per-row field). diff_runs: ValueError
+        # (cross-suite / bad threshold).
+        current = load_run_result_from_json(args.current)
+        baseline = load_run_result_from_json(args.baseline)
+        report = diff_runs(current, baseline, threshold_drop=args.threshold_drop)
+    except (FileNotFoundError, OSError) as e:
+        return _fail(f"could not read run JSON: {e}")
+    except json.JSONDecodeError as e:
+        return _fail(f"invalid run JSON: {e}")
+    except KeyError as e:
+        return _fail(f"run JSON missing required field: {e.args[0] if e.args else e}")
+    except ValueError as e:
+        return _fail(str(e))
     if args.format == "json":
         rendered = json.dumps(report.to_json(), indent=2, sort_keys=True) + "\n"
     elif args.format == "markdown":
@@ -402,9 +441,21 @@ def _run_comment(args: argparse.Namespace) -> int:
     # inverse — same defaulting semantics the prior SimpleNamespace
     # shim used, now expressed on the dataclass itself so the renderer
     # gets a properly-typed instance.
-    raw = Path(args.delta_json).read_text(encoding="utf-8")
-    payload = json.loads(raw)
-    report = DeltaReport.from_json(payload)
+    try:
+        # read_text: FileNotFoundError/OSError; json.loads: JSONDecodeError;
+        # DeltaReport.from_json: ValueError (non-finite threshold/mean_delta) and
+        # KeyError (per-row example_id/status missing).
+        raw = Path(args.delta_json).read_text(encoding="utf-8")
+        payload = json.loads(raw)
+        report = DeltaReport.from_json(payload)
+    except (FileNotFoundError, OSError) as e:
+        return _fail(f"could not read delta JSON: {e}")
+    except json.JSONDecodeError as e:
+        return _fail(f"invalid delta JSON: {e}")
+    except KeyError as e:
+        return _fail(f"delta JSON missing required field: {e.args[0] if e.args else e}")
+    except ValueError as e:
+        return _fail(str(e))
     body = render_delta_markdown(report)
     if args.dry_run:
         print(body, end="")
@@ -433,9 +484,13 @@ def _run_list(args: argparse.Namespace) -> int:
         _emit_list_output(rendered, args.out)
         return 0
 
-    with connect(db_path) as conn:
-        init_db_on(conn)  # idempotent; safe even if the file already has the schema
-        runs = list_runs(conn, limit=args.limit, suite=args.suite)
+    try:
+        with connect(db_path) as conn:
+            init_db_on(conn)  # idempotent; safe even if the file already has the schema
+            # list_runs raises ValueError on a non-positive / non-int --limit.
+            runs = list_runs(conn, limit=args.limit, suite=args.suite)
+    except ValueError as e:
+        return _fail(str(e))
 
     if args.as_json:
         rendered = json.dumps([_run_summary_to_json(r) for r in runs], indent=2) + "\n"
