@@ -32,6 +32,7 @@ from eval_harness.drift import _clamp01 as clamp01
 from eval_harness.drift import _judge_stub as judge_stub
 from eval_harness.drift import _length_histogram as length_histogram
 from eval_harness.drift import _load_inputs_jsonl as load_inputs
+from eval_harness.drift import _tokens as tokens
 
 FIXTURES = Path(__file__).resolve().parent.parent / "fixtures" / "drift"
 
@@ -111,6 +112,46 @@ def test_hash_embed_blank_input_returns_zero_vector():
 def test_hash_embed_rejects_non_positive_dim():
     with pytest.raises(ValueError, match="dim"):
         hash_embed("anything", dim=0)
+
+
+# ----------------------------------------------------------------------
+# tokenization (#108): the hash tokenizer must be Unicode-aware. The drift
+# module scores multilingual production traffic, so an ASCII-only token class
+# blinded the embedding axis — non-Latin text produced zero tokens and the
+# all-zero vector (the sentinel for *empty* input), and accents were dropped.
+# ----------------------------------------------------------------------
+
+
+def test_tokens_preserves_accented_latin():
+    # `café` previously tokenized to `caf` (the `é` was dropped); accents are
+    # part of the word and must survive.
+    assert tokens("Café Résumé") == ["café", "résumé"]
+
+
+def test_tokens_keeps_non_latin_scripts():
+    # CJK / Cyrillic produced an empty token list under the ASCII regex.
+    assert tokens("こんにちは 世界") == ["こんにちは", "世界"]
+    assert tokens("Привет мир") == ["привет", "мир"]
+
+
+def test_tokens_ascii_behavior_unchanged_including_underscore_split():
+    # The `[^\W_]+` fix must leave ASCII tokenization byte-identical to the old
+    # `[A-Za-z0-9]+`: underscore stays a separator, punctuation splits.
+    assert tokens("foo_bar baz") == ["foo", "bar", "baz"]
+    assert tokens("Hello, World! 123") == ["hello", "world", "123"]
+
+
+def test_hash_embed_distinguishes_non_ascii_inputs_from_empty():
+    # Two semantically-distinct non-ASCII strings must not collapse to the same
+    # vector, and neither may equal the empty-input zero vector (the bug: both
+    # returned all-zeros and so compared equal).
+    a = hash_embed("天気は良い")
+    b = hash_embed("株価が下落")
+    empty = hash_embed("")
+    assert a != b
+    assert a != empty
+    assert b != empty
+    assert any(x != 0.0 for x in a)
 
 
 # ----------------------------------------------------------------------
