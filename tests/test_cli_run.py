@@ -124,6 +124,32 @@ def test_run_invalid_threshold_drop_exits_2_not_traceback(
     assert "::error::" in stderr
 
 
+def test_run_unknown_baseline_exits_2_not_traceback(tmp_path: Path, capsys) -> None:
+    # #112: an explicit --baseline that doesn't exist routes through
+    # load_baseline -> read_run, which raises KeyError. `run` must translate it
+    # to a clean exit-2 usage error like the sibling `diff` (#110 fixed the
+    # ValueError half of this same path; this is the KeyError half), not leak a
+    # traceback after already printing the run JSON.
+    db = tmp_path / "runs.db"
+    rc, _, stderr = _run_cli(
+        [
+            "run",
+            "--suite",
+            "smoke",
+            "--dataset",
+            str(SAMPLE_DATASET),
+            "--db",
+            str(db),
+            "--baseline",
+            "does-not-exist",
+        ],
+        capsys=capsys,
+    )
+    assert rc == 2, f"expected exit 2 for an unknown --baseline, got {rc}"
+    assert "no run with id 'does-not-exist'" in stderr
+    assert "::error::" in stderr
+
+
 def test_diff_exits_nonzero_when_regression_flagged(tmp_path: Path, capsys) -> None:
     db = tmp_path / "runs.db"
 

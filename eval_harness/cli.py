@@ -376,6 +376,13 @@ def _run_run(args: argparse.Namespace) -> int:
                 return 0
             current_stored = read_run(conn, result.run_id)
             report = diff_runs(current_stored, baseline, threshold_drop=args.threshold_drop)
+    except KeyError as e:
+        # An explicit --baseline that doesn't exist routes through load_baseline
+        # -> read_run, which raises KeyError("no run with id 'x'"). The sibling
+        # `diff` already translates this to exit 2; `run` must honor the same
+        # contract instead of leaking a traceback — the KeyError half of the
+        # #110 exit-code fix on this path. read_run's message is already specific.
+        return _fail(e.args[0] if e.args else str(e))
     except ValueError as e:
         # An invalid --threshold-drop (negative/NaN/Inf) is a usage error, not a
         # crash: diff_runs is the single-source validator and `_run_diff` /

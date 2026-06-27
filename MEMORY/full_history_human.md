@@ -790,3 +790,15 @@ separate consideration, behaviorally a breaking change to that CLI surface.
 **Open questions / blockers:** none.
 
 **Next session:** all three diff-bearing subcommands now honor the exit-2 usage contract uniformly; validating `--threshold-drop` before the (expensive) eval runs/persists remains a possible follow-up.
+
+## 2026-06-27 — Issue #112: `run --baseline <unknown-id>` leaked a KeyError traceback
+**Duration:** ~15 min · **Branch:** `session/2026-06-27-1927-issue-112`
+
+- `_run_run` caught only `ValueError` on the baseline-diff path, but an explicit unknown `--baseline` routes through `load_baseline` → `read_run`, which raises `KeyError("no run with id 'x'")`. The run JSON printed, then the uncaught traceback escaped — instead of the clean exit-2 usage error the sibling `diff` command honors. This is the `KeyError` half of #110 (which fixed the `ValueError` half on the same path).
+- Fixed with an `except KeyError` clause mirroring `_run_diff`, translating the message via `_fail`. Added a lock test (reproduced firsthand via the fake-backend seam) that fails on the pre-fix code.
+
+**Why this work, this session:** third issue of a multi-issue DAY run; this was the error-handling gap the Phase A dogfood flagged for priority-tier llm-eval-harness — a real exit-code-contract violation even though it wasn't a wrong-output bug.
+
+**Open questions / blockers:** none.
+
+**Next session:** continue the loop if time remains.
