@@ -181,7 +181,16 @@ def percentile(values: Sequence[float], q: float) -> float:
     return s[lo] + (s[hi] - s[lo]) * frac
 
 
-_HASH_TOKEN_RE = re.compile(r"[A-Za-z0-9]+")
+# Unicode alphanumerics, excluding underscore (`[^\W_]` = a `\w` char that is
+# not `_`). The drift module scores *production traffic samples*, which are
+# inherently multilingual; an ASCII-only `[A-Za-z0-9]+` matched zero tokens for
+# non-Latin text (CJK/Cyrillic/…), so `hash_embed` returned the all-zero vector
+# — the sentinel reserved for *empty* input — collapsing every distinct
+# non-ASCII input to identical "empty" content, and dropped accents from Latin
+# text (`café` -> `caf`). `[^\W_]+` keeps ASCII tokenization byte-identical
+# (underscore is still a separator: `foo_bar` -> `foo`, `bar`) and only changes
+# non-ASCII behavior. See #108.
+_HASH_TOKEN_RE = re.compile(r"[^\W_]+")
 
 
 def _tokens(text: str) -> list[str]:
