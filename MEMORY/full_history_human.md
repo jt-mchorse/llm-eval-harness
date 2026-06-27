@@ -767,6 +767,18 @@ separate consideration, behaviorally a breaking change to that CLI surface.
 
 **Next session:** the dispatch is now a flat list of one-branch-per-command; the only remaining vestige is the harmless `return 2  # unreachable` after `parser.error(...)`, deliberately left out of scope.
 
+## 2026-06-27 — Issue #108: Unicode-aware drift hash tokenizer
+**Duration:** ~25 min · **Branch:** `session/2026-06-27-0318-issue-108`
+
+- `_HASH_TOKEN_RE = re.compile(r"[A-Za-z0-9]+")` (`drift.py`) matched only ASCII alphanumerics. On a module whose job is detecting drift on *production traffic samples* — inherently multilingual — any non-Latin input (CJK, Cyrillic, …) produced **zero tokens**, so `hash_embed` returned the all-zero vector, the exact sentinel reserved for *empty* input. Every semantically-distinct non-ASCII input therefore collapsed to identical "empty" content, and accented Latin text was mangled (`café` → `caf`). Reproduced on main: `hash_embed('天気は良い') == hash_embed('株価が下落')` returned `True`.
+- Fixed with `re.compile(r"[^\W_]+")` — Unicode alphanumerics excluding underscore. This keeps ASCII tokenization **byte-identical** to the old regex (underscore stays a separator, so no existing ASCII test can break) and only changes non-ASCII behavior. Added 4 regression tests (accents preserved, CJK/Cyrillic non-empty, ASCII-unchanged incl. underscore-split, two distinct non-ASCII strings → distinct embeddings neither equal to the empty zero vector). Suite 527 → 531, ruff clean.
+
+**Why this work, this session:** first issue of a multi-issue NIGHT run after merging 10 clean PRs in Phase A. All repos were fresh and the only `priority:high`/decision-revisit issues (mcp #54/#55, cost-optimizer #97) are JT-decision blockers (D-007), so I dogfooded the priority tier in build order; this was the one solid, reproducible bug surfaced (4 parallel hunters; the other 3 repos were honest declines).
+
+**Open questions / blockers:** none.
+
+**Next session:** drift embedding axis is now multilingual-safe; the dep-free hash embedder remains intentionally simple (no locale-aware tokenization).
+
 ## 2026-06-27 — Issue #110: `run` crashed on an invalid --threshold-drop
 **Duration:** ~20 min · **Branch:** `session/2026-06-27-0428-issue-110`
 
