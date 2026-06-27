@@ -368,13 +368,20 @@ def _run_run(args: argparse.Namespace) -> int:
 
     if args.no_diff:
         return 0
-    with connect(args.db) as conn:
-        init_db_on(conn)
-        baseline = load_baseline(conn, args.suite, args.baseline, exclude_run_id=result.run_id)
-        if baseline is None:
-            return 0
-        current_stored = read_run(conn, result.run_id)
-        report = diff_runs(current_stored, baseline, threshold_drop=args.threshold_drop)
+    try:
+        with connect(args.db) as conn:
+            init_db_on(conn)
+            baseline = load_baseline(conn, args.suite, args.baseline, exclude_run_id=result.run_id)
+            if baseline is None:
+                return 0
+            current_stored = read_run(conn, result.run_id)
+            report = diff_runs(current_stored, baseline, threshold_drop=args.threshold_drop)
+    except ValueError as e:
+        # An invalid --threshold-drop (negative/NaN/Inf) is a usage error, not a
+        # crash: diff_runs is the single-source validator and `_run_diff` /
+        # `_run_diff_json` already translate its ValueError to exit 2 via _fail.
+        # `run` must honor the same contract instead of leaking a traceback (#110).
+        return _fail(str(e))
     print(render_delta_ascii(report), file=sys.stderr)
     return 1 if report.summary["n_flagged"] > 0 else 0
 

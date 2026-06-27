@@ -87,6 +87,43 @@ def test_run_then_diff_against_baseline(tmp_path: Path, capsys) -> None:
     json.loads(stdout2)  # still valid JSON
 
 
+@pytest.mark.parametrize("bad_threshold", ["nan", "inf", "-inf", "-0.5"])
+def test_run_invalid_threshold_drop_exits_2_not_traceback(
+    tmp_path: Path, capsys, bad_threshold: str
+) -> None:
+    # #110: an invalid --threshold-drop must be a clean exit-2 usage error (the
+    # same contract `diff`/`diff --format json` honor), not a raw traceback.
+    # diff_runs is the single-source validator; `run` must translate its
+    # ValueError via _fail exactly like the sibling subcommands.
+    db = tmp_path / "runs.db"
+    # Seed a baseline run so the second run reaches the baseline-diff path.
+    rc_seed, _, _ = _run_cli(
+        ["run", "--suite", "smoke", "--dataset", str(SAMPLE_DATASET), "--db", str(db), "--no-diff"],
+        capsys=capsys,
+    )
+    assert rc_seed == 0
+
+    # Pass via the `=` form so a negative-looking value (`-inf`, `-0.5`) is one
+    # argparse token rather than being mistaken for an option flag — that's how
+    # a user supplies a negative value, and it routes the value into our handler.
+    rc, _, stderr = _run_cli(
+        [
+            "run",
+            "--suite",
+            "smoke",
+            "--dataset",
+            str(SAMPLE_DATASET),
+            "--db",
+            str(db),
+            f"--threshold-drop={bad_threshold}",
+        ],
+        capsys=capsys,
+    )
+    assert rc == 2, f"expected exit 2 for --threshold-drop={bad_threshold!r}, got {rc}"
+    assert "threshold_drop must be a finite number" in stderr
+    assert "::error::" in stderr
+
+
 def test_diff_exits_nonzero_when_regression_flagged(tmp_path: Path, capsys) -> None:
     db = tmp_path / "runs.db"
 

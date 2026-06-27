@@ -778,3 +778,15 @@ separate consideration, behaviorally a breaking change to that CLI surface.
 **Open questions / blockers:** none.
 
 **Next session:** drift embedding axis is now multilingual-safe; the dep-free hash embedder remains intentionally simple (no locale-aware tokenization).
+
+## 2026-06-27 — Issue #110: `run` crashed on an invalid --threshold-drop
+**Duration:** ~20 min · **Branch:** `session/2026-06-27-0428-issue-110`
+
+- `diff_runs` validates `threshold_drop` and raises `ValueError` for negative/NaN/Inf (the #42 guard). `_run_diff` and `_run_diff_json` both catch it → `_fail` → exit 2, but `_run_run`'s `diff_runs` call was outside any try/except, so a bad `--threshold-drop` passed to `run` leaked a raw traceback (non-2 exit), breaking the CLI's documented "0 clean / 1 findings / 2 usage error" contract. The NaN case is the worst — the guard exists to stop NaN silently disabling the regression gate, but in `run` it crashed instead of erroring cleanly.
+- Wrapped `_run_run`'s baseline-diff block in `except ValueError: return _fail(str(e))`, mirroring the sibling subcommands (single-source validation stays in `diff_runs`). Added 4 parametrized tests (nan/inf/-inf/-0.5) asserting exit 2 + the `::error::threshold_drop must be a finite number` line; the negative values are passed via the `=` form to dodge an argparse tokenization quirk. Suite 527 → 531, ruff clean.
+
+**Why this work, this session:** thirteenth issue of a multi-issue NIGHT run; a high-confidence, clean CLI exit-code-contract fix surfaced by a second-pass dogfood of priority-tier llm-eval-harness.
+
+**Open questions / blockers:** none.
+
+**Next session:** all three diff-bearing subcommands now honor the exit-2 usage contract uniformly; validating `--threshold-drop` before the (expensive) eval runs/persists remains a possible follow-up.
