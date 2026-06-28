@@ -802,3 +802,15 @@ separate consideration, behaviorally a breaking change to that CLI surface.
 **Open questions / blockers:** none.
 
 **Next session:** continue the loop if time remains.
+
+## 2026-06-28 — Issue #114: `validate_dataset` let a version-drifted row reserve its id
+**Duration:** ~25 min · **Branch:** `session/2026-06-28-1533-issue-114`
+
+- `validate_dataset` recorded each id in `seen_ids` *before* the version-drift check, so a version-drifted row — which is explicitly dropped from the valid set — still claimed its id. A later, fully-valid, correct-version row reusing that id was then reported as a spurious `duplicate_id` finding (its "first seen at line N" pointing at a discarded row) and wrongly excluded from `n_valid`, which can fail a `validate` gate on a clean dataset.
+- The tell was an internal inconsistency: the schema-rejection path already `continue`s *before* the id is recorded (so it doesn't reserve an id), while the version-drift path did. Fixed by moving the `seen_ids` assignment to run only once a row becomes valid (just before `valid_examples.append`), making both rejection paths consistent. `load_jsonl` is intentionally untouched — it fails fast on the first drift and never continues, so the ordering never manifests there. Added a regression test for the id-reuse-after-drift repro; suite 536 → 537, ruff clean.
+
+**Why this work, this session:** second substantive issue of a multi-issue DAY run (after landing the three mcp-server-cookbook rebase PRs in Phase A/B). Priority-tier llm-eval-harness had zero open issues, so this was filed from a Phase A dogfood sweep and fixed the same session — the saturated-portfolio dogfood→issue→PR pattern.
+
+**Open questions / blockers:** none.
+
+**Next session:** continue the loop if time remains.
