@@ -155,3 +155,113 @@ def test_diff_json_regression_still_exits_one(tmp_path: Path, capsys) -> None:
     _run_result_json(base, run_id="b", score=0.9)
     rc = main(["diff-json", "--current", str(cur), "--baseline", str(base)])
     assert rc == 1
+
+
+# --- #116: null run_id / null summary count must not escape as a raw TypeError -----
+
+
+def _delta_json(path: Path, payload: dict) -> None:
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+
+def _comment_dry_run(delta: Path) -> list[str]:
+    return ["comment", "--repo", "o/n", "--pr", "1", "--delta-json", str(delta), "--dry-run"]
+
+
+@pytest.mark.parametrize("fmt", ["ascii", "markdown"])
+def test_diff_json_null_run_id_exits_two(tmp_path: Path, capsys, fmt: str) -> None:
+    # A null run_id in a RunResult JSON reached `run_id[:8]` in the delta renderers
+    # and raised an uncaught TypeError (exit 1). `json` can't emit a bare null run
+    # field except by hand-editing, but that's exactly the corrupt-artifact threat
+    # model the finiteness guards already cover. Must now fail clean → exit 2.
+    cur = tmp_path / "cur.json"
+    cur.write_text(
+        json.dumps(
+            {
+                "run_id": None,
+                "started_at": "2026-01-01T00:00:00Z",
+                "suite": "s",
+                "mean_score": 0.9,
+                "n_rows": 1,
+                "rows": [{"example_id": "ex1", "score": 0.9, "reasoning": "ok"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    base = tmp_path / "base.json"
+    _run_result_json(base, run_id="b")
+    rc = main(["diff-json", "--current", str(cur), "--baseline", str(base), "--format", fmt])
+    assert rc == 2
+    assert "::error::" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("field", ["current_run_id", "baseline_run_id"])
+def test_comment_null_run_id_exits_two(tmp_path: Path, capsys, field: str) -> None:
+    # A present-null current/baseline run id in a delta JSON reached
+    # `current_run_id[:8]` in render_delta_markdown (TypeError, exit 1). Must
+    # surface via DeltaReport.from_json as a clean ValueError → exit 2.
+    payload = {
+        "current_run_id": "c",
+        "baseline_run_id": "b",
+        "suite": "s",
+        "threshold_drop": 0.1,
+        "rows": [],
+        "summary": {},
+    }
+    payload[field] = None
+    delta = tmp_path / "d.json"
+    _delta_json(delta, payload)
+    rc = main(_comment_dry_run(delta))
+    assert rc == 2
+    err = capsys.readouterr().err
+    assert "::error::" in err
+    assert field in err
+
+
+@pytest.mark.parametrize(
+    "count_key",
+    ["n_flagged", "n_regressed", "n_improved", "n_unchanged", "n_new", "n_removed"],
+)
+def test_comment_null_summary_count_renders_clean(tmp_path: Path, capsys, count_key: str) -> None:
+    # A present-null summary count reached `int(None)` in render_delta_markdown
+    # (TypeError, exit 1) — the count siblings of the already-guarded mean_delta.
+    # Coerced to 0: the comment renders and exits 0 (dry-run, no flagged rows).
+    delta = tmp_path / "d.json"
+    _delta_json(
+        delta,
+        {
+            "current_run_id": "c",
+            "baseline_run_id": "b",
+            "suite": "s",
+            "threshold_drop": 0.1,
+            "rows": [],
+            "summary": {count_key: None},
+        },
+    )
+    rc = main(_comment_dry_run(delta))
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "::error::" not in out
+    # The coerced count renders as 0, never the literal "None".
+    assert "None" not in out
+
+
+def test_render_delta_ascii_null_count_renders_zero_not_none() -> None:
+    # render_delta_ascii isn't reachable with a null count via diff-json (diff_runs
+    # always emits int counts), but it's a public renderer and was interpolating a
+    # present-null count as the literal string "None" — the silent-output sibling of
+    # the markdown TypeError. Lock the coercion to 0 directly.
+    from eval_harness.runner import DeltaReport, render_delta_ascii
+
+    report = DeltaReport(
+        current_run_id="cccccccccc",
+        baseline_run_id="bbbbbbbbbb",
+        suite="s",
+        threshold_drop=0.1,
+        rows=(),
+        summary={"n_regressed": None, "n_flagged": None},
+    )
+    out = render_delta_ascii(report)
+    assert "regressed=0" in out
+    assert "flagged=0" in out
+    assert "None" not in out
