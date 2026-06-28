@@ -50,12 +50,22 @@ def render_delta_markdown(report: DeltaReport) -> str:
     # `or`) so a legitimate falsy 0.0 mean Δ is preserved.
     raw_mean_delta = summary.get("mean_delta", 0.0)
     mean_delta = float(raw_mean_delta) if raw_mean_delta is not None else 0.0
-    n_flag = int(summary.get("n_flagged", 0))
-    n_reg = int(summary.get("n_regressed", 0))
-    n_imp = int(summary.get("n_improved", 0))
-    n_new = int(summary.get("n_new", 0))
-    n_rem = int(summary.get("n_removed", 0))
-    n_same = int(summary.get("n_unchanged", 0))
+
+    # The sibling count fields were left with bare `int(...)`, so a present-but-null
+    # count (an undefined count serialized as JSON null, the same shape as the
+    # null mean_delta handled above) reached `int(None)` and raised a TypeError —
+    # crashing the whole comment render and escaping `_run_comment` as exit 1 (it
+    # catches ValueError/KeyError, not TypeError). Coerce null → 0 like mean_delta.
+    def _count(key: str) -> int:
+        v = summary.get(key)
+        return int(v) if v is not None else 0
+
+    n_flag = _count("n_flagged")
+    n_reg = _count("n_regressed")
+    n_imp = _count("n_improved")
+    n_new = _count("n_new")
+    n_rem = _count("n_removed")
+    n_same = _count("n_unchanged")
 
     lines: list[str] = [STICKY_MARKER, ""]
     lines.append(f"# Eval delta · `{report.suite}`")

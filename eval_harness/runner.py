@@ -262,9 +262,25 @@ class DeltaReport:
                 f"non-finite mean_delta {mean_delta} in delta JSON summary; mean_delta must be "
                 "finite — a NaN/Infinity value renders as '+nan' in the posted PR comment"
             )
+        # `.get` defaults only fire on a MISSING key; a present-but-null
+        # current_run_id/baseline_run_id passes None straight to the renderers,
+        # where `current_run_id[:8]` raises a raw TypeError (exit 1) instead of the
+        # documented exit-2 clean failure — the run-id sibling of the present-null
+        # mean_delta guard above. Reject a non-string value here.
+        current_run_id = payload.get("current_run_id", "current")
+        baseline_run_id = payload.get("baseline_run_id", "baseline")
+        for _label, _val in (
+            ("current_run_id", current_run_id),
+            ("baseline_run_id", baseline_run_id),
+        ):
+            if not isinstance(_val, str):
+                raise ValueError(
+                    f"{_label} must be a string when present; got {_val!r} — a null value "
+                    f"crashes the delta renderer's {_label}[:8] slice with a raw TypeError"
+                )
         return cls(
-            current_run_id=payload.get("current_run_id", "current"),
-            baseline_run_id=payload.get("baseline_run_id", "baseline"),
+            current_run_id=current_run_id,
+            baseline_run_id=baseline_run_id,
             suite=payload.get("suite", "(unknown)"),
             threshold_drop=threshold_drop,
             rows=tuple(RowDelta.from_json(r) for r in payload.get("rows", ())),
@@ -512,12 +528,22 @@ def render_delta_ascii(report: DeltaReport) -> str:
     # 0.0 mean Δ is preserved) to bring the two renderers to parity (#100).
     raw_mean_delta = s.get("mean_delta", 0.0)
     mean_delta = float(raw_mean_delta) if raw_mean_delta is not None else 0.0
+
+    # A present-but-null count (e.g. `{"n_flagged": null}` in a hand-edited delta
+    # JSON) was interpolated raw and rendered the literal string `None` — silent
+    # wrong output, the ascii sibling of the `int(None)` TypeError in
+    # render_delta_markdown. Coerce null → 0, matching the mean_delta None→0.0
+    # handling above and bringing the two renderers to parity.
+    def _count(key: str) -> int:
+        v = s.get(key)
+        return int(v) if v is not None else 0
+
     lines.append("")
     lines.append(
         f"summary: mean Δ={mean_delta:+.3f}  "
-        f"regressed={s.get('n_regressed', 0)} (flagged={s.get('n_flagged', 0)})  "
-        f"improved={s.get('n_improved', 0)}  unchanged={s.get('n_unchanged', 0)}  "
-        f"new={s.get('n_new', 0)}  removed={s.get('n_removed', 0)}"
+        f"regressed={_count('n_regressed')} (flagged={_count('n_flagged')})  "
+        f"improved={_count('n_improved')}  unchanged={_count('n_unchanged')}  "
+        f"new={_count('n_new')}  removed={_count('n_removed')}"
     )
     return "\n".join(lines) + "\n"
 
@@ -599,8 +625,21 @@ def load_run_result_from_json(path: str | Path) -> StoredRun:
             f"non-finite mean_score {mean_score}; mean_score must be finite — a "
             "NaN/Infinity value corrupts the mean_delta diff_runs computes"
         )
+    # `run_id` is required (bracket access → KeyError → exit 2 when missing), but
+    # a present-but-null value passed straight through to `StoredRun.run_id`, then
+    # to `DeltaReport.current_run_id`, where `render_delta_ascii`/`render_delta_markdown`
+    # slice it (`run_id[:8]`) and raise a raw `TypeError` (exit 1) — bypassing the
+    # documented exit-2 clean-failure contract the CLI catch blocks honor for
+    # ValueError/KeyError but not TypeError. Reject a non-string/empty run_id loudly,
+    # same finiteness-style loader guard as `mean_score`/`n_rows` above.
+    run_id = payload["run_id"]
+    if not isinstance(run_id, str) or not run_id:
+        raise ValueError(
+            f"run_id must be a non-empty string; got {run_id!r} — a null/empty run_id "
+            "crashes the delta renderers' run_id[:8] slice with a raw TypeError"
+        )
     return StoredRun(
-        run_id=payload["run_id"],
+        run_id=run_id,
         started_at=payload["started_at"],
         suite=payload["suite"],
         dataset_version=payload.get("dataset_version", ""),
