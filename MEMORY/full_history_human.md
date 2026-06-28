@@ -814,3 +814,16 @@ separate consideration, behaviorally a breaking change to that CLI surface.
 **Open questions / blockers:** none.
 
 **Next session:** continue the loop if time remains.
+
+## 2026-06-28 — Issue #116: null `run_id` / null summary count crashed the delta renderers with a raw TypeError
+**Duration:** ~35 min · **Branch:** `session/2026-06-28-1914-issue-116`
+
+- A delta or run JSON artifact carrying a JSON `null` where a string/int is assumed crashed the `diff-json` / `comment` CLI paths with an uncaught `TypeError` and exit 1, violating the documented `2 = I/O or usage error` exit contract (those handlers catch `ValueError`/`KeyError`/`OSError`/`JSONDecodeError`, but not `TypeError`). Same defect class as the finiteness guards (#42/#86/#89) and the present-null `mean_delta` coercion (#81/#100).
+- Three concrete paths, all reproduced firsthand: (1) null `run_id` in a RunResult JSON → `render_delta_ascii` `run_id[:8]`; (2) null `current_run_id`/`baseline_run_id` in a delta JSON → `render_delta_markdown` `run_id[:8]` (the `.get` default only fires on a *missing* key, not a present null); (3) null summary count → `render_delta_markdown` `int(None)`, while `render_delta_ascii` silently rendered the literal string `None`. The `mean_delta` field on the adjacent line was already null-guarded — the count siblings were left bare.
+- Fixed loader-side for run ids (`load_run_result_from_json` + `DeltaReport.from_json` reject a present-null/non-string id → `ValueError` → exit 2) and renderer-side for counts (both renderers coerce a present-null count to `0`, matching the `mean_delta` handling and bringing the two renderers to parity). 11 lock tests added to the #104 exit-code-contract file; suite 537 → 548, ruff check + format clean.
+
+**Why this work, this session:** first substantive issue of a multi-issue DAY run. Phase A found no mergeable PRs (only protected demo-capture drafts) and a clean audit; priority-tier llm-eval-harness (first in build sequence) had zero open issues, so a Phase A dogfood sweep surfaced this latent bug family — the saturated-portfolio dogfood→issue→PR pattern. Left llm-cost-optimizer #97 (batch-idempotency decision-revisit) untouched: it is explicitly filed for JT confirmation.
+
+**Open questions / blockers:** none.
+
+**Next session:** continue the loop — rotate to another repo to avoid same-repo append-only MEMORY conflicts.
