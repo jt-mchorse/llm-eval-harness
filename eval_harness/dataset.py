@@ -456,7 +456,6 @@ def validate_dataset(path: str | Path) -> ValidationReport:
                 # Don't add the duplicate to valid_examples — it shadows
                 # the original and would skew the tag histogram.
                 continue
-            seen_ids[ex.id] = line_no
 
             if version is None:
                 version = ex.dataset_version
@@ -475,6 +474,12 @@ def validate_dataset(path: str | Path) -> ValidationReport:
                 # so the tag histogram reflects the file's nominal version.
                 continue
 
+            # Reserve the id only once a row actually becomes valid. A rejected
+            # row (schema or version-drift) must not claim its id, or a later
+            # valid row reusing it would get a spurious `duplicate_id` finding
+            # pointing at a row that isn't in the valid set. This mirrors the
+            # schema-rejection path above, which `continue`s before this line.
+            seen_ids[ex.id] = line_no
             valid_examples.append(ex)
             n_valid += 1
 

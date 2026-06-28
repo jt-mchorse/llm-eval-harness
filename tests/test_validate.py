@@ -179,6 +179,32 @@ def test_version_drift_row_is_flagged_and_excluded(tmp_path: Path) -> None:
     assert report.findings[0].line_no == 2
 
 
+def test_id_reused_after_version_drift_is_valid_not_a_duplicate(tmp_path: Path) -> None:
+    """A version-drifted row is dropped and must NOT reserve its id: a later
+    valid row that reuses the dropped row's id is a legitimate valid example,
+    not a ``duplicate_id`` finding pointing at a discarded row (#114).
+
+    This mirrors the schema-rejection path, which already `continue`s before
+    the id is recorded — only rows that become valid should claim an id.
+    """
+    path = tmp_path / "reuse.jsonl"
+    _write_jsonl(
+        path,
+        [
+            _good_row(id="a", dataset_version="v1"),  # valid
+            _good_row(id="b", dataset_version="v2"),  # version drift -> dropped
+            _good_row(id="b", dataset_version="v1"),  # valid; reuses the dropped id
+        ],
+    )
+    report = validate_dataset(path)
+    assert report.dataset_version == "v1"
+    # The line-3 row is valid; only the line-2 drift should be a finding.
+    assert report.n_valid == 2, "the reused-id row on line 3 is a valid example"
+    codes = [f.code for f in report.findings]
+    assert codes == ["version_drift"], "no spurious duplicate_id for the reused id"
+    assert report.findings[0].line_no == 2
+
+
 # --- library: empty file ----------------------------------------------------
 
 
