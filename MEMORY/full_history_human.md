@@ -852,3 +852,16 @@ separate consideration, behaviorally a breaking change to that CLI surface.
 **Open questions / blockers:** none.
 
 **Next session:** continue the loop on another repo (avoid same-repo append-only MEMORY conflicts); the deferred `drift`-subcommand uncaught-traceback gap is filed separately as priority:med.
+
+## 2026-06-29 — Issue #122: `drift` was the last subcommand outside the exit-2 fail-clean contract
+**Duration:** ~30 min · **Branch:** `session/2026-06-29-2309-issue-122`
+
+- `drift.cli` (`drift.py:715`) delegated straight to `_load_inputs_jsonl` / `compute_drift` with no exception translation — unlike `_run_diff_json` / `_run_comment` / `_run_validate`, which all catch their data-layer exceptions and fail clean. Reproduced all three paths firsthand on `main` first (acceptance criterion #1): a missing `--golden`/`--candidate` path leaked a raw `FileNotFoundError` (exit 1); an empty input / zero valid rows leaked a raw `ValueError: …no inputs loaded`; malformed JSON leaked a raw `ValueError` (already wrapped from `json.JSONDecodeError` by `_load_inputs_jsonl` — the issue had speculated a raw `JSONDecodeError`, corrected in the plan and test comments).
+- Fixed by wrapping the input-loading block in `drift.cli` in a `try/except` translating `FileNotFoundError` / `OSError` / `ValueError` to a clean `::error::` line + exit 2, mirroring `_run_diff_json`'s catch shape. The guard lives in `drift.cli` (not `cli._run_drift`) so the contract holds on both the `eval-harness drift` path and the direct `python -m eval_harness.drift` entrypoint.
+- **Scoping catch:** a first draft also wrapped `atomic_write_text(args.output, …)`, which broke the pre-existing `test_drift_output_routes_through_atomic_helper` — that test deliberately asserts an output-write `OSError` *propagates* (the atomic-write artifact guard: an aborted rename must leave no half-written report). The full suite caught it before push; `atomic_write_text` was moved outside the `try` so the artifact guard is preserved. 7 lock tests added (missing/empty/bad-JSON × golden+candidate + a valid-inputs exit-0 guard), all 6 error-path tests confirmed failing on pre-fix code. Suite 552 → 559, ruff clean.
+
+**Why this work, this session:** first substantive issue of a multi-issue DAY run (Phase A merged 3 clean PRs across llm-eval-harness/llm-cost-optimizer/chunking, and the audit was clean bar the known operator-blocked portfolio-ops finding). #122 was the deferred follow-up filed during the earlier session that produced #120 — completing the exit-2 contract across every user-facing subcommand.
+
+**Open questions / blockers:** none.
+
+**Next session:** continue the loop on another repo to avoid same-repo append-only MEMORY conflicts; the portfolio is saturated (zero `priority:high` issues anywhere), so expect a dogfood→issue→PR pattern.
