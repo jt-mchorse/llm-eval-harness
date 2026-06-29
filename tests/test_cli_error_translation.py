@@ -218,6 +218,76 @@ def test_comment_null_run_id_exits_two(tmp_path: Path, capsys, field: str) -> No
     assert field in err
 
 
+# --- #120: null / non-string per-row example_id must not escape the exit-2 contract ----
+
+
+@pytest.mark.parametrize("fmt", ["ascii", "markdown", "json"])
+def test_diff_json_null_example_id_exits_two(tmp_path: Path, capsys, fmt: str) -> None:
+    # A present-null example_id in a RunResult JSON became a `None` dict key, then
+    # `diff_runs`' `sorted(set(current.rows) | set(baseline.rows))` raised an
+    # uncaught TypeError ('<' not supported between str and NoneType) — exit 1,
+    # bypassing the exit-2 fail-clean contract. `load_run_result_from_json` must
+    # now reject it as a clean ValueError → exit 2. Same corrupt-artifact threat
+    # model as the null run_id lock above.
+    cur = tmp_path / "cur.json"
+    cur.write_text(
+        json.dumps(
+            {
+                "run_id": "c",
+                "started_at": "2026-01-01T00:00:00Z",
+                "suite": "s",
+                "mean_score": 0.9,
+                "n_rows": 1,
+                "rows": [{"example_id": None, "score": 0.9, "reasoning": "ok"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    base = tmp_path / "base.json"
+    _run_result_json(base, run_id="b")
+    rc = main(["diff-json", "--current", str(cur), "--baseline", str(base), "--format", fmt])
+    assert rc == 2
+    err = capsys.readouterr().err
+    assert "::error::" in err
+    assert "example_id" in err
+
+
+def test_comment_null_example_id_exits_two(tmp_path: Path, capsys) -> None:
+    # A present-null per-row example_id in a delta JSON otherwise flowed through
+    # RowDelta.from_json into render_delta_markdown and posted the literal string
+    # "None" as the row id in the PR comment (exit 0, silently wrong). Must now
+    # surface via RowDelta.from_json as a clean ValueError → exit 2, never the
+    # silent "None" row.
+    delta = tmp_path / "d.json"
+    _delta_json(
+        delta,
+        {
+            "current_run_id": "c",
+            "baseline_run_id": "b",
+            "suite": "s",
+            "threshold_drop": 0.1,
+            "rows": [
+                {
+                    "example_id": None,
+                    "status": "new",
+                    "baseline_score": None,
+                    "current_score": 0.9,
+                    "delta": None,
+                    "flagged": False,
+                }
+            ],
+            "summary": {"n_new": 1},
+        },
+    )
+    rc = main(_comment_dry_run(delta))
+    assert rc == 2
+    captured = capsys.readouterr()
+    assert "::error::" in captured.err
+    assert "example_id" in captured.err
+    # The clean failure must replace the silent "None" row, not sit alongside it.
+    assert "None" not in captured.out
+
+
 @pytest.mark.parametrize(
     "count_key",
     ["n_flagged", "n_regressed", "n_improved", "n_unchanged", "n_new", "n_removed"],
