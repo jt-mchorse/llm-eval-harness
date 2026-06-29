@@ -161,7 +161,7 @@ rather than the first:
 
 ```bash
 eval-harness validate fixtures/sample_factuality_v1.jsonl
-# → stdout: ok: fixtures/sample_factuality_v1.jsonl rows=8 valid=8 findings=0 version=factuality-v0.1
+# → stdout: ok: fixtures/sample_factuality_v1.jsonl rows=10 valid=10 findings=0 version=factuality-v0.1
 # → exit 0
 ```
 
@@ -199,7 +199,7 @@ lint-without-tokens treatment as the golden datasets:
 
 ```bash
 eval-harness validate --calibration fixtures/calibration.jsonl
-# → stdout: ok: fixtures/calibration.jsonl rows=8 valid=8 findings=0 version=calibration
+# → stdout: ok: fixtures/calibration.jsonl rows=50 valid=50 findings=0 version=calibration
 # → exit 0
 ```
 
