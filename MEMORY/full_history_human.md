@@ -839,3 +839,16 @@ separate consideration, behaviorally a breaking change to that CLI surface.
 **Open questions / blockers:** none.
 
 **Next session:** README validate examples match the shipped CLI output and the test-locked fixture sizes.
+
+## 2026-06-29 — Issue #120: null/non-string `example_id` escaped the exit-2 contract on `diff-json` and `comment`
+**Duration:** ~28 min · **Branch:** `session/2026-06-29-1912-issue-120`
+
+- `example_id` is the load-bearing per-row join key, but the two JSON loaders read it by bare bracket access with no type check — the one remaining gap in a field family where `run_id`, `mean_score`, `n_rows`, and per-row `score` are all already guarded against present-but-invalid values. A `null` (or non-string) `example_id` in a corrupt/hand-edited artifact broke the CLI exit contract two ways, both reproduced firsthand.
+- (1) `diff-json`: the `null` id became a `None` dict key, then `diff_runs`' `sorted(set(current.rows) | set(baseline.rows))` raised a raw `TypeError` (`'<' not supported between str and NoneType`), exit 1 — bypassing the documented exit-2 fail-clean contract (the catch blocks honor `ValueError`/`KeyError`/`FileNotFoundError`/`JSONDecodeError`, not `TypeError`). (2) `comment`: the `null` id flowed into `render_delta_markdown` and posted the literal string `None` as the row id into the PR comment, exit 0 — silently wrong. Same defect class as the #110/#116 null-`run_id` exit-2 fixes.
+- Fixed loader-side in both `load_run_result_from_json` and `RowDelta.from_json`: reject a non-string/empty `example_id` with a `ValueError`, mirroring the existing `run_id` guard; `_run_diff_json` and `_run_comment` already translate it to a clean `::error::` line + exit 2. 4 lock tests added to the #104 exit-code-contract file (diff-json × ascii/markdown/json + comment dry-run), confirmed failing on pre-fix code via `git stash` before passing. Suite 548 → 552, ruff check + format clean.
+
+**Why this work, this session:** first substantive issue of a multi-issue DAY run. Phase A found a clean merge queue (zero ready PRs across all 13 repos) and a clean audit (only the known operator-blocked `portfolio-ops` `trending-daily` stale-schedule finding). Priority-tier `llm-eval-harness` (first in build sequence) had zero open issues, so a dogfood hunter subagent surfaced this latent bug — the saturated-portfolio dogfood→issue→PR pattern. A parallel hunter on `rag-production-kit` found no genuine in-scope bug (that repo is unusually hardened), so the loop rotates elsewhere next.
+
+**Open questions / blockers:** none.
+
+**Next session:** continue the loop on another repo (avoid same-repo append-only MEMORY conflicts); the deferred `drift`-subcommand uncaught-traceback gap is filed separately as priority:med.
