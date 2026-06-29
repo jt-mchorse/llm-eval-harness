@@ -176,6 +176,17 @@ class RowDelta:
         render as ``inf`` / ``+nan`` in the posted PR comment (#89).
         """
         example_id = payload["example_id"]
+        # Mirror the `load_run_result_from_json` guard on the comment path: a
+        # present-but-null/non-string example_id otherwise flows straight into
+        # `render_delta_markdown` and posts the literal string 'None' as the row
+        # id in the PR comment (exit 0, silently wrong) instead of failing clean.
+        # `_run_comment` already translates this ValueError to exit 2.
+        if not isinstance(example_id, str) or not example_id:
+            raise ValueError(
+                f"example_id must be a non-empty string; got {example_id!r} — a "
+                "null/non-string example_id renders as a literal 'None' row id in the "
+                "posted PR comment"
+            )
         return cls(
             example_id=example_id,
             baseline_score=_finite_or_none(
@@ -561,6 +572,22 @@ def load_run_result_from_json(path: str | Path) -> StoredRun:
     rows: dict[str, tuple[float, str]] = {}
     for r in payload.get("rows", []):
         example_id = r["example_id"]
+        # `example_id` is the dict key `diff_runs` joins on, but unlike its
+        # sibling load-bearing fields (`run_id`, `mean_score`, `n_rows`, per-row
+        # `score`) it was read by bare bracket access with no type check. A
+        # present-but-null id (parseable from a raw JSON `null` token) became a
+        # `None` dict key, then `diff_runs`' `sorted(set(current.rows) | ...)`
+        # raised a raw `TypeError` ('<' not supported between str and NoneType)
+        # — exit 1, bypassing the documented exit-2 clean-failure contract the
+        # CLI catch blocks honor for ValueError/KeyError but not TypeError. A
+        # numeric id similarly slips through and renders wrong downstream. Reject
+        # a non-string/empty example_id loudly, same loader guard as `run_id`.
+        if not isinstance(example_id, str) or not example_id:
+            raise ValueError(
+                f"example_id must be a non-empty string; got {example_id!r} — a "
+                "null/non-string example_id crashes diff_runs' sorted() join with a "
+                "raw TypeError and renders as a literal 'None' in the posted PR comment"
+            )
         # Reject duplicates loudly rather than silently overwriting the earlier
         # row — a silent dict-overwrite would drop a score and leave `n_rows`
         # (read from the payload below) disagreeing with `len(rows)`, corrupting
