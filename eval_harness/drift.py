@@ -37,6 +37,7 @@ import html
 import json
 import math
 import re
+import sys
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -730,15 +731,41 @@ def cli(argv: Sequence[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    golden = _load_inputs_jsonl(Path(args.golden))
-    candidate = _load_inputs_jsonl(Path(args.candidate))
-    judge_fn: Callable[[str], float] | None = _judge_stub if args.judge_stub else None
-    report = compute_drift(
-        golden,
-        candidate,
-        judge_score_fn=judge_fn,
-        cluster_k=args.cluster_k,
-    )
+    # Honor the CLI's `0 = clean / 1 = findings / 2 = I/O or usage error` exit
+    # contract that the read-side subcommands already uphold (#104/#110/#116).
+    # `_load_inputs_jsonl` otherwise leaks FileNotFoundError (missing path),
+    # OSError (present-but-unreadable input — e.g. a directory), and ValueError
+    # (empty input / zero valid rows / malformed JSON, already wrapped from
+    # json.JSONDecodeError) as raw exit-1 tracebacks (#122). Translate the
+    # input-loading failures to a clean `::error::` line + exit 2 here, mirroring
+    # `cli._run_diff_json`'s catch shape. The guard lives in `drift.cli` (not
+    # `cli._run_drift`) so the contract holds on both the `eval-harness drift`
+    # path and the direct `python -m eval_harness.drift` entrypoint.
+    #
+    # `atomic_write_text(args.output, ...)` is deliberately left OUTSIDE this try:
+    # a failed output write must still propagate (not become exit 2) so the
+    # atomic-write artifact guard holds — an aborted rename leaves no half-written
+    # report. That contract is locked by
+    # test_io_utils_atomic_write.test_drift_output_routes_through_atomic_helper.
+    try:
+        golden = _load_inputs_jsonl(Path(args.golden))
+        candidate = _load_inputs_jsonl(Path(args.candidate))
+        judge_fn: Callable[[str], float] | None = _judge_stub if args.judge_stub else None
+        report = compute_drift(
+            golden,
+            candidate,
+            judge_score_fn=judge_fn,
+            cluster_k=args.cluster_k,
+        )
+    except FileNotFoundError as e:
+        print(f"::error::could not read drift input: {e}", file=sys.stderr)
+        return 2
+    except OSError as e:
+        print(f"::error::drift input I/O error: {e}", file=sys.stderr)
+        return 2
+    except ValueError as e:
+        print(f"::error::{e}", file=sys.stderr)
+        return 2
     atomic_write_text(args.output, render_html(report))
     summary = (
         f"wrote {args.output}: "
