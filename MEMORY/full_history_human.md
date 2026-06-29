@@ -827,3 +827,15 @@ separate consideration, behaviorally a breaking change to that CLI surface.
 **Open questions / blockers:** none.
 
 **Next session:** continue the loop — rotate to another repo to avoid same-repo append-only MEMORY conflicts.
+
+## 2026-06-29 — Issue #118: README validate examples showed stale rows=8
+**Duration:** ~9 min · **Branch:** `session/2026-06-29-0355-readme-validate-rowcounts`
+
+- The README's two `validate` examples claimed `rows=8 valid=8`, but the shipped CLI prints `rows=10` for the factuality fixture (10 lines) and `rows=50` for calibration (50 lines). The calibration `8` was doubly wrong — the README says "50 rows" three other places. Real counts are test-locked.
+- README-only fix aligning both example outputs to the verified CLI output.
+
+**Why this work, this session:** eighth issue of the night run, from the parallel doc-contract subagent sweep.
+
+**Open questions / blockers:** none.
+
+**Next session:** README validate examples match the shipped CLI output and the test-locked fixture sizes.

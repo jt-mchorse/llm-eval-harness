@@ -1334,3 +1334,21 @@ context_for_next_session:
 decisions_made: []
 followups: []
 ---
+
+---
+session: 2026-06-29T03:55Z
+issue: 118
+focus: readme_validate_examples_stale_rows_8_real_10_factuality_and_50_calibration
+phase: night_session_phase_b_iteration_8
+duration_min: 9
+delta:
+  files_changed: 1 # README.md
+  tests_added: 0   # readme-only; real counts already test-locked
+context_for_next_session:
+  - readme_164_and_202_validate_examples_claimed_rows_8_valid_8_but_shipped_cli_prints_rows_10_sample_factuality_v1_jsonl_10_lines_and_rows_50_calibration_jsonl_50_lines_verified_by_running_eval_harness_validate
+  - calibration_rows_8_doubly_wrong_readme_says_50_rows_three_other_places_line_380_plus_section_header_plus_render_report_output_real_counts_test_locked_test_cli_run_293_n_rows_10_test_calibration_158_160_338_50
+  - fix_readme_only_164_to_rows_10_valid_10_202_to_rows_50_valid_50_full_suite_green_incl_readme_snapshot_tests_which_did_not_lock_these_lines_ruff_clean
+  - surfaced_by_parallel_doc_contract_subagent_sweep_eighth_issue_this_night_run
+decisions_made: []
+followups: []
+---
