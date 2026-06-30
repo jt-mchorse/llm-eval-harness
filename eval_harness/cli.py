@@ -476,7 +476,17 @@ def _run_comment(args: argparse.Namespace) -> int:
     if args.dry_run:
         print(body, end="")
         return 0
-    comment_id = upsert_sticky_comment(args.repo, args.pr, body)
+    try:
+        comment_id = upsert_sticky_comment(args.repo, args.pr, body)
+    except RuntimeError as e:
+        # A missing GITHUB_TOKEN/GH_TOKEN (_resolve_token) and a GitHub API
+        # HTTP error (_do_request) both raise RuntimeError — pure usage / I-O
+        # failures, not crashes. This call sits outside the delta-load try above,
+        # so the RuntimeError otherwise escaped as a raw traceback at exit 1,
+        # breaking the `0 = clean / 1 = findings / 2 = I/O or usage error`
+        # contract that the read-side subcommands already honor (#104/#110/#116/
+        # #122). Translate it here, same as the delta-load catch (#124).
+        return _fail(str(e))
     print(f"upserted sticky comment id={comment_id} on {args.repo}#{args.pr}", file=sys.stderr)
     return 0
 

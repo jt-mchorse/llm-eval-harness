@@ -423,3 +423,66 @@ def test_drift_valid_inputs_exits_zero(tmp_path: Path, capsys) -> None:
     assert rc == 0
     assert "::error::" not in capsys.readouterr().err
     assert out.exists()
+
+
+# --- #124: `comment` leaked a RuntimeError (exit 1) on missing GITHUB_TOKEN -----
+#
+# The `upsert_sticky_comment` call in `_run_comment` sits OUTSIDE the delta-load
+# try/except. With no GITHUB_TOKEN/GH_TOKEN, `_resolve_token` raises RuntimeError,
+# which escaped `main` as a raw exit-1 traceback — breaking the `2 = I/O or usage
+# error` contract the read-side subcommands already uphold. The token path is
+# network-free (the check fires before any HTTP call), so it's deterministically
+# testable. These locks were confirmed failing (exit 1, traceback) on pre-fix code.
+
+
+def _valid_delta_json(path: Path) -> None:
+    # A minimal, fully-valid delta payload: renders clean (no flagged rows → the
+    # render step and exit code are not under test here; the token failure is).
+    _delta_json(
+        path,
+        {
+            "current_run_id": "cccccccccc",
+            "baseline_run_id": "bbbbbbbbbb",
+            "suite": "s",
+            "threshold_drop": 0.1,
+            "rows": [],
+            "summary": {
+                "n_flagged": 0,
+                "n_regressed": 0,
+                "n_improved": 0,
+                "n_unchanged": 0,
+                "n_new": 0,
+                "n_removed": 0,
+            },
+        },
+    )
+
+
+def _comment_live(delta: Path) -> list[str]:
+    # Non-dry-run: this is the path that resolves a token and calls the API.
+    return ["comment", "--repo", "o/n", "--pr", "1", "--delta-json", str(delta)]
+
+
+def test_comment_missing_token_exits_two(tmp_path: Path, capsys, monkeypatch) -> None:
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    monkeypatch.delenv("GH_TOKEN", raising=False)
+    delta = tmp_path / "d.json"
+    _valid_delta_json(delta)
+    rc = main(_comment_live(delta))
+    assert rc == 2
+    err = capsys.readouterr().err
+    assert "::error::" in err
+    assert "token missing" in err
+    assert "Traceback" not in err
+
+
+def test_comment_dry_run_success_path_unchanged(tmp_path: Path, capsys, monkeypatch) -> None:
+    # Companion regression: even with no token, `--dry-run` never resolves one, so
+    # it still renders and exits 0 — the error translation must not perturb it.
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    monkeypatch.delenv("GH_TOKEN", raising=False)
+    delta = tmp_path / "d.json"
+    _valid_delta_json(delta)
+    rc = main(_comment_dry_run(delta))
+    assert rc == 0
+    assert "::error::" not in capsys.readouterr().err
