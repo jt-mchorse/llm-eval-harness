@@ -865,3 +865,16 @@ separate consideration, behaviorally a breaking change to that CLI surface.
 **Open questions / blockers:** none.
 
 **Next session:** continue the loop on another repo to avoid same-repo append-only MEMORY conflicts; the portfolio is saturated (zero `priority:high` issues anywhere), so expect a dogfood→issue→PR pattern.
+
+## 2026-06-30 — Issue #124: `comment` leaked a RuntimeError (exit 1) on missing GITHUB_TOKEN
+**Duration:** ~20 min · **Branch:** `session/2026-06-30-0317-issue-124`
+
+- `_run_comment` (`cli.py`) called `upsert_sticky_comment` **outside** its delta-load `try/except`. With no `GITHUB_TOKEN`/`GH_TOKEN`, `comment._resolve_token` raises `RuntimeError`, which escaped `main` as a raw exit-1 traceback — breaking the CLI's documented `0 = clean / 1 = findings / 2 = I/O or usage error` contract (the same one the read-side exit-2 sweeps #104/#110/#116/#122 uphold). A missing token is a pure usage/config error (forgetting `permissions: pull-requests: write` in Actions).
+- Fixed by wrapping the `upsert` call in `try/except RuntimeError` → `_fail` (clean `::error::` line + exit 2). This also brings the GitHub-API HTTP-error `RuntimeError` from `_do_request` under the same contract. Scoped to `RuntimeError` only — the marker `ValueError` is always satisfied by `render_delta_markdown`, so a genuine internal bug there should still surface. The token path is network-free, so it's deterministically testable.
+- Lock test: missing-token `comment` (non-dry-run) → exit 2 with `::error:: … token missing` and no traceback; companion asserts `--dry-run` still returns 0. Confirmed failing pre-fix via `git stash`. Suite 559 → 561, ruff clean.
+
+**Why this work, this session:** second issue of a NIGHT multi-issue run; a dogfood hunter surfaced this exit-2-contract gap in priority-tier `llm-eval-harness`, reproduced firsthand before acting. Distinct from #123 (drift subcommand).
+
+**Open questions / blockers:** none — ready for review.
+
+**Next session:** continue the loop.
