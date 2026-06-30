@@ -522,6 +522,38 @@ def test_calibrate_malformed_row_exits_two(tmp_path: Path, capsys) -> None:
     assert "Traceback" not in err
 
 
+def test_calibrate_empty_but_valid_file_exits_two(tmp_path: Path, capsys) -> None:
+    # Issue #128: an empty-but-valid (0-row) calibration file loads cleanly, so
+    # the #126 load-seam catch does not fire. Without the guard it reached
+    # `calibrate(judge, [])` → ValueError (exit 1 traceback) or, in a minimal
+    # install, AnthropicBackend ImportError — both break the `2 = usage error`
+    # contract. The zero-row check must report exit 2 + ::error::, hermetically.
+    empty = tmp_path / "empty.jsonl"
+    empty.write_text("", encoding="utf-8")
+    rc = main(["calibrate", "--calibration", str(empty)])
+    assert rc == 2
+    err = capsys.readouterr().err
+    assert "::error::" in err
+    assert "no rows to calibrate against" in err
+    assert str(empty) in err
+    assert "Traceback" not in err
+
+
+def test_calibrate_empty_file_does_not_construct_backend(tmp_path: Path, monkeypatch) -> None:
+    # Hermeticity guard: the zero-row check fires *before* the backend, so the
+    # empty-file path must never touch AnthropicBackend (which needs the `judge`
+    # extra / API key). If construction were reached this sentinel would raise.
+    import eval_harness.cli as cli
+
+    def _boom(*_a, **_k):  # pragma: no cover - reached only on regression
+        raise AssertionError("backend constructed on an empty calibration set")
+
+    monkeypatch.setattr(cli, "AnthropicBackend", _boom)
+    empty = tmp_path / "empty.jsonl"
+    empty.write_text("", encoding="utf-8")
+    assert main(["calibrate", "--calibration", str(empty)]) == 2
+
+
 def test_calibrate_load_translation_does_not_swallow_downstream_valueerror(
     tmp_path: Path, monkeypatch
 ) -> None:
