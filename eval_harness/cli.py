@@ -290,7 +290,22 @@ def _add_calibrate_args(parser: argparse.ArgumentParser) -> None:
 
 
 def _run_calibrate(args: argparse.Namespace) -> int:
-    rows = load_calibration(args.calibration)
+    # `load_calibration` runs before the judge backend is constructed, and it
+    # raises on bad input: FileNotFoundError/OSError (missing/unreadable file)
+    # and CalibrationLoadError (a ValueError subclass — blank line, malformed
+    # JSON, duplicate id, schema violation). Left untranslated those escaped as
+    # a raw traceback at exit 1, breaking the `0 = clean / 1 = findings /
+    # 2 = I/O or usage error` contract the sibling subcommands honor — calibrate
+    # was the last subcommand left out of the #104/#110/#116/#122/#124 sweep.
+    # Map them to exit 2 here. Note exit 1 is reserved for the legitimate
+    # "Cohen's κ < threshold" findings outcome below, so a load/usage failure
+    # must be 2, not 1. Scope is the load seam only, mirroring `_run_validate`.
+    try:
+        rows = load_calibration(args.calibration)
+    except (FileNotFoundError, OSError) as e:
+        return _fail(f"calibration not found: {e}")
+    except ValueError as e:
+        return _fail(str(e))
     backend = AnthropicBackend(model=args.model)
     judge = Judge(backend=backend)
     result = calibrate(judge, rows)

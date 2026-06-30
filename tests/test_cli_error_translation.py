@@ -486,3 +486,60 @@ def test_comment_dry_run_success_path_unchanged(tmp_path: Path, capsys, monkeypa
     rc = main(_comment_dry_run(delta))
     assert rc == 0
     assert "::error::" not in capsys.readouterr().err
+
+
+# --- #126: `calibrate` leaked a raw traceback (exit 1) on a missing/malformed ---
+# calibration file -------------------------------------------------------------
+#
+# `_run_calibrate` called `load_calibration(args.calibration)` with no error
+# translation — the one subcommand left out of the #104/#110/#116/#122/#124
+# exit-code sweep. A missing file (FileNotFoundError) or a malformed row
+# (CalibrationLoadError, a ValueError subclass) escaped `cli.main` as a raw
+# traceback at exit 1, breaking the `2 = I/O or usage error` contract. The load
+# fires before the judge backend is constructed, so these are hermetic (no API
+# key, no `judge` extra). These locks were confirmed failing (exit 1, traceback)
+# on pre-fix code. calibrate's exit 1 is reserved for "Cohen's κ < threshold"
+# (a findings outcome), so a load/usage failure must map to 2, not 1.
+
+
+def test_calibrate_missing_file_exits_two(tmp_path: Path, capsys) -> None:
+    rc = main(["calibrate", "--calibration", str(tmp_path / "nope.jsonl")])
+    assert rc == 2
+    err = capsys.readouterr().err
+    assert "::error::" in err
+    assert "calibration not found" in err
+    assert "Traceback" not in err
+
+
+def test_calibrate_malformed_row_exits_two(tmp_path: Path, capsys) -> None:
+    bad = tmp_path / "bad.jsonl"
+    bad.write_text("{ not valid json\n", encoding="utf-8")
+    rc = main(["calibrate", "--calibration", str(bad)])
+    assert rc == 2
+    err = capsys.readouterr().err
+    assert "::error::" in err
+    assert "invalid JSON" in err
+    assert "Traceback" not in err
+
+
+def test_calibrate_load_translation_does_not_swallow_downstream_valueerror(
+    tmp_path: Path, monkeypatch
+) -> None:
+    # Over-rejection / scoping guard: the new try/except wraps ONLY the
+    # `load_calibration` line, so a ValueError raised *downstream* (e.g. backend
+    # construction, `calibrate()` on a degenerate set, report rendering) must
+    # still propagate — it must NOT be masked as an exit-2 usage error, which
+    # would hide a real bug. We let the load succeed and make the next step raise
+    # a sentinel ValueError; if the catch were too broad it would translate it to
+    # 2 instead of letting it escape.
+    import eval_harness.cli as cli
+
+    monkeypatch.setattr(cli, "load_calibration", lambda _path: ["sentinel-row"])
+
+    def _boom(*_a, **_k):
+        raise ValueError("downstream sentinel — not a load error")
+
+    monkeypatch.setattr(cli, "AnthropicBackend", _boom)
+
+    with pytest.raises(ValueError, match="downstream sentinel"):
+        main(["calibrate", "--calibration", str(tmp_path / "ignored.jsonl")])
