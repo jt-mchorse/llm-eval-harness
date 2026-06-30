@@ -335,3 +335,91 @@ def test_render_delta_ascii_null_count_renders_zero_not_none() -> None:
     assert "regressed=0" in out
     assert "flagged=0" in out
     assert "None" not in out
+
+
+# --- #122: `drift` is the last user-facing subcommand outside the exit-2 contract ----
+#
+# `drift.cli` delegated straight to `_load_inputs_jsonl` / `compute_drift` with no
+# exception translation, so a missing input path (FileNotFoundError), an empty input
+# or zero valid rows (ValueError: "no inputs loaded"), and malformed JSON (ValueError,
+# already wrapped from json.JSONDecodeError by `_load_inputs_jsonl`) each escaped
+# `cli.main` as a raw exit-1 traceback — bypassing the `2 = I/O or usage error`
+# contract the read-side subcommands above already uphold. All three were reproduced
+# firsthand on pre-fix code; these locks were confirmed failing (exit 1, traceback)
+# before the `drift.cli` guard was added.
+
+
+def _drift_argv(golden: Path, candidate: Path, output: Path) -> list[str]:
+    # `--judge-stub` keeps the run hermetic (no Anthropic backend); the error paths
+    # under test all fire during input loading, before the judge is ever consulted.
+    return [
+        "drift",
+        "--golden",
+        str(golden),
+        "--candidate",
+        str(candidate),
+        "--output",
+        str(output),
+        "--judge-stub",
+    ]
+
+
+def _valid_inputs_jsonl(path: Path) -> None:
+    path.write_text('"a quick brown fox"\n"the lazy dog sleeps here"\n', encoding="utf-8")
+
+
+@pytest.mark.parametrize("side", ["golden", "candidate"])
+def test_drift_missing_input_exits_two(tmp_path: Path, capsys, side: str) -> None:
+    # A missing --golden/--candidate path leaked a raw FileNotFoundError (exit 1);
+    # must now fail clean. Both sides are checked so a one-sided guard can't pass.
+    good = tmp_path / "good.jsonl"
+    _valid_inputs_jsonl(good)
+    missing = tmp_path / "nope.jsonl"
+    golden, candidate = (missing, good) if side == "golden" else (good, missing)
+    rc = main(_drift_argv(golden, candidate, tmp_path / "r.html"))
+    assert rc == 2
+    err = capsys.readouterr().err
+    assert "::error::" in err
+    assert "Traceback" not in err
+
+
+@pytest.mark.parametrize("side", ["golden", "candidate"])
+def test_drift_empty_input_exits_two(tmp_path: Path, capsys, side: str) -> None:
+    # An empty input (zero valid rows) raised ValueError "no inputs loaded" (exit 1).
+    good = tmp_path / "good.jsonl"
+    _valid_inputs_jsonl(good)
+    empty = tmp_path / "empty.jsonl"
+    empty.write_text("", encoding="utf-8")
+    golden, candidate = (empty, good) if side == "golden" else (good, empty)
+    rc = main(_drift_argv(golden, candidate, tmp_path / "r.html"))
+    assert rc == 2
+    err = capsys.readouterr().err
+    assert "::error::" in err
+    assert "Traceback" not in err
+
+
+@pytest.mark.parametrize("side", ["golden", "candidate"])
+def test_drift_invalid_json_exits_two(tmp_path: Path, capsys, side: str) -> None:
+    # Malformed JSON leaked a ValueError wrapping json.JSONDecodeError (exit 1).
+    good = tmp_path / "good.jsonl"
+    _valid_inputs_jsonl(good)
+    bad = tmp_path / "bad.jsonl"
+    bad.write_text("{not valid json\n", encoding="utf-8")
+    golden, candidate = (bad, good) if side == "golden" else (good, bad)
+    rc = main(_drift_argv(golden, candidate, tmp_path / "r.html"))
+    assert rc == 2
+    err = capsys.readouterr().err
+    assert "::error::" in err
+    assert "Traceback" not in err
+
+
+def test_drift_valid_inputs_exits_zero(tmp_path: Path, capsys) -> None:
+    # Success-path guard: the error translation must not swallow a real run. Two
+    # valid input files write the HTML report and exit 0 (the contract's clean case).
+    good = tmp_path / "good.jsonl"
+    _valid_inputs_jsonl(good)
+    out = tmp_path / "r.html"
+    rc = main(_drift_argv(good, good, out))
+    assert rc == 0
+    assert "::error::" not in capsys.readouterr().err
+    assert out.exists()
