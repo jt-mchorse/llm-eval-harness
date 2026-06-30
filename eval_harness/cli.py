@@ -306,6 +306,15 @@ def _run_calibrate(args: argparse.Namespace) -> int:
         return _fail(f"calibration not found: {e}")
     except ValueError as e:
         return _fail(str(e))
+    # Empty-but-valid file (#128): load_calibration returns [] cleanly, so the
+    # catch above does not fire. Downstream, `calibrate(judge, [])` raises
+    # ValueError("no rows to calibrate against") (exit 1, raw traceback), and in
+    # a minimal install AnthropicBackend(...) raises ImportError first — both
+    # break the `2 = usage error` contract. Treat a zero-row set as a usage
+    # error here, before the backend is built, so it stays hermetic (no `judge`
+    # extra / API key needed) and reports exit 2 with a clean ::error:: line.
+    if not rows:
+        return _fail(f"no rows to calibrate against in {args.calibration}")
     backend = AnthropicBackend(model=args.model)
     judge = Judge(backend=backend)
     result = calibrate(judge, rows)

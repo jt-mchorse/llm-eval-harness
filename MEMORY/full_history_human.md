@@ -891,3 +891,15 @@ separate consideration, behaviorally a breaking change to that CLI surface.
 **Open questions / blockers:** none — ready for review. Filed #128 (low) for the adjacent empty-but-valid-file seam, deliberately out of this PR's scope.
 
 **Next session:** continue the loop on another repo to avoid same-repo append-only MEMORY conflicts.
+
+## 2026-06-30 — Issue #128: calibrate leaked a raw traceback on an empty-but-valid calibration file
+**Duration:** ~15 min · **Branch:** `session/2026-06-30-1937-issue-128`
+
+- Follow-up to #126 (landed via #127, merged in this run's Phase A). #126 brought the `calibrate` **load** seam into the exit-code contract (missing/malformed → 2). An empty-but-valid (0-row) file is downstream of that: `load_calibration` returns `[]` cleanly, so the catch doesn't fire. Then `calibrate(judge, [])` raised `ValueError` (exit 1 traceback), or in a minimal install `AnthropicBackend(...)` raised `ImportError` first — both broke the `2 = usage error` contract.
+- Fixed with a zero-row check (`if not rows: return _fail(...)`) placed right after `load_calibration` returns and before the backend is constructed, so it reports exit 2 + a clean `::error::no rows to calibrate against in <path>` line, hermetically. Note: only a truly empty (0-byte) file reaches `[]` — `load_calibration` raises on blank/whitespace lines — so I dropped a blank-lines test whose message assertion would have been wrong. +2 hermetic tests (empty file → exit 2, `::error::` naming the path, no traceback; a guard that the backend is never constructed on the empty path), both failing pre-fix. Suite 564 → 566, ruff clean.
+
+**Why this work, this session:** third issue of a DAY multi-issue run (after nextjs #70 and rag #108). Picked as the earliest priority-tier repo's lowest unblocked issue once its #126 upstream merged this run; `llm-cost-optimizer` #97 had fallen through earlier as a `decision-revisit` one-way blocker.
+
+**Open questions / blockers:** none — ready for review.
+
+**Next session:** continue the loop. The read-side `since()` swallow noted in rag #108 and chunking #93 (BOM/utf-8-sig) remain candidates.
