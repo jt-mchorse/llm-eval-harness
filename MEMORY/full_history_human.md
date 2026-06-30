@@ -878,3 +878,16 @@ separate consideration, behaviorally a breaking change to that CLI surface.
 **Open questions / blockers:** none — ready for review.
 
 **Next session:** continue the loop.
+
+## 2026-06-30 — Issue #126: `calibrate` leaked a raw traceback (exit 1) on a missing/malformed calibration file
+**Duration:** ~20 min · **Branch:** `session/2026-06-30-1511-issue-126`
+
+- `_run_calibrate` (`cli.py:293`) called `load_calibration(args.calibration)` with no error translation — the one subcommand left out of the exit-code-contract sweep (#104 → #110/#116/#122/#124). A missing file (`FileNotFoundError`) or a malformed row (`CalibrationLoadError`, a `ValueError` subclass) escaped `cli.main` as a raw exit-1 traceback, breaking the documented `0 = clean / 1 = findings / 2 = I/O or usage error` contract that `validate` (missing-file → 2) and `run` already honor. Reproduced both firsthand before acting.
+- Fixed by wrapping **only** the `load_calibration` call in `try/except` (mirroring how `_run_validate` wraps `validator(args.dataset)`): `FileNotFoundError`/`OSError` → `_fail("calibration not found: …")`, `ValueError` → `_fail(str(e))` — both exit 2. The load fires *before* the judge backend is constructed, so the fix is hermetic (no API key, no `judge` extra). calibrate's exit **1** stays reserved for the legitimate "Cohen's κ < threshold" findings outcome, so load/usage failures map to **2**.
+- Three tests: missing-file → exit 2 and malformed-row → exit 2 (both confirmed failing pre-fix via `git stash`, inverse safety net), plus an over-rejection/scoping guard proving the load-only catch does not swallow a *downstream* `ValueError` (which would mask a real bug as a usage error). Suite 561 → 564, `ruff check` + `ruff format --check` clean.
+
+**Why this work, this session:** first issue of a DAY multi-issue run. Portfolio is deeply saturated (zero `priority:high` issues; Phase A merged the four ready bug-fix PRs that closed the pre-filed backlog), so dogfood→issue→PR: read `cli.py` end-to-end and found `calibrate` was the last subcommand outside the exit-2 contract. Priority-tier `llm-eval-harness` chosen via D-009 tie-break (nextjs was the 18h-stale tier repo but its only issue #16 is operator-blocked binary-recording, so D-007 fall-through).
+
+**Open questions / blockers:** none — ready for review. Filed #128 (low) for the adjacent empty-but-valid-file seam, deliberately out of this PR's scope.
+
+**Next session:** continue the loop on another repo to avoid same-repo append-only MEMORY conflicts.
