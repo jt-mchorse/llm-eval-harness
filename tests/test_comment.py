@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
@@ -31,7 +32,7 @@ from eval_harness.comment import (
     render_delta_markdown,
     upsert_sticky_comment,
 )
-from eval_harness.runner import DeltaReport, RowDelta
+from eval_harness.runner import DeltaReport, RowDelta, render_delta_ascii
 
 # ---------------------------------------------------------------------------
 # render_delta_markdown
@@ -112,6 +113,56 @@ def test_render_table_columns_in_expected_order():
     )
     header_line = "| status | example_id | baseline | current | Δ | flag |"
     assert header_line in md
+
+
+def test_render_escapes_pipe_in_example_id_so_columns_dont_break():
+    # #130: a `|` in example_id used to inject an extra GFM column. Backticks
+    # do NOT protect a pipe — GFM splits table cells on unescaped `|` before it
+    # parses inline-code spans. The id must contribute zero column delimiters,
+    # i.e. the row's unescaped-pipe count must equal the header row's. Fails
+    # pre-fix (the piped id row carried 8 unescaped pipes vs the header's 7).
+    md = render_delta_markdown(
+        _make_report(
+            [RowDelta("lang=py|framework=fastapi", 0.6, 0.9, 0.3, "improved", False)],
+            _default_summary(mean_delta=0.3, n_improved=1),
+        )
+    )
+    lines = md.splitlines()
+    header_line = next(ln for ln in lines if ln.startswith("| status |"))
+    row_line = next(ln for ln in lines if "framework=fastapi" in ln)
+
+    def unescaped_pipes(s: str) -> int:
+        # Count `|` not preceded by a backslash — the ones GFM treats as
+        # column delimiters. `\|` renders as a literal pipe and does not split.
+        return len(re.findall(r"(?<!\\)\|", s))
+
+    assert unescaped_pipes(row_line) == unescaped_pipes(header_line)
+    # The literal pipe is preserved (escaped), not dropped.
+    assert "lang=py\\|framework=fastapi" in row_line
+
+
+def test_ascii_renderer_is_pipe_free_so_a_piped_id_cant_misalign_it():
+    # #130 scope guard: render_delta_ascii uses 2-space separators, not `|`
+    # delimiters, so a pipe in example_id is a harmless literal there (and must
+    # NOT be `\|`-escaped — that escape is a GFM-table concern only).
+    # 1) With a pipe-free id, the renderer itself emits no structural pipes.
+    pipe_free = render_delta_ascii(
+        _make_report(
+            [RowDelta("qa_01", 0.8, 0.7, -0.1, "regressed", False)],
+            _default_summary(mean_delta=-0.1, n_regressed=1),
+        )
+    )
+    assert "|" not in pipe_free
+    # 2) A piped id is rendered as the literal pipe (unescaped) — the ascii
+    # table has no delimiter to break, so `\|`-escaping there would be wrong.
+    piped = render_delta_ascii(
+        _make_report(
+            [RowDelta("a|b", 0.6, 0.9, 0.3, "improved", False)],
+            _default_summary(mean_delta=0.3, n_improved=1),
+        )
+    )
+    assert "a|b" in piped
+    assert "a\\|b" not in piped
 
 
 def test_render_flagged_row_carries_warning():

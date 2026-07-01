@@ -903,3 +903,15 @@ separate consideration, behaviorally a breaking change to that CLI surface.
 **Open questions / blockers:** none — ready for review.
 
 **Next session:** continue the loop. The read-side `since()` swallow noted in rag #108 and chunking #93 (BOM/utf-8-sig) remain candidates.
+
+## 2026-07-01 — Issue #130: a `|` in example_id broke the GFM sticky-comment table
+**Duration:** ~25 min · **Branch:** `session/2026-07-01-0325-issue-130`
+
+- `_row_to_md` wrapped `example_id` in backticks "so multi-word IDs don't break the column" — but backticks don't protect a literal `|`: GFM splits table cells on unescaped pipes *before* parsing inline code, so a piped id (`lang=py|framework=fastapi`) injected an extra column and corrupted the whole posted PR-comment table (confirmed: row had 8 unescaped pipes vs the header's 7). Fixed by escaping `|` → `\|`, which GitHub renders as a literal pipe inside a code span in a table. `render_delta_ascii` is unaffected (2-space separators) and must not escape — locked by a sibling test so a future `|`-delimited ascii refactor inherits the escaping need.
+- +2 tests (`tests/test_comment.py`): markdown row keeps the header's unescaped-pipe count (fails pre-fix 8≠7); ascii renderer is pipe-free and renders a piped id verbatim. Suite 502 → 504, ruff + format clean.
+
+**Why this work, this session:** portfolio is saturated — all remaining open issues are one-way `decision-revisit`s or non-headless `[demo]` captures. Ran a parallel dogfood bug-hunt across priority-tier repos (3 agents + 2 self-hunts); all came back NO_BUG_FOUND except this borderline finding, which empirical repro confirmed as a real output-corruption defect worth shipping (llm-eval-harness is priority-tier).
+
+**Open questions / blockers:** none — ready for review.
+
+**Next session:** continue the loop. The deferred backtick-in-id case remains a low-severity follow-up if it proves reachable.
