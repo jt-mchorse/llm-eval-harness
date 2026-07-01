@@ -106,8 +106,14 @@ def _row_to_md(r: RowDelta) -> str:
 
     delta_str = "—" if r.delta is None else f"{r.delta:+.3f}"
     flag = ":warning:" if r.flagged else ""
-    # Wrap example_id in `code` so multi-word IDs don't break the column.
-    return f"| {r.status} | `{r.example_id}` | {fmt(r.baseline_score)} | {fmt(r.current_score)} | {delta_str} | {flag} |"
+    # Wrap example_id in `code` so multi-word IDs stay legible — but backticks
+    # do NOT protect a literal `|`: GFM splits table cells on unescaped pipes
+    # *before* it parses inline-code spans, so a piped id (`lang=py|framework=x`)
+    # injects an extra column and corrupts the whole table's alignment. Escape
+    # `|` -> `\|` (GitHub renders `\|` as a literal pipe, inside a code span in a
+    # table too), so the id contributes zero column delimiters (#130).
+    example_id = r.example_id.replace("|", "\\|")
+    return f"| {r.status} | `{example_id}` | {fmt(r.baseline_score)} | {fmt(r.current_score)} | {delta_str} | {flag} |"
 
 
 # ---------------------------------------------------------------------------
