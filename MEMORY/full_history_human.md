@@ -915,3 +915,15 @@ separate consideration, behaviorally a breaking change to that CLI surface.
 **Open questions / blockers:** none — ready for review.
 
 **Next session:** continue the loop. The deferred backtick-in-id case remains a low-severity follow-up if it proves reachable.
+
+## 2026-07-01 — Issue #132: trailing-dot judge scores (`SCORE: 1.`) raised a misleading "missing SCORE:" error
+**Duration:** ~25 min · **Branch:** `session/2026-07-01-2310-issue-132`
+
+- `parse_judge_output`'s `_SCORE_RE` numeric group (`[+-]?[0-9]*\.?[0-9]+`) required a digit *after* the optional decimal point, so a trailing-dot integer like `SCORE: 1.` or `SCORE: 0.` failed the SCORE-line match entirely and surfaced as `JudgeParseError: missing SCORE: line` — the exact misleading class #71 fixed for out-of-range negatives. Since `float("1.") == 1.0` this is a plausible judge output, and the error aborts a whole multi-row `run_suite`/`calibrate`. Reproduced firsthand: `1.` failed while `1`, `.5`, `1.5`, `-0.2`, `+0.4` all parsed — a leading-dot/no-dot vs trailing-dot asymmetry.
+- Fixed by widening the group to `[+-]?(?:[0-9]+\.?[0-9]*|\.[0-9]+)` (no-dot, leading-dot, trailing-dot) so the value reaches the existing symmetric clamp. Verified against 16 cases before editing: the widening still rejects `.`, sign-only `-`, `1.2.3`, and sci-notation `1e0` via the `\s*$` anchor. +5 tests (trailing-dot int→1.0, trailing-dot zero→0.0, negative trailing-dot→clamped 0.0, and a parametrized guard that malformed forms still raise). Suite 575 → 580, ruff + format clean.
+
+**Why this work, this session:** first issue of a DAY multi-issue run; `llm-eval-harness` was the stalest priority-tier repo (~19h) and earliest in the build sequence among stale tier repos, with zero open issues → dogfood hunt. Read the full core surface (drift/calibration/runner/runs/judge/dataset/comment/io_utils/cli/pytest_plugin); the repo is exceptionally hardened and this was the single reproducible gap found.
+
+**Open questions / blockers:** none — ready for review.
+
+**Next session:** continue the loop. Scientific-notation scores remain a documented out-of-scope non-issue.
