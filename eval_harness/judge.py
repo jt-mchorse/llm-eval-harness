@@ -241,7 +241,19 @@ USER_TEMPLATE = "RUBRIC: {rubric}\n\nPROMPT: {prompt}\n\nRESPONSE: {response}\n"
 # (e.g. `SCORE: -0.1`) matches the SCORE line and reaches the clamp in
 # `parse_judge_output`, rather than failing the SCORE-line match and
 # surfacing as a misleading "missing SCORE: line" error (#71).
-_SCORE_RE = re.compile(r"^\s*SCORE:\s*([+-]?[0-9]*\.?[0-9]+)\s*$", re.MULTILINE | re.IGNORECASE)
+#
+# The numeric group is `[+-]?(?:[0-9]+\.?[0-9]*|\.[0-9]+)` — three shapes:
+# no-dot (`1`), leading-dot (`.5`), AND trailing-dot (`1.`). The pre-#132
+# pattern (`[+-]?[0-9]*\.?[0-9]+`) required a digit *after* the optional dot,
+# so a trailing-dot integer (`SCORE: 1.`, a natural way to write the integer
+# one — `float("1.") == 1.0`) failed the whole SCORE-line match and surfaced
+# as the same misleading "missing SCORE: line" error #71 set out to kill,
+# aborting a whole multi-row run. `float()` then reaches the symmetric clamp
+# in `parse_judge_output`. Genuinely malformed forms (bare `.`, sign-only
+# `-`, `1.2.3`, sci-notation `1e0`) still fail the `\s*$`-anchored match (#132).
+_SCORE_RE = re.compile(
+    r"^\s*SCORE:\s*([+-]?(?:[0-9]+\.?[0-9]*|\.[0-9]+))\s*$", re.MULTILINE | re.IGNORECASE
+)
 _REASON_RE = re.compile(r"^\s*REASONING:\s*(.+)$", re.MULTILINE | re.IGNORECASE)
 
 

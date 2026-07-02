@@ -79,6 +79,37 @@ def test_parse_explicit_plus_sign():
     assert parsed.score == pytest.approx(0.4)
 
 
+def test_parse_trailing_dot_integer():
+    # `SCORE: 1.` is a natural way a model writes the integer one
+    # (`float("1.") == 1.0`). The pre-#132 regex required a digit after the
+    # dot, so it failed the SCORE-line match and raised the misleading
+    # "missing SCORE: line" error #71 set out to kill. It must now reach the
+    # clamp and parse as 1.0, symmetric with the leading-dot form `.5`.
+    parsed = parse_judge_output("SCORE: 1.\nREASONING: faithful")
+    assert parsed.score == 1.0
+
+
+def test_parse_trailing_dot_zero():
+    parsed = parse_judge_output("SCORE: 0.\nREASONING: contradicts the prompt")
+    assert parsed.score == 0.0
+
+
+def test_parse_negative_trailing_dot_clamps():
+    # Trailing-dot form must also compose with the sign branch and the
+    # symmetric clamp: `-1.` → -1.0 → clamped to 0.0 (#132, extends #71).
+    parsed = parse_judge_output("SCORE: -1.\nREASONING: fully contradicts")
+    assert parsed.score == 0.0
+
+
+@pytest.mark.parametrize("bad", ["SCORE: .", "SCORE: -", "SCORE: 1.2.3", "SCORE: 1e0"])
+def test_parse_trailing_dot_widening_still_rejects_malformed(bad):
+    # Widening the numeric group for trailing-dot scores (#132) must not
+    # loosen the parser: a bare dot, a sign with no digits, a double-dotted
+    # value, and scientific notation all still fail the `\s*$`-anchored match.
+    with pytest.raises(JudgeParseError, match="missing SCORE"):
+        parse_judge_output(f"{bad}\nREASONING: hi")
+
+
 def test_parse_non_numeric_score_still_raises():
     # The leading-sign allowance must not loosen the match to non-numeric
     # values: a malformed SCORE line still fails the SCORE-line match.
