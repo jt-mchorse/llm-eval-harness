@@ -26,6 +26,7 @@ from eval_harness.drift import (
     compute_drift,
     hash_embed,
     jensen_shannon,
+    percentile,
     render_html,
 )
 from eval_harness.drift import _clamp01 as clamp01
@@ -507,3 +508,60 @@ def test_compute_drift_rejects_inf_judge_score_instead_of_silent_clamp():
             ["big"],
             judge_score_fn=lambda t: float("inf") if "big" in t else 0.5,
         )
+
+
+# ----------------------------------------------------------------------
+# percentile — NIST type-7 linear-interp percentile (#136)
+#
+# `percentile` is public (in `drift.__all__`) and drives the length-drift
+# report's `median` and `p95` (drift.py build_length_report), but had no
+# direct test. These cases lock its documented contract branch-by-branch;
+# every expected value was verified firsthand against the real function.
+# ----------------------------------------------------------------------
+
+
+def test_percentile_empty_returns_zero():
+    # Documented degenerate: no values → 0.0 (not an error), so an empty
+    # length sample yields median=p95=0.0 rather than crashing the report.
+    assert percentile([], 0.5) == 0.0
+
+
+def test_percentile_single_element_is_that_element_for_any_q():
+    for q in (0.0, 0.25, 0.5, 0.95, 1.0):
+        assert percentile([42.0], q) == 42.0
+
+
+def test_percentile_q0_is_min_and_q1_is_max_even_when_unsorted():
+    # The function sorts internally, so input order must not matter.
+    assert percentile([3.0, 1.0, 2.0], 0.0) == 1.0
+    assert percentile([3.0, 1.0, 2.0], 1.0) == 3.0
+
+
+def test_percentile_even_n_median_interpolates_between_middle_pair():
+    # type-7 median of [1,2,3,4] is the midpoint of the middle pair: 2.5.
+    assert percentile([1.0, 2.0, 3.0, 4.0], 0.5) == 2.5
+
+
+def test_percentile_odd_n_median_is_the_middle_element():
+    # idx = 0.5*(5-1) = 2 is integral (lo == hi), so the exact middle
+    # element is returned with no interpolation.
+    assert percentile([5.0, 4.0, 3.0, 2.0, 1.0], 0.5) == 3.0
+
+
+def test_percentile_integral_index_branch_returns_exact_element():
+    # [10,20,30,40,50] q=0.5 → idx=2.0 (lo == hi) → s[2] == 30.0 exactly.
+    assert percentile([10.0, 20.0, 30.0, 40.0, 50.0], 0.5) == 30.0
+
+
+def test_percentile_fractional_index_interpolates_linearly():
+    # [0,10] q=0.25 → idx=0.25 → 0 + (10-0)*0.25 = 2.5.
+    assert percentile([0.0, 10.0], 0.25) == 2.5
+    # [1..100] q=0.95 → idx=0.95*99=94.05 → s[94]=95 + (96-95)*0.05 = 95.05.
+    assert percentile([float(i) for i in range(1, 101)], 0.95) == pytest.approx(95.05)
+
+
+def test_percentile_rejects_q_out_of_unit_range():
+    with pytest.raises(ValueError, match=r"q must be in \[0.0, 1.0\]"):
+        percentile([1.0, 2.0], -0.1)
+    with pytest.raises(ValueError, match=r"q must be in \[0.0, 1.0\]"):
+        percentile([1.0, 2.0], 1.5)
