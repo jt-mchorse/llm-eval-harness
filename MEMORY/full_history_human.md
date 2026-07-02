@@ -935,3 +935,11 @@ separate consideration, behaviorally a breaking change to that CLI surface.
 **Why prioritized.** The whole open-issue backlog is either JT-decision one-way blockers (llm-cost #97, vector-search #71) or operator-blocked demo captures (nextjs #16, etc.), and nextjs — the stale priority-tier repo — only had the operator-blocked demo. Fell through to llm-eval-harness (priority tier, zero open issues) and dogfooded the core surface; this pipe-escaping gap in the calibration report was the one reproducible defect found, and it mirrors an established in-repo fix.
 
 **Open questions / blockers.** None for this issue. This closes the last GFM-table emitter that lacked pipe escaping (drift HTML uses `html.escape`; comment.py fixed in #130).
+
+## 2026-07-02 — Issue #136: characterization test for drift.percentile (~15 min)
+
+**What got done.** `drift.percentile` (a NIST type-7 linear-interp percentile) is public — exported in `drift.__all__` — and drives the length-drift report's `median` and `p95`, but had zero direct tests. Added 8 characterization tests to `tests/test_drift.py`, one per branch of the contract: empty→0.0, single element, q=0/q=1 on unsorted input, even-n median interpolation (`[1,2,3,4]`@0.5→2.5), the integral-index `lo==hi` branch (`[10,20,30,40,50]`@0.5→30.0), fractional interpolation (`[0,10]`@0.25→2.5, `[1..100]`@0.95→95.05), and q-out-of-range ValueError. Every expected value was verified firsthand against the real function first. No production code change; full suite green (584 passed), ruff clean.
+
+**Why prioritized.** Second issue of the day run. Two parallel dogfood bug-hunts on the priority-tier zero-open-issue repos (rag-production-kit and llm-eval-harness) both came up empty after deep probing (kappa fuzz 200k, JS divergence 100k, percentile vs a NIST reference over 50k cases) — the portfolio is bug-saturated. Per the "stop after two empty hunts" rule I pivoted from bug-hunting to locking an untested public function the hunt had surfaced. Still issue-driven: filed #136, closed it same session.
+
+**Open questions / blockers.** None. A property/fuzz test against a reference impl was deferred as a possible separate low-priority follow-up; the enumerated cases already cover every branch.
