@@ -417,8 +417,19 @@ def render_report(
         "|----|------:|------:|---------:|-----------|",
     ]
     for row, js in zip(result.rows, result.judge_scores, strict=True):
+        # `row.id` (arbitrary calibration-file string) and `js.reasoning`
+        # (free-form one-sentence judge output) land in a GFM table cell.
+        # Backticks do NOT protect a literal `|`: GFM splits table cells on
+        # unescaped pipes *before* it parses inline-code spans, so a piped id or
+        # reasoning injects extra columns and corrupts the whole table's
+        # alignment. Escape `|` -> `\|` (GitHub renders `\|` as a literal pipe,
+        # inside a code span in a table too) so each cell contributes zero column
+        # delimiters — same fix as `comment._row_to_md` (#130), applied to the
+        # calibration report here (#134).
+        row_id = row.id.replace("|", "\\|")
+        reasoning = js.reasoning.replace("|", "\\|")
         lines.append(
-            f"| `{row.id}` | {row.human_score:.2f} | {js.score:.2f} | {abs(row.human_score - js.score):.2f} | {js.reasoning} |"
+            f"| `{row_id}` | {row.human_score:.2f} | {js.score:.2f} | {abs(row.human_score - js.score):.2f} | {reasoning} |"
         )
     lines.append("")
     return "\n".join(lines)

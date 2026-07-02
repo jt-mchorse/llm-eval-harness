@@ -371,3 +371,47 @@ def test_render_report_marks_fail_below_threshold():
     result = calibrate(judge, rows)
     md = render_report(result, judge_model="stub", threshold_kappa=0.6)
     assert "**FAIL**" in md
+
+
+def test_render_report_escapes_pipe_in_id_and_reasoning_so_columns_dont_break():
+    # #134 (sibling to comment.py #130): `row.id` and the free-form
+    # `js.reasoning` land in a GFM per-row table cell. Backticks do NOT protect
+    # a literal `|` — GFM splits table cells on unescaped pipes before it parses
+    # inline-code spans, so a piped id or reasoning injects an extra column and
+    # corrupts the whole table. The fix escapes `|` -> `\|`; the invariant is
+    # that the data row's unescaped-pipe count equals the header row's. Fails
+    # pre-fix (the piped row carried 8 unescaped pipes vs the header's 6).
+    import re
+
+    from eval_harness.calibration import CalibrationResult
+    from eval_harness.judge import JudgeScore
+
+    rows = [
+        CalibrationRow(
+            id="lang=py|framework=x",
+            prompt="p",
+            response="r",
+            rubric="score it",
+            human_score=0.8,
+            provenance={},
+        )
+    ]
+    judge_scores = [JudgeScore(score=0.7, reasoning="faithful | grounded in prompt", raw="raw")]
+    result = CalibrationResult(
+        n=1, cohens_kappa=1.0, pearson_r=1.0, judge_scores=judge_scores, rows=rows
+    )
+    md = render_report(result, judge_model="stub", threshold_kappa=0.6)
+
+    lines = md.splitlines()
+    header_line = next(line for line in lines if line.startswith("| id "))
+    row_line = next(line for line in lines if "lang=py" in line)
+
+    def unescaped_pipes(s: str) -> int:
+        # A `\|` renders as a literal pipe and does NOT split the cell; only a
+        # bare, unescaped `|` is a column delimiter.
+        return len(re.findall(r"(?<!\\)\|", s))
+
+    assert unescaped_pipes(row_line) == unescaped_pipes(header_line)
+    # The literal pipes are preserved (escaped), not dropped.
+    assert "lang=py\\|framework=x" in row_line
+    assert "faithful \\| grounded in prompt" in row_line

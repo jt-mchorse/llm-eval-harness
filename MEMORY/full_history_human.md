@@ -927,3 +927,11 @@ separate consideration, behaviorally a breaking change to that CLI surface.
 **Open questions / blockers:** none — ready for review.
 
 **Next session:** continue the loop. Scientific-notation scores remain a documented out-of-scope non-issue.
+
+## 2026-07-02 — Issue #134: escape pipes in the calibration report table (~20 min)
+
+**What got done.** `calibration.render_report` builds the per-row markdown table for the calibration report, interpolating each row's `id` and the judge's free-form `reasoning` into a GitHub-flavored table cell. Neither was escaping `|`, so a pipe in either field split the cell into extra columns and corrupted the table's alignment when GitHub rendered it — the same bug we already fixed in the PR-comment renderer (#130), just never applied here. Escaped `|` → `\|` in both fields and added a lock test that asserts the data row's unescaped-pipe count matches the header's (and that the literal pipes survive). Verified it fails before the fix and passes after; full suite (581 tests) green, ruff clean.
+
+**Why prioritized.** The whole open-issue backlog is either JT-decision one-way blockers (llm-cost #97, vector-search #71) or operator-blocked demo captures (nextjs #16, etc.), and nextjs — the stale priority-tier repo — only had the operator-blocked demo. Fell through to llm-eval-harness (priority tier, zero open issues) and dogfooded the core surface; this pipe-escaping gap in the calibration report was the one reproducible defect found, and it mirrors an established in-repo fix.
+
+**Open questions / blockers.** None for this issue. This closes the last GFM-table emitter that lacked pipe escaping (drift HTML uses `html.escape`; comment.py fixed in #130).
