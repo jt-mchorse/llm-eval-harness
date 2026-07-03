@@ -140,6 +140,64 @@ def _resolves_on_disk(token: str) -> bool:
     return (REPO_ROOT / token).exists()
 
 
+# File-suffix tokens that look like a `<name>.<attr>` symbol reference but are
+# really filenames (`cli.py`, `runs.sqlite`). Excluded from the dotted-symbol
+# resolution check below so a filename isn't mistaken for a package attribute.
+# Hard-pinned by `test_symbol_skip_extensions_hard_pin_set` so a loose edit
+# can't silently widen the skip set and let a real broken symbol ref through.
+SYMBOL_SKIP_EXTENSIONS = ("py", "sqlite", "json", "md", "txt", "yaml", "yml", "sh", "toml")
+
+# Package submodules under `eval_harness/` — a `<module>.<symbol>` doc reference
+# is resolved by importing `eval_harness.<module>` and checking the attribute.
+_PKG_DIR = REPO_ROOT / "eval_harness"
+
+
+def _extract_symbol_refs(text: str) -> tuple[set[str], set[str]]:
+    """Split backtick-quoted tokens into the two symbol-citation styles the
+    doc actually uses, so the resolver only checks things that are genuinely
+    symbol claims (not prose, field names, or file paths).
+
+    Returns ``(dotted, camel)``:
+
+    - ``dotted``: ``<submodule>.<symbol>`` where ``<submodule>`` is a real
+      `eval_harness/*.py` module and the token is NOT a filename — i.e. an
+      attribute reference like ``io_utils.atomic_write_text``. Filename tokens
+      (``cli.py``, ``runs.sqlite``) are dropped via ``SYMBOL_SKIP_EXTENSIONS``
+      and an on-disk existence check.
+    - ``camel``: a *multi-word* CamelCase identifier (an internal
+      lowercase→uppercase transition, e.g. ``RunResult``, ``AnthropicBackend``).
+      Bare snake_case is deliberately excluded — it collides with data-field
+      names the doc quotes (``human_score``, ``dataset_version``,
+      ``duplicate_id``), which are not importable symbols.
+    """
+    submodules = {p.stem for p in _PKG_DIR.glob("*.py") if p.stem != "__init__"}
+    dotted: set[str] = set()
+    camel: set[str] = set()
+    for match in re.finditer(r"`([^`\n]+)`", text):
+        token = match.group(1).strip()
+        token = re.sub(r"\(\)$", "", token)
+        while token and token[-1] in ".,;:":
+            token = token[:-1]
+        dotted_match = re.fullmatch(r"([a-z_]+)\.([A-Za-z_][A-Za-z0-9_]*)", token)
+        if dotted_match:
+            module, attr = dotted_match.group(1), dotted_match.group(2)
+            if (
+                module in submodules
+                and attr not in SYMBOL_SKIP_EXTENSIONS
+                and not (_PKG_DIR / token).exists()
+            ):
+                dotted.add(token)
+            continue
+        # Multi-word CamelCase: starts uppercase, contains a lowercase, and has
+        # at least one internal lowercase→uppercase boundary (so `SCORE` /
+        # `REASONING` / a single-word `Backend`-in-prose aren't swept in).
+        if re.fullmatch(r"[A-Z][A-Za-z0-9]*[a-z][A-Za-z0-9]*", token) and re.search(
+            r"[a-z][A-Z]", token
+        ):
+            camel.add(token)
+    return dotted, camel
+
+
 def test_doc_exists() -> None:
     assert DOC.exists(), f"missing {DOC}"
 
@@ -155,6 +213,63 @@ def test_backtick_paths_resolve_on_disk(doc_text: str) -> None:
         "docs/architecture.md quotes paths that don't exist on disk:\n"
         + "\n".join(f"  - `{t}`" for t in unresolved)
         + "\n(regenerate the doc to match the current layout, or fix the typo)"
+    )
+
+
+def test_doc_symbol_refs_resolve(doc_text: str) -> None:
+    """Every symbol the doc names resolves to a real package attribute.
+
+    ``test_backtick_paths_resolve_on_disk`` validates slash-path tokens only;
+    a *symbol* reference — a ``<submodule>.<symbol>`` attribute or a CamelCase
+    public type — was unguarded. That is exactly the drift class portfolio-ops
+    #55 catalogued (e.g. llm-cost-optimizer's doc naming a nonexistent
+    ``BatchAPIBackend``, embedding-model-shootout's ``compute_frontier`` for the
+    real ``pareto_frontier``): the symbol never existed, yet CI stayed green.
+    Propagates the embedding-model-shootout #71 / python-async #70 precedents,
+    adapted to the two citation styles this doc actually uses.
+    """
+    import importlib
+
+    pkg = importlib.import_module("eval_harness")
+    dotted, camel = _extract_symbol_refs(doc_text)
+    assert dotted or camel, (
+        "expected at least one symbol reference (`<module>.<symbol>` or a "
+        "CamelCase public type) in docs/architecture.md — the resolver would "
+        "otherwise be vacuously green"
+    )
+
+    unresolved: list[str] = []
+    for token in sorted(dotted):
+        module_name, _, symbol = token.rpartition(".")
+        try:
+            module = importlib.import_module(f"eval_harness.{module_name}")
+        except ModuleNotFoundError:
+            unresolved.append(f"{token} (module eval_harness.{module_name} not importable)")
+            continue
+        if not hasattr(module, symbol):
+            unresolved.append(token)
+    for token in sorted(camel):
+        if not hasattr(pkg, token):
+            unresolved.append(f"{token} (not in the eval_harness public surface)")
+
+    assert not unresolved, (
+        "docs/architecture.md names symbols that don't exist in the package:\n"
+        + "\n".join(f"  - {u}" for u in unresolved)
+        + "\n(fix the doc to match the shipped symbol, or update the rename that orphaned it)"
+    )
+
+
+def test_symbol_skip_extensions_hard_pin_set() -> None:
+    assert SYMBOL_SKIP_EXTENSIONS == (
+        "py",
+        "sqlite",
+        "json",
+        "md",
+        "txt",
+        "yaml",
+        "yml",
+        "sh",
+        "toml",
     )
 
 
