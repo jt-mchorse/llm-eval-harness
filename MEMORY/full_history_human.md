@@ -955,3 +955,13 @@ separate consideration, behaviorally a breaking change to that CLI surface.
 **Open questions / blockers:** none — ready for review.
 
 **Next session:** continue the loop. Remaining portfolio work is JT-blocked decision-revisits (llm-cost #97, vector-search #71) and operator-verification demos.
+
+## 2026-07-03 — Issue #140: symbol-resolution doc-lock (propagates portfolio-ops #55) (~20 min)
+
+**What got done.** `tests/test_architecture_doc.py` locked path tokens, issue/decision coverage, and banned phrases — but never checked that the symbols the doc *names* actually exist. That's the exact drift class portfolio-ops #55 catalogued across the portfolio (a doc naming a nonexistent `BatchAPIBackend` / `compute_frontier` passes CI). Added `test_doc_symbol_refs_resolve` for the two citation styles this doc uses: `<submodule>.<symbol>` attribute refs (e.g. `io_utils.atomic_write_text`) resolved via `importlib` + `hasattr`, and multi-word CamelCase public types (`RunResult`, `AnthropicBackend`, `ValidationReport`, `AnswerSource`) checked against the `eval_harness` public surface. Filename tokens (`cli.py`, `runs.sqlite`) and bare snake_case field names (`human_score`, `dataset_version`) are excluded so there are no false positives. The skip-extension set is hard-pinned. Inverse-verified by injecting drifted symbols of both styles into a doc copy — both flagged. Suite 588 → 590, ruff clean.
+
+**Why this work, this session:** third worked issue of the DAY run. After shipping chunking-strategies-lab #102, the loop fell through two genuinely-saturated repos (python-async-llm-pipelines and ai-app-integration-tests — thorough two-hunter dogfood sweeps, no shippable bug; ai-app's one finding was `headersToObject` dropping multi-`Set-Cookie`, but that header is redacted before write so it's moot). A full portfolio open-issue sweep showed the only actionable, non-blocked, non-decision-revisit work was portfolio-ops #55/#56. Rather than only file meta-issues, executed #55's own remediation — filed the per-repo follow-up (#140) in a priority-tier repo and shipped the lock as the propagation template.
+
+**Open questions / blockers:** none — ready for review. This doc adapts the lock to the bare-symbol + `submodule.symbol` styles here (not emb_shootout's fully-qualified `pkg.mod.sym`), so the propagation is per-repo, not copy-paste.
+
+**Next session:** continue #55 propagation to the remaining repos (rag-production-kit, llm-cost-optimizer, chunking-strategies-lab, nextjs [TS: exported-name check], etc.), one small PR each. Remaining non-propagation work stays JT-blocked (decision-revisits llm-cost #97 / vector-search #71; operator secret config portfolio-ops #17).
