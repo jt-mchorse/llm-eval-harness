@@ -72,7 +72,15 @@ class ExpectedOutput:
     VALID_KINDS: ClassVar[frozenset[str]] = frozenset({"exact", "semantic", "regex"})
 
     def __post_init__(self) -> None:
-        if self.kind not in self.VALID_KINDS:
+        # `not isinstance(self.kind, str)` must lead: `VALID_KINDS` is a
+        # frozenset, so testing membership of an unhashable `kind` (a JSON
+        # array/object, e.g. `{"kind": []}`) raises a raw `TypeError` from the
+        # `in` itself — which escapes `_validate_record`'s `except ValueError`
+        # and aborts `validate_dataset`'s collecting pass. Reject non-str kinds
+        # up front so the clean `ValueError` fires and is wrapped into a
+        # `DatasetLoadError` like every other bad kind (a hashable wrong kind
+        # such as `123` was already handled; this closes the unhashable gap).
+        if not isinstance(self.kind, str) or self.kind not in self.VALID_KINDS:
             raise ValueError(
                 f"invalid expected_output kind {self.kind!r}; "
                 f"valid kinds: {sorted(self.VALID_KINDS)}"

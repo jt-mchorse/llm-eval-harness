@@ -123,6 +123,30 @@ def test_unknown_expected_output_kind_is_rejected(tmp_path: Path) -> None:
     assert "invalid expected_output kind" in exc.value.reason
 
 
+@pytest.mark.parametrize("bad_kind", [["exact"], {"k": "v"}])
+def test_unhashable_expected_output_kind_is_a_clean_error_not_a_typeerror(
+    tmp_path: Path, bad_kind: object
+) -> None:
+    # #138: an unhashable `kind` (JSON array/object) used to leak a raw
+    # `TypeError` from the `frozenset` membership test — escaping
+    # `_validate_record`'s `except ValueError` — instead of the clean
+    # per-line `DatasetLoadError` a hashable wrong kind (123) already got.
+    bad = json.dumps(
+        {
+            "id": "x",
+            "input": "q",
+            "expected_outputs": [{"kind": bad_kind, "value": "good"}],
+            "dataset_version": "v1",
+            "provenance": {},
+        }
+    )
+    path = _write(tmp_path, [bad])
+    with pytest.raises(DatasetLoadError) as exc:
+        load_jsonl(path)
+    assert exc.value.line_no == 1
+    assert "invalid expected_output kind" in exc.value.reason
+
+
 def test_empty_expected_outputs_is_rejected(tmp_path: Path) -> None:
     bad = json.dumps(
         {
@@ -201,6 +225,13 @@ def test_missing_file_raises_filenotfound(tmp_path: Path) -> None:
 def test_expected_output_rejects_bad_kind() -> None:
     with pytest.raises(ValueError, match="kind"):
         ExpectedOutput(kind="bogus", value="x")
+
+
+def test_expected_output_rejects_unhashable_kind_as_valueerror() -> None:
+    # #138: a list/dict kind must raise the same `ValueError` as any other bad
+    # kind, not a `TypeError` from the set membership test.
+    with pytest.raises(ValueError, match="kind"):
+        ExpectedOutput(kind=["exact"], value="x")  # type: ignore[arg-type]
 
 
 def test_expected_output_value_must_be_str() -> None:
