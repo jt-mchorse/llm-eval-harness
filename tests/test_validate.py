@@ -128,6 +128,29 @@ def test_accumulates_every_bad_row_not_just_the_first(tmp_path: Path) -> None:
     assert codes == ["parse", "schema", "schema"]
 
 
+def test_unhashable_kind_row_is_one_schema_finding_not_a_crash(tmp_path: Path) -> None:
+    """#138: a row whose `expected_outputs.kind` is an unhashable JSON value
+    (list/dict) used to throw a raw `TypeError` that aborted the whole
+    collecting pass. It must instead surface as a single `schema` finding while
+    the surrounding valid rows still validate."""
+    path = tmp_path / "unhashable_kind.jsonl"
+    rows = [
+        _good_row(id="valid_before"),
+        _good_row(id="bad_kind", expected_outputs=[{"kind": ["exact"], "value": "x"}]),
+        _good_row(id="valid_after"),
+    ]
+    _write_jsonl(path, rows)
+
+    report = validate_dataset(path)
+    assert not report.ok
+    assert report.n_rows == 3
+    assert report.n_valid == 2, "the two well-formed rows must still validate"
+    assert len(report.findings) == 1, f"expected 1 finding, got {report.findings}"
+    assert report.findings[0].line_no == 2
+    assert report.findings[0].code == "schema"
+    assert "invalid expected_output kind" in report.findings[0].reason
+
+
 # --- library: duplicate id --------------------------------------------------
 
 

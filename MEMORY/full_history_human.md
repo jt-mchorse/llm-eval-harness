@@ -943,3 +943,15 @@ separate consideration, behaviorally a breaking change to that CLI surface.
 **Why prioritized.** Second issue of the day run. Two parallel dogfood bug-hunts on the priority-tier zero-open-issue repos (rag-production-kit and llm-eval-harness) both came up empty after deep probing (kappa fuzz 200k, JS divergence 100k, percentile vs a NIST reference over 50k cases) — the portfolio is bug-saturated. Per the "stop after two empty hunts" rule I pivoted from bug-hunting to locking an untested public function the hunt had surfaced. Still issue-driven: filed #136, closed it same session.
 
 **Open questions / blockers.** None. A property/fuzz test against a reference impl was deferred as a possible separate low-priority follow-up; the enumerated cases already cover every branch.
+
+## 2026-07-03 — Issue #138: unhashable `expected_outputs.kind` leaked a raw TypeError instead of a clean DatasetLoadError
+**Duration:** ~25 min · **Branch:** `session/2026-07-03-0317-issue-138`
+
+- `ExpectedOutput.__post_init__` (`eval_harness/dataset.py:75`) validated `kind` with `self.kind not in VALID_KINDS`. `VALID_KINDS` is a `frozenset`, so an **unhashable** `kind` (a JSON array/object, e.g. `{"kind": []}`) raised a raw `TypeError` from the membership test — *before* the intended `ValueError`. `_validate_record`'s wrapping `except ValueError` didn't catch it, so `load_jsonl` leaked the traceback and `validate_dataset`'s collecting pass aborted entirely — exactly the failure collecting-mode exists to prevent. A hashable wrong kind (`123`) was already handled cleanly; only unhashable JSON types hit the gap.
+- **Fix:** lead the guard with `not isinstance(self.kind, str)` so the existing `invalid expected_output kind` `ValueError` fires and is wrapped into `DatasetLoadError` like every other bad kind. +4 regression tests (load_jsonl on list/dict kind → `DatasetLoadError`; the `ExpectedOutput` unit check → `ValueError`; `validate_dataset` surfaces exactly one `schema` finding while surrounding rows still validate). Reproduced firsthand before and after; suite 584 → 588, ruff + format clean.
+
+**Why this work, this session:** second issue of a NIGHT run, portfolio saturated. Ran two parallel dogfood hunts on the priority-tier zero-open-issue repos not yet hunted this cycle — `chunking-strategies-lab` came up clean after 2000+ fuzz cases per strategy; `llm-eval-harness` surfaced this. Verified the agent's finding firsthand before fixing (per the saturation guidance).
+
+**Open questions / blockers:** none — ready for review.
+
+**Next session:** continue the loop. Remaining portfolio work is JT-blocked decision-revisits (llm-cost #97, vector-search #71) and operator-verification demos.
