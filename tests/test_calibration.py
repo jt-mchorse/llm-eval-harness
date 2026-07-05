@@ -415,3 +415,45 @@ def test_render_report_escapes_pipe_in_id_and_reasoning_so_columns_dont_break():
     # The literal pipes are preserved (escaped), not dropped.
     assert "lang=py\\|framework=x" in row_line
     assert "faithful \\| grounded in prompt" in row_line
+
+
+def test_render_report_neutralizes_newline_in_id_so_the_row_stays_one_line():
+    # #142 (companion to #134): a literal newline in `row.id` is a GFM *row*
+    # delimiter — it splits the per-row cell across two physical lines and
+    # corrupts the table exactly as an unescaped pipe corrupts columns.
+    # `load_calibration` only requires `id` be a non-empty string, so a newline
+    # is reachable. The piped-and-newlined data row must stay a single physical
+    # line with the same structural-pipe count as the header. Fails pre-fix
+    # (the row split into two lines).
+    import re
+
+    from eval_harness.calibration import CalibrationResult
+    from eval_harness.judge import JudgeScore
+
+    rows = [
+        CalibrationRow(
+            id="row\n| INJ",
+            prompt="p",
+            response="r",
+            rubric="score it",
+            human_score=0.5,
+            provenance={},
+        )
+    ]
+    judge_scores = [JudgeScore(score=0.5, reasoning="fine", raw="raw")]
+    result = CalibrationResult(
+        n=1, cohens_kappa=1.0, pearson_r=1.0, judge_scores=judge_scores, rows=rows
+    )
+    md = render_report(result, judge_model="stub", threshold_kappa=0.6)
+
+    lines = md.splitlines()
+    header_line = next(line for line in lines if line.startswith("| id "))
+    inj_lines = [line for line in lines if "INJ" in line]
+
+    def unescaped_pipes(s: str) -> int:
+        return len(re.findall(r"(?<!\\)\|", s))
+
+    assert len(inj_lines) == 1, lines
+    assert unescaped_pipes(inj_lines[0]) == unescaped_pipes(header_line)
+    # The literal pipe is preserved as an escape, not dropped.
+    assert "\\| INJ" in inj_lines[0]
