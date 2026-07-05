@@ -141,6 +141,35 @@ def test_render_escapes_pipe_in_example_id_so_columns_dont_break():
     assert "lang=py\\|framework=fastapi" in row_line
 
 
+def test_render_neutralizes_newline_in_example_id_so_the_row_stays_one_line():
+    # #142 (companion to #130): a literal newline in example_id is a GFM *row*
+    # delimiter — it splits the cell across two physical lines and corrupts the
+    # table exactly as an unescaped pipe corrupts columns. `example_id` reaches
+    # here from dataset `Example.id`, and `load_jsonl` accepts any non-empty
+    # string, so a newline is reachable. The whole delta table renders across a
+    # fixed number of physical lines; the piped-and-newlined data row must be
+    # exactly one of them. Fails pre-fix (the row split into two lines).
+    md = render_delta_markdown(
+        _make_report(
+            [RowDelta("qa\n| INJ", 0.9, 0.4, -0.5, "regressed", True)],
+            _default_summary(mean_delta=-0.5, n_regressed=1, n_flagged=1),
+        )
+    )
+    lines = md.splitlines()
+    header_line = next(ln for ln in lines if ln.startswith("| status |"))
+    inj_lines = [ln for ln in lines if "INJ" in ln]
+
+    def unescaped_pipes(s: str) -> int:
+        return len(re.findall(r"(?<!\\)\|", s))
+
+    # The id contributes to exactly one physical row, and that row carries the
+    # same number of structural (unescaped) pipes as the header.
+    assert len(inj_lines) == 1, lines
+    assert unescaped_pipes(inj_lines[0]) == unescaped_pipes(header_line)
+    # The literal pipe is still preserved as an escape, not dropped.
+    assert "\\| INJ" in inj_lines[0]
+
+
 def test_ascii_renderer_is_pipe_free_so_a_piped_id_cant_misalign_it():
     # #130 scope guard: render_delta_ascii uses 2-space separators, not `|`
     # delimiters, so a pipe in example_id is a harmless literal there (and must

@@ -19,6 +19,7 @@ from pathlib import Path
 
 from eval_harness.dataset import ValidationFinding, ValidationReport
 from eval_harness.judge import Judge, JudgeScore
+from eval_harness.markdown import md_table_cell
 
 
 @dataclass(frozen=True)
@@ -419,15 +420,16 @@ def render_report(
     for row, js in zip(result.rows, result.judge_scores, strict=True):
         # `row.id` (arbitrary calibration-file string) and `js.reasoning`
         # (free-form one-sentence judge output) land in a GFM table cell.
-        # Backticks do NOT protect a literal `|`: GFM splits table cells on
-        # unescaped pipes *before* it parses inline-code spans, so a piped id or
-        # reasoning injects extra columns and corrupts the whole table's
-        # alignment. Escape `|` -> `\|` (GitHub renders `\|` as a literal pipe,
-        # inside a code span in a table too) so each cell contributes zero column
-        # delimiters — same fix as `comment._row_to_md` (#130), applied to the
-        # calibration report here (#134).
-        row_id = row.id.replace("|", "\\|")
-        reasoning = js.reasoning.replace("|", "\\|")
+        # Backticks protect neither GFM delimiter: an unescaped `|` injects an
+        # extra column (#134) and a literal newline splits the row across two
+        # physical lines (#142) — both before inline-code spans are parsed.
+        # `md_table_cell` escapes the pipe and collapses any CR/LF run so each
+        # cell contributes zero column or row delimiters. `row.id` can carry a
+        # newline (the loader only requires a non-empty string); `js.reasoning`
+        # is single-line-guaranteed by `_REASON_RE` today but shares the guard
+        # defensively so a future reasoning path can't regress the table.
+        row_id = md_table_cell(row.id)
+        reasoning = md_table_cell(js.reasoning)
         lines.append(
             f"| `{row_id}` | {row.human_score:.2f} | {js.score:.2f} | {abs(row.human_score - js.score):.2f} | {reasoning} |"
         )
