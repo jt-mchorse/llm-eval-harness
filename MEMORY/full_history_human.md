@@ -965,3 +965,15 @@ separate consideration, behaviorally a breaking change to that CLI surface.
 **Open questions / blockers:** none — ready for review. This doc adapts the lock to the bare-symbol + `submodule.symbol` styles here (not emb_shootout's fully-qualified `pkg.mod.sym`), so the propagation is per-repo, not copy-paste.
 
 **Next session:** continue #55 propagation to the remaining repos (rag-production-kit, llm-cost-optimizer, chunking-strategies-lab, nextjs [TS: exported-name check], etc.), one small PR each. Remaining non-propagation work stays JT-blocked (decision-revisits llm-cost #97 / vector-search #71; operator secret config portfolio-ops #17).
+
+## 2026-07-05 — Issue #142: GFM table emitters don't escape newlines in free-form id cells
+**Duration:** ~35 min · **Branch:** `session/2026-07-05-1912-issue-142` · **PR:** #143
+
+- Both markdown-table emitters (`comment._row_to_md`, `calibration.render_report`) escaped the GFM column delimiter `|` (per #130/#134) in free-form id cells but left the row delimiter `\r`/`\n` intact. A literal newline in `row.id` or `example_id` splits the row across two physical lines and corrupts the table exactly as an unescaped pipe corrupts columns. Both cells are reachable — `load_calibration` and `load_jsonl` accept any non-empty string id — and both were reproduced firsthand before the fix.
+- The `|`-only escape was duplicated inline at three call sites, which is precisely why this class keeps recurring (a new emitter copies the pipe line and forgets the newline). Fixed by centralizing in a new internal `eval_harness/markdown.py` `md_table_cell()` that escapes `|` and collapses any CR/LF run to a single space, and routing all three sites through it. Added 7 tests (5 helper unit + 1 newline-lock per emitter). 590 → 597 passing, ruff clean.
+
+**Why this work, this session:** portfolio is deeply saturated — Phase A merged three ready collision/parity-lens PRs and found nothing else auto-mergeable; the audit was clean; and rag-production-kit + nextjs dogfood hunts both came up empty. The one productive vein was the recurring GFM-table escaping class, which a targeted hunt surfaced (same class as #130/#134/#79) with two firsthand-reproduced findings.
+
+**Open questions / blockers:** none — ready for review.
+
+**Next session:** correctness surface is saturated; remaining open items are JT-gated decision-revisits (lco #97 draft #124 / D-013, vsas #71) and display-blocked demo captures. The productive lens remains collision/parity/GFM and re-examining hunter-dismissed "design choice" leads against objective invariants.
