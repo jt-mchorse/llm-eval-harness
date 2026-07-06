@@ -985,3 +985,14 @@ A Phase-A dogfood doc-drift hunt (run-the-shipped-example lens) caught the READM
 Fixed the README line to the real output (no fabricated numbers — copied from the shipped command) and added a 7th pairing to `test_readme_defaults_snapshot.py` that recomputes drift on the committed fixtures with the judge stub and asserts the README line, closing the lock gap. Full suite green, ruff clean. PR #145, ready.
 
 **Why prioritized:** the static issue queue is still exhausted (all open issues are JT-gated decision-revisits or headless demo captures), so work came from a fresh-lens hunt; this was the only reproducible finding across three parallel hunts (encoding-unicode and numeric-boundary both came up empty, reconfirming saturation on those axes).
+
+## 2026-07-06 — Issue #146: ship a PEP 561 `py.typed` marker for `eval_harness`
+**Duration:** ~15 min · **Branch:** `session/2026-07-06-2321-issue-146` · **PR:** #147
+
+- `eval_harness` is the flagship "imported by every repo" package (11 of 12 modules typed) with a real committed downstream consumer — `rag-production-kit` pins a git dep on `eval-harness` and its `evals/run_eval.py` mirrors `eval_harness.runner.RunResult`. But it shipped no PEP 561 `py.typed` marker, so downstream mypy/pyright saw `import eval_harness` as untyped. Added the marker, the `Typing :: Typed` classifier, and a two-axis regression test; verified firsthand the wheel ships the marker. 600 passing, ruff clean.
+
+**Why this work, this session:** second issue of the DAY loop and the higher-value of the two `py.typed` fixes — this is the one repo whose gap concretely bites an in-portfolio consumer today. Correctness surface is saturated (five empty fresh-lens hunts this run), so the productive vein was an objective packaging-correctness sweep.
+
+**Open questions / blockers:** none — ready for review.
+
+**Next session:** the `py.typed` lens is now closed for the two repos that matter (lco, leh — the only two Python packages imported as libraries by siblings). Do NOT PR the marker for ems/vsas/prs/chunking — cosmetic there, not consumer-biting, would be sibling-churn.

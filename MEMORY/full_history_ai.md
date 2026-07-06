@@ -1656,3 +1656,24 @@ context_for_next_session:
 decisions_made: []
 followups: []
 ---
+
+---
+session: 2026-07-06T23:33Z
+issue: 146
+focus: ship_pep_561_py_typed_marker_so_downstream_importers_see_eval_harness_types
+phase: day_session_multi_issue_loop_phase_b_issue_2
+duration_min: 15
+delta:
+  files_changed: 2   # pyproject.toml (Typing::Typed classifier) + tests/test_py_typed_marker.py
+  files_added: 1     # eval_harness/py.typed marker
+  tests_added: 2     # test_py_typed_is_a_packaged_resource + test_pyproject_declares_typed_classifier
+context_for_next_session:
+  - eval_harness_flagship_imported_by_every_repo_11_of_12_modules_type_hinted_real_committed_downstream_consumer_rag_production_kit_pins_git_dep_eval_harness_and_evals_run_eval_py_mirrors_eval_harness_runner_runresult_but_shipped_no_py_typed_marker_so_downstream_mypy_pyright_saw_import_eval_harness_untyped
+  - fix_identical_to_lco_127_add_empty_eval_harness_py_typed_plus_typing_typed_classifier_plus_two_axis_regression_test_resource_lookup_and_classifier_presence
+  - verified_firsthand_python_m_build_wheel_includes_eval_harness_py_typed_hatchling_default
+  - full_pytest_600_passed_including_2_new_ruff_check_clean_ruff_format_check_50_files_clean
+  - py_typed_lens_now_DONE_for_the_2_repos_that_matter_lco_127_pr_128_and_leh_146_pr_here_these_are_the_only_2_python_packages_imported_as_libraries_by_siblings
+  - do_NOT_pr_py_typed_for_ems_vsas_prs_chunking_they_are_research_lab_repos_not_imported_as_libraries_pring_them_is_sibling_churn_the_marker_gap_there_is_cosmetic_not_consumer_biting
+decisions_made: []
+followups: []
+---
