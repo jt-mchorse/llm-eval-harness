@@ -977,3 +977,11 @@ separate consideration, behaviorally a breaking change to that CLI surface.
 **Open questions / blockers:** none — ready for review.
 
 **Next session:** correctness surface is saturated; remaining open items are JT-gated decision-revisits (lco #97 draft #124 / D-013, vsas #71) and display-blocked demo captures. The productive lens remains collision/parity/GFM and re-examining hunter-dismissed "design choice" leads against objective invariants.
+
+## 2026-07-06 — Drift example stdout was stale (issue #144, ~30 min)
+
+A Phase-A dogfood doc-drift hunt (run-the-shipped-example lens) caught the README's Drift-detection example quoting stale stdout numbers: `length=0.4012 / embedding=0.2783 / judge=0.3094`. Running the exact documented `eval-harness drift ... --judge-stub` command against the committed fixtures on a fresh clone deterministically prints `length=0.729 / embedding=0.156 / judge=0.896` — the 4-decimal example predated the JSD/D-014 rework and nothing pinned it, so it drifted silently. Same class as the earlier #118/#119 stale-example fixes.
+
+Fixed the README line to the real output (no fabricated numbers — copied from the shipped command) and added a 7th pairing to `test_readme_defaults_snapshot.py` that recomputes drift on the committed fixtures with the judge stub and asserts the README line, closing the lock gap. Full suite green, ruff clean. PR #145, ready.
+
+**Why prioritized:** the static issue queue is still exhausted (all open issues are JT-gated decision-revisits or headless demo captures), so work came from a fresh-lens hunt; this was the only reproducible finding across three parallel hunts (encoding-unicode and numeric-boundary both came up empty, reconfirming saturation on those axes).

@@ -17,6 +17,11 @@ Pairings locked:
 4. "κ ≥ 0.6 threshold" ↔ `--threshold-kappa` default in eval_harness.cli.
 5. "k=8 cluster centroids" ↔ cluster_k default in eval_harness.drift.compute_drift.
 6. `<!-- eval-harness:sticky-comment -->` marker ↔ eval_harness.comment.STICKY_MARKER.
+7. Drift-detection `# stdout: length=… embedding=… judge=…` example ↔ the
+   live `:.3f` scores + statuses of `compute_drift` on the committed drift
+   fixtures with the `_judge_stub`. This example silently drifted once
+   (#144: it predated the JSD/D-014 rework) precisely because it was the one
+   README numeric example nothing pinned.
 """
 
 from __future__ import annotations
@@ -29,12 +34,15 @@ from pathlib import Path
 
 from eval_harness import drift
 from eval_harness.comment import STICKY_MARKER
+from eval_harness.drift import _judge_stub, _load_inputs_jsonl, compute_drift
 from eval_harness.runner import DEFAULT_THRESHOLD_DROP
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 README = REPO_ROOT / "README.md"
 PYPROJECT = REPO_ROOT / "pyproject.toml"
 CALIBRATION = REPO_ROOT / "fixtures" / "calibration.jsonl"
+DRIFT_GOLDEN = REPO_ROOT / "fixtures" / "drift" / "golden_inputs.jsonl"
+DRIFT_CANDIDATE = REPO_ROOT / "fixtures" / "drift" / "shifted.jsonl"
 
 REGEN_HINT = (
     "Source is the truth: update the README quote to match the new live "
@@ -161,6 +169,54 @@ def test_sticky_comment_marker_matches_comment_constant() -> None:
         f"README must contain the sticky-comment marker literal "
         f"{STICKY_MARKER!r} (currently quoted in the GitHub Action section "
         f"as `{STICKY_MARKER}`). Source is eval_harness.comment.STICKY_MARKER. "
+        f"{REGEN_HINT}"
+    )
+
+
+def test_drift_example_stdout_matches_live_computation() -> None:
+    """README's Drift-detection `# stdout:` example must equal the live
+    `compute_drift` output on the committed fixtures with the judge stub.
+
+    This mirrors exactly what `eval_harness.drift.cli` prints for the
+    documented command (`--judge-stub`, default `cluster_k=8`, `:.3f`
+    formatting), so the README example can never silently desync from the
+    real deterministic output again (#144).
+    """
+    body = _readme()
+    match = re.search(
+        r"# stdout: "
+        r"length=([\d.]+) \((\w+)\), "
+        r"embedding=([\d.]+) \((\w+)\), "
+        r"judge=([\d.]+) \((\w+)\)",
+        body,
+    )
+    assert match, (
+        "README Drift-detection section must quote the example output as "
+        "'# stdout: length=<N> (<status>), embedding=<N> (<status>), "
+        "judge=<N> (<status>)' so this snapshot can lock it."
+    )
+    readme = {
+        "length": (match.group(1), match.group(2)),
+        "embedding": (match.group(3), match.group(4)),
+        "judge": (match.group(5), match.group(6)),
+    }
+
+    # Replicate `drift.cli`'s documented invocation exactly.
+    golden = _load_inputs_jsonl(DRIFT_GOLDEN)
+    candidate = _load_inputs_jsonl(DRIFT_CANDIDATE)
+    report = compute_drift(golden, candidate, judge_score_fn=_judge_stub, cluster_k=8)
+    assert report.judge is not None, (
+        "The judge stub was supplied, so the judge axis must be scored — "
+        "the README example quotes a judge= value."
+    )
+    live = {
+        "length": (f"{report.length.drift_score:.3f}", report.length.status),
+        "embedding": (f"{report.embedding.drift_score:.3f}", report.embedding.status),
+        "judge": (f"{report.judge.drift_score:.3f}", report.judge.status),
+    }
+    assert readme == live, (
+        f"README drift-example stdout {readme} does not match the live "
+        f"compute_drift output {live} on the committed drift fixtures. "
         f"{REGEN_HINT}"
     )
 
