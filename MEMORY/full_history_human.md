@@ -1009,3 +1009,16 @@ Fixed the README line to the real output (no fabricated numbers — copied from 
 **Open questions / blockers:** none.
 
 **Next session:** `llm-cost-optimizer#129` is the sibling gate — its 5 mypy errors are all the redis `ResponseT` sync/async union in `semantic_cache.py`.
+
+## 2026-07-07 — Issue #150: Non-object JSON payloads break the CLI exit-2 contract
+**Duration:** ~30 min · **Branch:** `session/2026-07-07-1514-issue-150`
+
+- `load_run_result_from_json` and `DeltaReport.from_json`/`RowDelta.from_json` did `json.loads()` then `payload.get(...)`/`r["example_id"]` with no `isinstance(dict)` guard, so a valid-JSON-but-not-an-object input (bare list/number/string/null, or a non-object row) leaked a raw `AttributeError`/`TypeError` and exited **1** — the code reserved for findings/regression — instead of the documented exit **2** for malformed input. Reproduced firsthand via `diff-json` and `comment`.
+- Added four `isinstance(payload, dict)` → `ValueError` guards (top-level + per-row in both loaders), mirroring `dataset._validate_record`; the CLI's existing `except ValueError → _fail` translates them to a clean `::error::` + exit 2.
+- Parametrized regression test locks exit-2 for both subcommands on top-level and per-row non-object inputs. Full suite 601 passed; ruff clean.
+
+**Why this work, this session:** Same isinstance-after-`json.loads` loader-parity vein as prs#108/chunking#110; the field-by-field guards (#120/#122/#124/#138) left the object-shape gap open. Found by a parallel dogfood hunt, verified firsthand.
+
+**Open questions / blockers:** none.
+
+**Next session:** judge/calibration/drift/dataset audited and saturated — this object-shape guard closes the last open loader-parity gap in the CLI read path.
