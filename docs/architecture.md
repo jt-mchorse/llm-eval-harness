@@ -191,6 +191,12 @@ alias was visible in `--help`, locked by
   through one package-level helper (D-015) that writes to
   `<dest>.tmp`, `fsync`s, and `os.replace`s — operators never see a
   half-written report from a Ctrl-C mid-run.
+- **Type-checking gate (`[tool.mypy]`, #148).** The annotations shipped
+  via the `py.typed` marker (#146) are machine-checked by a non-strict
+  `mypy` gate (D-016) run in CI's lint job and locked by
+  `tests/test_mypy_clean.py`, so they can't silently drift from the code.
+  No blanket `ignore_missing_imports`; the optional `anthropic` SDK is
+  the one per-module override.
 
 ## What's deliberately not in the harness
 
