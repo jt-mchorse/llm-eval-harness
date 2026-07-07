@@ -175,6 +175,12 @@ class RowDelta:
         produced delta artifact can carry one, and it would otherwise
         render as ``inf`` / ``+nan`` in the posted PR comment (#89).
         """
+        # A non-object row (bare string/number in the delta `rows` array)
+        # otherwise reached `payload["example_id"]` and raised a raw `TypeError`
+        # (exit 1) — the per-row sibling of the top-level delta guard. Reject it
+        # as a clean ValueError so the exit-2 contract holds.
+        if not isinstance(payload, dict):
+            raise ValueError(f"each delta row must be a JSON object; got {type(payload).__name__}")
         example_id = payload["example_id"]
         # Mirror the `load_run_result_from_json` guard on the comment path: a
         # present-but-null/non-string example_id otherwise flows straight into
@@ -257,6 +263,15 @@ class DeltaReport:
         ``json.loads`` and would otherwise render as ``nan`` (threshold
         line) / ``+nan`` (mean Δ) in the posted PR comment (#89).
         """
+        # A bare list/number/string/null is valid JSON but not the
+        # `DeltaReport.to_json()` object shape; without this guard `payload.get`
+        # raised a raw `AttributeError` (exit 1), bypassing the exit-2 contract
+        # `_run_comment` honors for ValueError/KeyError. Reject it loudly, the
+        # sibling of `load_run_result_from_json`'s top-level guard.
+        if not isinstance(payload, dict):
+            raise ValueError(
+                f"delta JSON top-level value must be a JSON object; got {type(payload).__name__}"
+            )
         threshold_drop = float(payload.get("threshold_drop", DEFAULT_THRESHOLD_DROP))
         if not math.isfinite(threshold_drop):
             raise ValueError(
@@ -569,8 +584,24 @@ def load_run_result_from_json(path: str | Path) -> StoredRun:
     """
     raw = Path(path).read_text(encoding="utf-8")
     payload = json.loads(raw)
+    # `json.loads` returns whatever JSON the file holds — a bare list, number,
+    # string, or null are all valid JSON but not the `RunResult.to_json()` object
+    # shape. Without this guard `payload.get(...)` raised a raw `AttributeError`
+    # (exit 1), bypassing the exit-2 clean-failure contract `_run_diff_json`
+    # honors for ValueError/KeyError but not AttributeError. Reject it loudly,
+    # mirroring `dataset._validate_record`'s "top-level value must be JSON object".
+    if not isinstance(payload, dict):
+        raise ValueError(
+            f"run JSON top-level value must be a JSON object; got {type(payload).__name__}"
+        )
     rows: dict[str, tuple[float, str]] = {}
     for r in payload.get("rows", []):
+        # A non-object row (a bare string/number in the `rows` array) otherwise
+        # reached `r["example_id"]` and raised a raw `TypeError` (exit 1) — the
+        # per-row sibling of the top-level guard above. Reject it as a clean
+        # ValueError so the exit-2 contract holds.
+        if not isinstance(r, dict):
+            raise ValueError(f"each run row must be a JSON object; got {type(r).__name__}")
         example_id = r["example_id"]
         # `example_id` is the dict key `diff_runs` joins on, but unlike its
         # sibling load-bearing fields (`run_id`, `mean_score`, `n_rows`, per-row

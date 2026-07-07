@@ -575,3 +575,60 @@ def test_calibrate_load_translation_does_not_swallow_downstream_valueerror(
 
     with pytest.raises(ValueError, match="downstream sentinel"):
         main(["calibrate", "--calibration", str(tmp_path / "ignored.jsonl")])
+
+
+# --- #150: valid-JSON-but-not-an-object payloads must not escape as a raw
+# AttributeError/TypeError -----------------------------------------------------
+# `json.loads` happily returns a bare list/number/string/null; the loaders then
+# did `payload.get(...)` / `r["example_id"]` with no `isinstance(..., dict)`
+# guard, leaking an uncaught AttributeError/TypeError (exit 1) that the CLI catch
+# blocks — tuned for ValueError/KeyError — never translated. The four guards
+# (top-level + per-row in both the run-JSON and delta-JSON loaders) turn every
+# shape into a clean exit-2, mirroring `dataset._validate_record`.
+
+
+@pytest.mark.parametrize("bad", ["[1, 2, 3]", "42", '"a string"', "null"])
+def test_diff_json_non_object_payload_exits_two(tmp_path: Path, capsys, bad: str) -> None:
+    cur = tmp_path / "cur.json"
+    cur.write_text(bad, encoding="utf-8")
+    base = tmp_path / "base.json"
+    _run_result_json(base, run_id="b")
+    rc = main(["diff-json", "--current", str(cur), "--baseline", str(base)])
+    assert rc == 2
+    assert "::error::" in capsys.readouterr().err
+
+
+def test_diff_json_non_object_row_exits_two(tmp_path: Path, capsys) -> None:
+    # A `rows` array holding a bare string reached `r["example_id"]` and raised
+    # `TypeError: string indices must be integers` (exit 1). Now a clean exit 2.
+    cur = tmp_path / "cur.json"
+    cur.write_text(
+        '{"run_id":"c","started_at":"t","suite":"s","mean_score":0.9,"rows":["x"]}',
+        encoding="utf-8",
+    )
+    base = tmp_path / "base.json"
+    _run_result_json(base, run_id="b")
+    rc = main(["diff-json", "--current", str(cur), "--baseline", str(base)])
+    assert rc == 2
+    assert "::error::" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("bad", ["[1, 2, 3]", "42", '"a string"', "null"])
+def test_comment_non_object_delta_exits_two(tmp_path: Path, capsys, bad: str) -> None:
+    # `DeltaReport.from_json` did `payload.get(...)` on the parsed value; a bare
+    # list/number/string/null raised an uncaught AttributeError (exit 1).
+    delta = tmp_path / "delta.json"
+    delta.write_text(bad, encoding="utf-8")
+    rc = main(_comment_dry_run(delta))
+    assert rc == 2
+    assert "::error::" in capsys.readouterr().err
+
+
+def test_comment_non_object_delta_row_exits_two(tmp_path: Path, capsys) -> None:
+    # A non-object entry in the delta `rows` array reached `RowDelta.from_json`'s
+    # `payload["example_id"]` and raised a raw TypeError (exit 1). Now exit 2.
+    delta = tmp_path / "delta.json"
+    delta.write_text('{"rows": ["x"]}', encoding="utf-8")
+    rc = main(_comment_dry_run(delta))
+    assert rc == 2
+    assert "::error::" in capsys.readouterr().err
