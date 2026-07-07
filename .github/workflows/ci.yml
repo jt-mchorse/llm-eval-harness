@@ -26,6 +26,10 @@ jobs:
       - run: pip install -e '.[dev]'
       - run: ruff check .
       - run: ruff format --check .
+      # Type-check the annotations shipped via py.typed (#146, #148) so
+      # they stay honest against the code. Config lives in pyproject.toml
+      # ([tool.mypy]); non-strict baseline (D-016).
+      - run: mypy
 
   test:
     # Issue #7 acceptance criterion: tested on macOS and ubuntu-latest.

@@ -160,7 +160,7 @@ class AnthropicBackend:
                 raise ValueError(f"{name} must be a finite number >= 0.0; got {val!r}")
 
         try:
-            import anthropic  # type: ignore[import-not-found]
+            import anthropic
         except ImportError as e:
             raise ImportError(
                 "AnthropicBackend requires the optional `judge` extra. "

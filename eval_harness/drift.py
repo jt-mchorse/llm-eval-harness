@@ -244,8 +244,8 @@ def _kmeans(
         for i, v in enumerate(vectors):
             best = 0
             best_sim = -2.0
-            for ci, c in enumerate(centroids):
-                sim = _cosine(v, c)
+            for ci, centroid in enumerate(centroids):
+                sim = _cosine(v, centroid)
                 if sim > best_sim:
                     best_sim = sim
                     best = ci

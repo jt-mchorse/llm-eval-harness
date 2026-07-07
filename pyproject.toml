@@ -38,6 +38,9 @@ dev = [
   # Powers tests/test_workflows_yaml_parseable.py (#60), the inverse
   # safety net for the 21-day silent CI outage closed in portfolio-ops#27.
   "pyyaml>=6.0",
+  # Type-checks the annotations shipped via py.typed (#146) so they can't
+  # silently drift from the code; gated in CI and tests/test_mypy_clean.py (#148).
+  "mypy>=1.10",
 ]
 
 [project.scripts]
@@ -62,6 +65,23 @@ addopts   = "-ra -q"
 markers = [
   "eval(suite, dataset, answer_source, judge_backend, threshold=0.6, rubric=None): run as one eval item per dataset row (see eval_harness.pytest_plugin).",
 ]
+
+[tool.mypy]
+# Non-strict baseline gate (#148, D-016). The goal is to keep the shipped
+# py.typed annotations (#146) honest against the code, not to enforce full
+# strictness — tightening (disallow_untyped_defs et al.) is a follow-up.
+python_version = "3.11"
+files = ["eval_harness"]
+# No blanket `ignore_missing_imports`, so a mistyped import surfaces. The
+# only external import is the optional `anthropic` SDK; the per-module
+# override below silences it when the `judge` extra isn't installed,
+# without an inline ignore that would go stale when it *is* installed.
+warn_unused_ignores = true
+warn_redundant_casts = true
+
+[[tool.mypy.overrides]]
+module = "anthropic.*"
+ignore_missing_imports = true
 
 [tool.ruff]
 line-length = 100
