@@ -996,3 +996,16 @@ Fixed the README line to the real output (no fabricated numbers — copied from 
 **Open questions / blockers:** none — ready for review.
 
 **Next session:** the `py.typed` lens is now closed for the two repos that matter (lco, leh — the only two Python packages imported as libraries by siblings). Do NOT PR the marker for ems/vsas/prs/chunking — cosmetic there, not consumer-biting, would be sibling-churn.
+
+## 2026-07-07 — Issue #148: Non-strict mypy gate for eval_harness
+**Duration:** ~55 min · **Branch:** `session/2026-07-07-0308-issue-148`
+
+- Added a non-strict `mypy` gate (`[tool.mypy]` in `pyproject.toml`, `mypy` in the `dev` extra, a step in the `ci.yml` lint job, and `tests/test_mypy_clean.py` locking it) so the annotations shipped via the #146 `py.typed` marker can't silently drift from the code.
+- Triaged all 7 pre-existing errors with real fixes: renamed a k-means loop variable in `drift.py` reused for both a centroid vector and a cluster index; annotated the optional `judge_score` as `JudgeScore | None` and guarded `row.id` against a `None` row (removing a latent `AttributeError`) in `pytest_plugin.py`; `# type: ignore`'d the genuinely-dynamic `_eval_failure_extra` monkey-patch; and dropped a now-redundant import ignore in `judge.py`.
+- Config declines a blanket `ignore_missing_imports` (so typo'd imports still surface) and scopes a per-module override to the optional `anthropic` SDK — verified clean both with and without it installed. Full suite: 601 passed.
+
+**Why this work, this session:** Objective, pre-filed follow-up (#148) from the #146 py.typed work; the gate is the machine-checked half of the "annotations are honest" contract.
+
+**Open questions / blockers:** none.
+
+**Next session:** `llm-cost-optimizer#129` is the sibling gate — its 5 mypy errors are all the redis `ResponseT` sync/async union in `semantic_cache.py`.
