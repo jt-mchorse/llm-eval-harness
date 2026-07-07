@@ -207,3 +207,18 @@ Strategic decisions for this repo, with reasoning. Append-only — superseded de
 **Reversibility:** Cheap. The helper is two dozen lines and a stable API; if a future evolution wants per-module variants, the public symbol can call into private ones.
 
 **Related issues:** #48, #50
+
+## D-016 — Non-strict mypy gate as the baseline strictness bar (2026-07-07)
+**Decision:** Adopt a non-strict `mypy` gate for `eval_harness` as the baseline strictness bar, wired into CI (`ci.yml` lint job) and locked by a test (`tests/test_mypy_clean.py`). Config lives in `pyproject.toml` `[tool.mypy]`: no blanket `ignore_missing_imports`, a per-module override for the optional `anthropic` SDK only, and `warn_unused_ignores` + `warn_redundant_casts` on.
+
+**Why:** #146 shipped a `py.typed` marker so `eval_harness`'s annotations are visible to downstream type-checkers (notably `rag-production-kit`, which mirrors `eval_harness.runner.RunResult`), but nothing machine-checked them in this repo — they could silently drift from the code. A gate keeps them honest. Non-strict (rather than full strict mode) is the right starting bar: the 7 pre-existing errors were mostly annotation-shape and one latent `AttributeError`, none needing strict-mode machinery; forcing `disallow_untyped_defs` now would generate churn without correctness value. Declining the blanket `ignore_missing_imports` keeps a mistyped import surfacing; the per-module override scoped to `anthropic.*` handles the one genuinely-optional dependency and, being config rather than an inline ignore, stays clean whether or not the `judge` extra is installed (verified both ways).
+
+**Alternatives considered:**
+- Full strict mode now — rejected; churn without correctness value at this stage. Tightening is a follow-up.
+- Blanket `ignore_missing_imports = true` — rejected; it would silently swallow a typo'd import. Only `anthropic` needs the escape hatch, so a per-module override is more precise.
+- No gate (leave annotations unchecked) — rejected; that's exactly the silent-drift failure the py.typed marker's value depends on avoiding.
+- pyright instead of mypy — rejected; mypy is already the portfolio's Python convention and installs cleanly into the existing `dev` extra.
+
+**Reversibility:** Cheap. The strictness bar is a few config lines; tighten or swap the checker in a follow-up (a mypy-strict or pyright migration would be its own decision).
+
+**Related issues:** #146, #148

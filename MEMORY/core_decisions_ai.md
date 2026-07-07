@@ -135,3 +135,12 @@
   reversibility: cheap
   related_issues: [#48, #50]
   superseded_by: null
+
+- id: D-016
+  date: 2026-07-07
+  decision: non_strict_mypy_gate_as_baseline_strictness_bar
+  rationale: py_typed_146_ships_annotations_downstream_but_nothing_machine_checked_them_here_so_they_could_silently_drift_non_strict_baseline_keeps_them_honest_without_the_churn_of_full_strict_mode_no_blanket_ignore_missing_imports_so_typod_imports_still_surface_per_module_override_only_for_optional_anthropic_sdk_warn_unused_ignores_plus_warn_redundant_casts_on
+  alternatives_rejected: [full_strict_mode_disallow_untyped_defs_now, blanket_ignore_missing_imports, no_gate_leave_annotations_unchecked, pyright_instead_of_mypy]
+  reversibility: cheap
+  related_issues: [#146, #148]
+  superseded_by: null

@@ -42,7 +42,7 @@ breaking those integrations.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -183,8 +183,11 @@ def pytest_pyfunc_call(pyfuncitem: pytest.Function):
 
     # Body passed (or was empty). Run the threshold check now, inside
     # the call phase, so a violation is a `failed` outcome.
-    score: JudgeScore = pyfuncitem.funcargs.get("judge_score") or getattr(
-        pyfuncitem, "_eval_judge_score", None
+    # `funcargs` is typed `dict[str, object]`; the `judge_score` fixture
+    # yields a `JudgeScore` (or is absent, hence the `| None`).
+    score = cast(
+        "JudgeScore | None",
+        pyfuncitem.funcargs.get("judge_score") or getattr(pyfuncitem, "_eval_judge_score", None),
     )
     if score is None:
         return  # judge_score fixture wasn't triggered (e.g., no body referenced it)
@@ -193,8 +196,9 @@ def pytest_pyfunc_call(pyfuncitem: pytest.Function):
         row = getattr(pyfuncitem, "_eval_row", None)
         response = getattr(pyfuncitem, "_eval_response", None)
         expected = [eo.value for eo in row.expected_outputs] if row is not None else []
+        row_id = row.id if row is not None else None
         raise AssertionError(
-            f"eval_row.id={row.id!r} score={score.score:.3f} "
+            f"eval_row.id={row_id!r} score={score.score:.3f} "
             f"< threshold={spec.threshold:.3f}\n"
             f"  expected outputs: {expected}\n"
             f"  actual response:  {response!r}\n"
@@ -249,7 +253,10 @@ def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo[Any]):
     # The hook can't directly edit the report (it hasn't been built yet
     # at when=="call"); stash the extra block on the item so the
     # `pytest_runtest_logreport` consumer below can attach it.
-    item._eval_failure_extra = "\n".join(extra)
+    # `_eval_failure_extra` is a dynamic attribute stashed on the pytest
+    # Item for the logreport consumer to read; pytest's Item type doesn't
+    # declare it (documented monkey-patch plugin pattern).
+    item._eval_failure_extra = "\n".join(extra)  # type: ignore[attr-defined]
 
 
 def pytest_runtest_logreport(report: pytest.TestReport):
