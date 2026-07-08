@@ -157,7 +157,7 @@ def judge_score(
     return score
 
 
-@pytest.hookimpl(hookwrapper=True)
+@pytest.hookimpl(wrapper=True)
 def pytest_pyfunc_call(pyfuncitem: pytest.Function):
     """Wrap each eval-marked test call to add the threshold assertion.
 
@@ -165,21 +165,29 @@ def pytest_pyfunc_call(pyfuncitem: pytest.Function):
     teardown) keeps the threshold check inside the test's "call" phase,
     so a violation surfaces as a ``failed`` outcome rather than an
     ``error`` (which is what a fixture-teardown AssertionError counts as).
+
+    This is a **new-style** wrapper (``wrapper=True``): ``result = yield``
+    re-raises a body failure directly, and a threshold ``raise`` here
+    propagates as an ordinary call-phase exception. The earlier
+    ``hookwrapper=True`` (old-style) form raised the ``AssertionError``
+    *after* ``yield``, i.e. during the wrapper's teardown — which modern
+    pluggy (>= 1.6, bundled with pytest 8/9) reports as a
+    ``PluggyTeardownRaisedWarning`` on every violation, and under
+    ``-W error`` / ``filterwarnings = error`` re-surfaces the failure as
+    that warning class, burying the structured row/score/reasoning block
+    the plugin exists to deliver (#152). New-style keeps the failure a
+    clean ``AssertionError`` on all warning configs.
     """
     marker = pyfuncitem.get_closest_marker("eval")
     if marker is None:
         # Not an eval test — pass through unchanged.
-        yield
-        return
+        return (yield)
 
-    outcome = yield  # run the user's test body
-    # If the body already failed, surface that — the row + score context
-    # is already attached by the judge_score fixture, so pytest's normal
-    # failure rendering shows the AssertionError plus our stashed extras.
-    try:
-        outcome.get_result()
-    except BaseException:  # noqa: BLE001 — re-raise after body-failure path
-        raise
+    # Run the user's test body. In a new-style wrapper, ``yield`` re-raises
+    # a body failure directly, so the body-failure path needs no explicit
+    # re-raise: the row + score context stashed by the judge_score fixture
+    # is surfaced by pytest's normal failure rendering.
+    result = yield
 
     # Body passed (or was empty). Run the threshold check now, inside
     # the call phase, so a violation is a `failed` outcome.
@@ -190,7 +198,7 @@ def pytest_pyfunc_call(pyfuncitem: pytest.Function):
         pyfuncitem.funcargs.get("judge_score") or getattr(pyfuncitem, "_eval_judge_score", None),
     )
     if score is None:
-        return  # judge_score fixture wasn't triggered (e.g., no body referenced it)
+        return result  # judge_score fixture wasn't triggered (e.g., no body referenced it)
     spec: _EvalSpec = getattr(pyfuncitem, "_eval_spec_cached", None) or _read_marker(marker)
     if score.score < spec.threshold:
         row = getattr(pyfuncitem, "_eval_row", None)
@@ -204,6 +212,7 @@ def pytest_pyfunc_call(pyfuncitem: pytest.Function):
             f"  actual response:  {response!r}\n"
             f"  judge reasoning:  {score.reasoning!r}"
         )
+    return result
 
 
 @pytest.fixture(autouse=True)
