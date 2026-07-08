@@ -108,6 +108,76 @@ def test_marker_threshold_failure_includes_row_context(pytester: pytest.Pytester
     assert "weak." in out
 
 
+def _write_low_scoring_eval(pytester: pytest.Pytester) -> None:
+    """A single eval test scoring 0.10 against threshold 0.5 (always fails)."""
+    dataset = pytester.path / "sample.jsonl"
+    _write_sample_dataset(dataset)
+    pytester.makepyfile(
+        f"""
+        import pytest
+        from eval_harness.runner import DatasetEchoSource
+
+        class _LowBackend:
+            def complete(self, system, user):
+                return "SCORE: 0.10\\nREASONING: weak."
+
+        @pytest.mark.eval(
+            suite="demo",
+            dataset=r"{dataset}",
+            answer_source=DatasetEchoSource(),
+            judge_backend=_LowBackend(),
+            threshold=0.5,
+        )
+        def test_demo(eval_row):
+            pass  # body intentionally empty; the plugin enforces threshold
+        """
+    )
+
+
+def test_threshold_violation_emits_no_teardown_warning(pytester: pytest.Pytester) -> None:
+    """#152: raising the threshold assertion must not trip PluggyTeardownRaisedWarning.
+
+    The old-style ``hookwrapper=True`` form raised the AssertionError after
+    ``yield`` (in the wrapper's teardown); modern pluggy flags that on every
+    violation. The new-style ``wrapper=True`` form raises inside the call
+    phase, so a violation is a plain failed test with no spurious warning.
+    """
+    _write_low_scoring_eval(pytester)
+    result = pytester.runpytest("-v")
+    # A violation is a plain failed test with ZERO warnings. The old
+    # teardown-raise produced one PluggyTeardownRaisedWarning per violation
+    # (warnings=2 here). Asserting the warning *count* is robust — a substring
+    # scan of stdout would false-match the plugin docstring rendered in the
+    # failing test's traceback.
+    result.assert_outcomes(failed=2, warnings=0)
+
+
+def test_threshold_violation_is_clean_assertionerror_under_warnings_as_errors(
+    pytester: pytest.Pytester,
+) -> None:
+    """#152: under ``-W error`` a violation stays a clean AssertionError.
+
+    With the old teardown-raise, ``-W error`` re-surfaced the failure as
+    ``pluggy.PluggyTeardownRaisedWarning`` and buried the structured
+    row/score/reasoning block in the warning body. New-style keeps the
+    failure attributed to the AssertionError with the diagnostic intact.
+    """
+    _write_low_scoring_eval(pytester)
+    result = pytester.runpytest("-v", "-W", "error")
+    result.assert_outcomes(failed=2)
+    # The failure must NOT be the pluggy teardown warning promoted to an error.
+    # The old code's crash line was ``E  pluggy.PluggyTeardownRaisedWarning: ...``;
+    # match on the dotted ``pluggy.`` prefix, which the plugin docstring (rendered
+    # in the traceback) never produces — it wraps "pluggy" and the class name onto
+    # separate lines, so this is immune to docstring pollution.
+    result.stdout.no_fnmatch_line("*pluggy.PluggyTeardownRaisedWarning*")
+    # The structured row/score/reasoning block still surfaces in the failure body.
+    out = result.stdout.str()
+    assert "score=0.100" in out
+    assert "threshold=0.500" in out
+    assert "weak." in out
+
+
 def test_marker_missing_required_kwarg_raises_at_collection(pytester: pytest.Pytester) -> None:
     pytester.makepyfile(
         """
