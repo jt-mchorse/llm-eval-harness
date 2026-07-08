@@ -1022,3 +1022,16 @@ Fixed the README line to the real output (no fabricated numbers — copied from 
 **Open questions / blockers:** none.
 
 **Next session:** judge/calibration/drift/dataset audited and saturated — this object-shape guard closes the last open loader-parity gap in the CLI read path.
+
+## 2026-07-08 — Issue #152: pytest plugin threshold assertion tripped PluggyTeardownRaisedWarning
+**Duration:** ~40 min · **Branch:** `session/2026-07-08-1517-issue-152`
+
+- The plugin raised its threshold `AssertionError` **after `yield`** in an old-style `@pytest.hookimpl(hookwrapper=True)` hook (`pytest_pyfunc_call`) — i.e. in the wrapper's teardown. Modern pluggy (1.6, bundled with pytest 8/9) reports that as a `PluggyTeardownRaisedWarning` on every failing eval, and under `-W error` / `filterwarnings = error` (a common CI setting) it re-surfaced the failure **as** that warning class, burying the structured row/score/reasoning block the plugin exists to deliver. The outcome stayed `failed`, but the diagnostic delivery and failure attribution were broken — contradicting the module docstring's promise.
+- Fixed by migrating the hook to the new-style `@pytest.hookimpl(wrapper=True)` form (supported since pluggy 1.2 / pytest 7.2; repo pins `pytest>=8.0`): `result = yield` re-raises body failures directly, and the threshold `raise` propagates as a normal call-phase failure — no teardown raise, no warning, clean `AssertionError` on all warning configs. Verified firsthand: default `1 failed, 1 warning` → `1 failed`; `-W error` failure-attribution flipped from the pluggy warning back to a clean `AssertionError`.
+- Two regression tests added (fail pre-fix, pass on fix): `warnings=0` on a default run, and no `pluggy.PluggyTeardownRaisedWarning` crash under `-W error` with the structured block intact. Full suite 611 → 613, ruff/format/mypy clean.
+
+**Why this work, this session:** leh was the stalest priority-tier repo (23h) and its static issue queue is empty; a 5-lens parallel dogfood hunt (calibration, drift, runner-diffing, comment-delta all empty) surfaced this in the pytest-plugin-lifecycle lens. Every finding verified firsthand on clean main before filing.
+
+**Open questions / blockers:** none — ready for review.
+
+**Next session:** the "old-style hookwrapper teardown-raise" lens is swept on leh — `pytest_pyfunc_call` was the only hook raising after `yield`; `pytest_runtest_makereport`/`logreport` don't raise. Test-authoring gotcha: the plugin docstring now literally contains `PluggyTeardownRaisedWarning`, which pytest renders in the failing inner test's traceback — assert on the warning *count* (`warnings=0`) or the dotted `pluggy.` crash prefix, not a bare substring scan of stdout.
