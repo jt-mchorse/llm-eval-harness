@@ -1062,3 +1062,14 @@ Fixed the README line to the real output (no fabricated numbers — copied from 
 **Open questions / blockers:** none — ready for review.
 
 **Next session:** the nested-container sibling of #150 is now closed on both loaders. The isinstance-after-json.loads container-parity vein is fully swept in leh.
+
+## 2026-07-09 (PM) — Issue #158: CLI write-seam exit-code contract (the #104 sibling)
+**Duration:** ~35 min · **Branch:** `session/2026-07-09-1927-issue-writeseam` · **PR:** #159
+
+**What got done.** The eval-harness CLI documents a `0 = clean / 1 = findings / 2 = I/O or usage error` exit contract. #104 translated read/load I/O errors to a clean `::error::` line + exit 2 for every subcommand — but the write seam was left bare. All six cli.py write sites (`calibrate --report`, `run/diff/diff-json/list/validate --out`) called `atomic_write_text` directly, plus a seventh in `drift.cli`, so an unwritable destination (a directory, read-only path, unwritable parent) escaped as a raw `OSError` traceback at exit 1, breaking the contract. In `drift.cli` the write had been *explicitly* left outside the exit-2 try on the rationale that the OSError "must propagate to preserve the atomic-write artifact guard" — but that no-half-written-report guarantee is internal to `atomic_write_text` (temp + `os.replace` + cleanup) and holds regardless of whether the caller catches. Added a `_write_output` helper translating `OSError` → exit 2 and routed all six cli.py sites through it (plus `_emit_list_output`'s four branches); wrapped the drift write in the same translation. Migrated the five existing atomicity tests from `pytest.raises(OSError)` (which pinned the propagation *mechanism*) to `assert rc == 2` + destination-absent (both invariants hold), and added a hermetic `validate --out <dir>` test locking exit 2 + `::error::` line + no traceback. Full suite 630 pass, ruff clean.
+
+**Why prioritized.** Found via the exit-code-contract lens — the same class as this run's ems#87, applied to a priority-tier repo. Reproduced firsthand on `validate`, `list`, and `drift` before filing.
+
+**Open questions / blockers.** None — ready for review.
+
+**Next session:** leh CLI exit-code contract is now complete on both axes (#104 read, #158 write) across all 7 write subcommands. Don't re-sweep this class in leh.
