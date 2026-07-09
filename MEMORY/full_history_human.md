@@ -1035,3 +1035,18 @@ Fixed the README line to the real output (no fabricated numbers — copied from 
 **Open questions / blockers:** none — ready for review.
 
 **Next session:** the "old-style hookwrapper teardown-raise" lens is swept on leh — `pytest_pyfunc_call` was the only hook raising after `yield`; `pytest_runtest_makereport`/`logreport` don't raise. Test-authoring gotcha: the plugin docstring now literally contains `PluggyTeardownRaisedWarning`, which pytest renders in the failing inner test's traceback — assert on the warning *count* (`warnings=0`) or the dotted `pluggy.` crash prefix, not a bare substring scan of stdout.
+
+---
+
+## 2026-07-09 — Issue #154: pytest-plugin eval threshold unvalidated (nan/-inf bypasses the gate)
+**Duration:** ~25 min · **Branch:** `session/2026-07-09-0359-issue-154` · **PR:** #155
+
+- `@pytest.mark.eval(..., threshold=...)` was coerced with `float(...)` but never range-checked. A non-finite (nan/±inf) or out-of-[0,1] threshold reached the gate `score.score < threshold` unguarded; a nan/-inf threshold makes that comparison always False, so the assertion never fires and a broken judge scoring 0.0 passes green. 1.5 makes every eval impossible to pass.
+- Fix: `if not 0.0 <= threshold <= 1.0: raise ValueError(...)` in `_read_marker` at collection time — one bounds check catches nan/±inf/out-of-range. Mirrors the sibling threshold guards (calibration.py, judge.py). Parametrized regression test over nan/-inf/inf/1.5/-0.1. Full suite + mypy gate + ruff green.
+- Reproduced firsthand on clean main. Found by a parallel dogfood agent (threshold-boundary lens); I reset its working-tree changes and reimplemented cleanly.
+
+**Why this work, this session:** llm-eval-harness is priority-tier with a globally-exhausted static queue. The finiteness/range threshold-guard sweep had reached every loader path but not the operator-written `@pytest.mark.eval` decorator kwarg — the one remaining entry point.
+
+**Open questions / blockers:** none.
+
+**Next session:** threshold-guard sweep is now complete in leh incl. the pytest marker; check operator-written *decorator kwargs* (not just loaders) for the same guard class in other repos.
