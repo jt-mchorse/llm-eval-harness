@@ -223,6 +223,45 @@ def test_marker_explicit_empty_rubric_raises_at_collection(pytester: pytest.Pyte
     assert "rubric must be a non-empty string" in result.stdout.str()
 
 
+@pytest.mark.parametrize(
+    "bad_threshold", ["float('nan')", "float('-inf')", "float('inf')", "1.5", "-0.1"]
+)
+def test_marker_out_of_range_threshold_raises_at_collection(
+    pytester: pytest.Pytester, bad_threshold: str
+) -> None:
+    # #154: a non-finite (nan/±inf) or out-of-[0,1] threshold reached the gate
+    # `score.score < threshold` unguarded. A nan/-inf threshold makes that
+    # comparison always False, so the assertion never fires and a broken judge
+    # scoring 0.0 passes green; 1.5 makes every eval impossible to pass. The
+    # threshold must fail loud at collection, mirroring the sibling threshold
+    # guards (calibration.py, judge.py). One bounds check catches all cases.
+    pytester.makepyfile(
+        f"""
+        import pytest
+        from eval_harness.runner import DatasetEchoSource
+
+        class _Backend:
+            def complete(self, system, user):
+                return "SCORE: 0.0\\nREASONING: catastrophic."
+
+        @pytest.mark.eval(
+            suite="demo",
+            dataset="unused.jsonl",
+            answer_source=DatasetEchoSource(),
+            judge_backend=_Backend(),
+            threshold={bad_threshold},
+        )
+        def test_demo():
+            pass
+        """
+    )
+    result = pytester.runpytest("-v")
+    # The bad threshold raises during pytest_generate_tests → collection error,
+    # NOT a silently-passing test.
+    result.assert_outcomes(errors=1)
+    assert "threshold must be a finite number in [0, 1]" in result.stdout.str()
+
+
 def test_marker_empty_dataset_fails_collection(pytester: pytest.Pytester) -> None:
     empty = pytester.path / "empty.jsonl"
     empty.write_text("")

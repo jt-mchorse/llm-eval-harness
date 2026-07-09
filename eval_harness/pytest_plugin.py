@@ -95,12 +95,26 @@ def _read_marker(mark: pytest.Mark) -> _EvalSpec:
                 "@pytest.mark.eval rubric must be a non-empty string when provided; "
                 "omit the kwarg to use the default FAITHFULNESS_RUBRIC."
             )
+    # Range-validate `threshold` at collection time. Coerced with `float(...)`
+    # but previously unguarded, a non-finite (`nan`/`±inf`) or out-of-[0,1]
+    # threshold reached the gate `score.score < spec.threshold` unchecked: a
+    # `nan`/`-inf` threshold makes that comparison always False, so the assertion
+    # never fires and a broken judge scoring 0.0 passes green — the worst failure
+    # mode for an eval gate. `1.5` silently makes every eval impossible to pass.
+    # The single bounds check catches nan/±inf/out-of-range (all `nan`
+    # comparisons are False). Mirrors the sibling threshold guards
+    # (calibration.py, judge.py; binarize/diff_runs/compute_drift #40/#42/#46).
+    threshold = float(kw.get("threshold", 0.6))
+    if not 0.0 <= threshold <= 1.0:
+        raise ValueError(
+            f"@pytest.mark.eval threshold must be a finite number in [0, 1]; got {threshold!r}"
+        )
     return _EvalSpec(
         suite=str(kw["suite"]),
         dataset_path=str(kw["dataset"]),
         answer_source=kw["answer_source"],
         judge_backend=kw["judge_backend"],
-        threshold=float(kw.get("threshold", 0.6)),
+        threshold=threshold,
         rubric=rubric,
     )
 
