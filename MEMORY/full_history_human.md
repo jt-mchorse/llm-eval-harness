@@ -1050,3 +1050,15 @@ Fixed the README line to the real output (no fabricated numbers — copied from 
 **Open questions / blockers:** none.
 
 **Next session:** threshold-guard sweep is now complete in leh incl. the pytest marker; check operator-written *decorator kwargs* (not just loaders) for the same guard class in other repos.
+
+## 2026-07-09 — Issue #156: run/delta loaders raise raw TypeError on nested container fields
+**Duration:** ~25 min · **Branch:** `session/2026-07-09-1549-issue-156` · **PR:** #157
+
+- #150 rejected a non-object top-level payload and non-object per-row in the run/delta JSON loaders, but left the nested `rows`/`summary` *fields* unguarded: a present-but-wrong-container value (`{"rows": 5}`, `{"summary": 5}`) reached `dict(...)` / `for r in ...` and raised a raw `TypeError` (exit 1), bypassing the documented exit-2 clean-failure contract.
+- Guarded the nested `rows`/`summary` fields with a clean `ValueError` in both `DeltaReport.from_json` and `load_run_result_from_json` (and fixed the `dict(None)` crash on an explicit-null summary). 11 regression tests, all failing pre-fix. Full suite + ruff + mypy gate green.
+
+**Why this work, this session:** found via the sibling-branch-incomplete-fix meta-lens (a prior fix that closed one case leaving a sibling exposed) — the third hit of this run via that lens (after aop#99 and nextjs#80); reproduced firsthand via the shipped CLI before fixing.
+
+**Open questions / blockers:** none — ready for review.
+
+**Next session:** the nested-container sibling of #150 is now closed on both loaders. The isinstance-after-json.loads container-parity vein is fully swept in leh.
