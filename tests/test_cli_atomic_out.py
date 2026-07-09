@@ -16,7 +16,10 @@ What this file pins:
 
 - Integration through the CLI: each subcommand's `--out` survives a
   simulated `os.replace` failure without ever touching the destination,
-  proving the four call sites all route through the helper.
+  proving the call sites all route through the helper.
+- The write-seam exit-code contract (#104 sibling): an unwritable `--out`
+  is an I/O error, so it is translated to a clean `::error::` line + exit 2,
+  never a raw `OSError` traceback at exit 1 — matching the read seams.
 
 Unit tests on the helper itself live next to the helper in
 `tests/test_io_utils_atomic_write.py` (moved there when the helper was
@@ -124,11 +127,8 @@ def test_run_out_routes_through_atomic_helper(
 
     monkeypatch.setattr(io_utils_mod.os, "replace", boom)
 
-    with (
-        patch("eval_harness.cli.AnthropicBackend", _HighBackend),
-        pytest.raises(OSError, match="simulated rename failure"),
-    ):
-        main(
+    with patch("eval_harness.cli.AnthropicBackend", _HighBackend):
+        rc = main(
             [
                 "run",
                 "--suite",
@@ -143,6 +143,9 @@ def test_run_out_routes_through_atomic_helper(
             ]
         )
 
+    # #104 write-seam sibling: an unwritable --out is an I/O error → clean exit 2,
+    # not a raw OSError traceback at exit 1. The atomicity invariant still holds.
+    assert rc == 2
     assert not out.exists(), "run --out must not write destination when replace fails"
 
 
@@ -160,23 +163,23 @@ def test_diff_out_routes_through_atomic_helper(
         raise OSError("simulated rename failure")
 
     monkeypatch.setattr(io_utils_mod.os, "replace", boom)
-    with pytest.raises(OSError, match="simulated rename failure"):
-        main(
-            [
-                "diff",
-                "--current",
-                current_id,
-                "--baseline",
-                baseline_id,
-                "--db",
-                str(db),
-                "--format",
-                "markdown",
-                "--out",
-                str(out),
-            ]
-        )
+    rc = main(
+        [
+            "diff",
+            "--current",
+            current_id,
+            "--baseline",
+            baseline_id,
+            "--db",
+            str(db),
+            "--format",
+            "markdown",
+            "--out",
+            str(out),
+        ]
+    )
 
+    assert rc == 2
     assert not out.exists()
 
 
@@ -235,21 +238,21 @@ def test_diff_json_out_routes_through_atomic_helper(
         raise OSError("simulated rename failure")
 
     monkeypatch.setattr(io_utils_mod.os, "replace", boom)
-    with pytest.raises(OSError, match="simulated rename failure"):
-        main(
-            [
-                "diff-json",
-                "--current",
-                str(current_json),
-                "--baseline",
-                str(baseline_json),
-                "--format",
-                "json",
-                "--out",
-                str(delta_out),
-            ]
-        )
+    rc = main(
+        [
+            "diff-json",
+            "--current",
+            str(current_json),
+            "--baseline",
+            str(baseline_json),
+            "--format",
+            "json",
+            "--out",
+            str(delta_out),
+        ]
+    )
 
+    assert rc == 2
     assert not delta_out.exists()
 
 
@@ -271,9 +274,9 @@ def test_list_out_routes_through_atomic_helper(
         raise OSError("simulated rename failure")
 
     monkeypatch.setattr(io_utils_mod.os, "replace", boom)
-    with pytest.raises(OSError, match="simulated rename failure"):
-        main(["list", "--db", str(db), "--json", "--out", str(out)])
+    rc = main(["list", "--db", str(db), "--json", "--out", str(out)])
 
+    assert rc == 2
     assert not out.exists()
 
 
@@ -357,3 +360,24 @@ def test_all_subcommands_produce_valid_atomic_output(tmp_path: Path) -> None:
     list_parsed = json.loads(list_out.read_text(encoding="utf-8"))
     assert isinstance(list_parsed, list)
     assert len(list_parsed) == 2
+
+
+def test_validate_out_unwritable_exits_2_not_traceback(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`validate --out <directory>` translates the write OSError to a clean
+    `::error::` line + exit 2, not a raw traceback at exit 1 (#104 write-seam
+    sibling). `validate` is fully hermetic (no judge backend), so this locks
+    the full contract — rc, the diagnostic line, and the no-traceback promise —
+    without mocking `os.replace`.
+    """
+    out_dir = tmp_path / "out_is_a_dir"
+    out_dir.mkdir()
+
+    rc = main(["validate", str(ROOT / SAMPLE_DATASET), "--out", str(out_dir)])
+
+    assert rc == 2
+    err = capsys.readouterr().err
+    assert "::error::" in err
+    assert "failed to write" in err
+    assert "Traceback" not in err

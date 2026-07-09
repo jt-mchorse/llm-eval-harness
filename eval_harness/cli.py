@@ -72,6 +72,27 @@ def _fail(message: str) -> int:
     return 2
 
 
+def _write_output(path: str, rendered: str) -> int | None:
+    """Write ``rendered`` to ``path`` atomically, translating an ``OSError``
+    to the clean ``::error::`` + exit-2 contract. Returns ``2`` on failure and
+    ``None`` on success so callers can ``if (rc := _write_output(...)) is not
+    None: return rc``.
+
+    This is the write-seam sibling of ``_fail`` / #104: the read seams already
+    translate I/O errors to exit 2, but every ``--out`` write site
+    (``calibrate`` / ``run`` / ``diff`` / ``diff-json`` / ``list`` /
+    ``validate``) called ``atomic_write_text`` bare, so an unwritable ``--out``
+    (a directory, a read-only path, an unwritable parent) escaped as a raw
+    ``OSError`` traceback at exit 1 — a poor operator experience that breaks the
+    documented ``2 = I/O or usage error`` contract exactly as #104 describes.
+    """
+    try:
+        atomic_write_text(path, rendered)
+    except OSError as e:
+        return _fail(f"failed to write {path}: {e}")
+    return None
+
+
 def main(argv: list[str] | None = None) -> int:
     # `judge calibrate ...` is a backwards-compat alias for `calibrate ...`.
     # Rewrite the argv before argparse sees it so the alias resolves to the
@@ -320,7 +341,8 @@ def _run_calibrate(args: argparse.Namespace) -> int:
     result = calibrate(judge, rows)
 
     report = render_report(result, judge_model=backend.model, threshold_kappa=args.threshold_kappa)
-    atomic_write_text(args.report, report)
+    if (rc := _write_output(args.report, report)) is not None:
+        return rc
 
     print(
         f"calibration: n={result.n} kappa={result.cohens_kappa:.3f} pearson_r={result.pearson_r:.3f}"
@@ -381,7 +403,8 @@ def _run_run(args: argparse.Namespace) -> int:
         return 2
     json_text = render_run_json(result)
     if args.out:
-        atomic_write_text(args.out, json_text)
+        if (rc := _write_output(args.out, json_text)) is not None:
+            return rc
     else:
         print(json_text)
 
@@ -438,7 +461,8 @@ def _run_diff(args: argparse.Namespace) -> int:
     else:
         rendered = render_delta_ascii(report) + "\n"
     if args.out:
-        atomic_write_text(args.out, rendered)
+        if (rc := _write_output(args.out, rendered)) is not None:
+            return rc
     else:
         print(rendered, end="")
     return 1 if report.summary["n_flagged"] > 0 else 0
@@ -469,7 +493,8 @@ def _run_diff_json(args: argparse.Namespace) -> int:
     else:
         rendered = render_delta_ascii(report)
     if args.out:
-        atomic_write_text(args.out, rendered)
+        if (rc := _write_output(args.out, rendered)) is not None:
+            return rc
     else:
         print(rendered, end="")
     return 1 if report.summary["n_flagged"] > 0 else 0
@@ -531,7 +556,8 @@ def _run_list(args: argparse.Namespace) -> int:
         # No DB on disk yet — equivalent to no runs. Don't auto-create
         # here (init_db is what `run` does); avoid the side effect.
         rendered = "[]\n" if args.as_json else f"# no runs (no database at {db_path})\n"
-        _emit_list_output(rendered, args.out)
+        if (rc := _emit_list_output(rendered, args.out)) is not None:
+            return rc
         return 0
 
     try:
@@ -544,7 +570,8 @@ def _run_list(args: argparse.Namespace) -> int:
 
     if args.as_json:
         rendered = json.dumps([_run_summary_to_json(r) for r in runs], indent=2) + "\n"
-        _emit_list_output(rendered, args.out)
+        if (rc := _emit_list_output(rendered, args.out)) is not None:
+            return rc
         return 0
 
     if not runs:
@@ -552,25 +579,28 @@ def _run_list(args: argparse.Namespace) -> int:
             rendered = f"# no runs for suite {args.suite!r}\n"
         else:
             rendered = "# no runs\n"
-        _emit_list_output(rendered, args.out)
+        if (rc := _emit_list_output(rendered, args.out)) is not None:
+            return rc
         return 0
 
-    _emit_list_output(_render_runs_table(runs) + "\n", args.out)
+    if (rc := _emit_list_output(_render_runs_table(runs) + "\n", args.out)) is not None:
+        return rc
     return 0
 
 
-def _emit_list_output(rendered: str, out: str | None) -> None:
+def _emit_list_output(rendered: str, out: str | None) -> int | None:
     """Write a `list`-rendered string to ``out`` (with mkdir -p) or stdout.
 
     Mirrors the sink-decision shape of ``_run_diff`` / ``_run_diff_json``
     so all four subcommands route output identically. ``--out`` is silent
     on stdout; stdout-only mode prints without the trailing newline since
-    the renderer already adds one.
+    the renderer already adds one. Returns the exit-2 code from
+    ``_write_output`` if the write fails, else ``None``.
     """
     if out:
-        atomic_write_text(out, rendered)
-    else:
-        print(rendered, end="")
+        return _write_output(out, rendered)
+    print(rendered, end="")
+    return None
 
 
 def _run_summary_to_json(r: RunSummary) -> dict[str, object]:
@@ -660,7 +690,8 @@ def _run_validate(args: argparse.Namespace) -> int:
             f"findings={len(report.findings)} version={version}\n"
         )
     if args.out:
-        atomic_write_text(args.out, rendered)
+        if (rc := _write_output(args.out, rendered)) is not None:
+            return rc
     else:
         print(rendered, end="")
     return 0 if report.ok else 1
