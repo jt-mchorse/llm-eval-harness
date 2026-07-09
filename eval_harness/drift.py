@@ -742,11 +742,13 @@ def cli(argv: Sequence[str] | None = None) -> int:
     # `cli._run_drift`) so the contract holds on both the `eval-harness drift`
     # path and the direct `python -m eval_harness.drift` entrypoint.
     #
-    # `atomic_write_text(args.output, ...)` is deliberately left OUTSIDE this try:
-    # a failed output write must still propagate (not become exit 2) so the
-    # atomic-write artifact guard holds — an aborted rename leaves no half-written
-    # report. That contract is locked by
-    # test_io_utils_atomic_write.test_drift_output_routes_through_atomic_helper.
+    # An unwritable `--output` (a directory, read-only path, unwritable parent)
+    # is itself an I/O error and must honor the same exit-2 contract, not escape
+    # as a raw OSError traceback at exit 1 (#104 write-seam sibling; mirrors
+    # cli._write_output). The no-half-written-report guarantee is a property of
+    # `atomic_write_text` itself (temp file + os.replace + cleanup) and holds
+    # whether or not the caller catches the OSError — so catching it to return a
+    # clean exit 2 does not weaken the atomicity invariant.
     try:
         golden = _load_inputs_jsonl(Path(args.golden))
         candidate = _load_inputs_jsonl(Path(args.candidate))
@@ -766,7 +768,11 @@ def cli(argv: Sequence[str] | None = None) -> int:
     except ValueError as e:
         print(f"::error::{e}", file=sys.stderr)
         return 2
-    atomic_write_text(args.output, render_html(report))
+    try:
+        atomic_write_text(args.output, render_html(report))
+    except OSError as e:
+        print(f"::error::failed to write {args.output}: {e}", file=sys.stderr)
+        return 2
     summary = (
         f"wrote {args.output}: "
         f"length={report.length.drift_score:.3f} ({report.length.status}), "

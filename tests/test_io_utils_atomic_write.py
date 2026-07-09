@@ -183,20 +183,23 @@ def test_drift_output_routes_through_atomic_helper(
         raise OSError("simulated rename failure")
 
     monkeypatch.setattr(io_utils_mod.os, "replace", boom)
-    with pytest.raises(OSError, match="simulated rename failure"):
-        drift_cli(
-            [
-                "--golden",
-                str(golden),
-                "--candidate",
-                str(candidate),
-                "--output",
-                str(out),
-                "--cluster-k",
-                "2",
-            ]
-        )
+    rc = drift_cli(
+        [
+            "--golden",
+            str(golden),
+            "--candidate",
+            str(candidate),
+            "--output",
+            str(out),
+            "--cluster-k",
+            "2",
+        ]
+    )
 
+    # #104 write-seam sibling: an unwritable --output is an I/O error → clean
+    # exit 2, not a raw OSError traceback at exit 1. atomic_write_text still
+    # guarantees the destination is untouched on a failed rename.
+    assert rc == 2
     assert not out.exists(), "drift --output must not write destination when replace fails"
 
 
@@ -272,19 +275,21 @@ def test_calibrate_report_routes_through_atomic_helper(
     monkeypatch.setattr(io_utils_mod.os, "replace", boom)
     monkeypatch.setattr("eval_harness.cli.AnthropicBackend", _DeterministicBackend)
 
-    with pytest.raises(OSError, match="simulated rename failure"):
-        cli_main(
-            [
-                "calibrate",
-                "--calibration",
-                str(calibration),
-                "--report",
-                str(out),
-                "--threshold-kappa",
-                "0.0",  # avoid κ-gate exit before write
-            ]
-        )
+    rc = cli_main(
+        [
+            "calibrate",
+            "--calibration",
+            str(calibration),
+            "--report",
+            str(out),
+            "--threshold-kappa",
+            "0.0",  # avoid κ-gate exit before write
+        ]
+    )
 
+    # #104 write-seam sibling: an unwritable --report is an I/O error → clean
+    # exit 2, not a raw OSError traceback at exit 1. Atomicity invariant holds.
+    assert rc == 2
     assert not out.exists(), "calibrate --report must not write destination when replace fails"
 
 
