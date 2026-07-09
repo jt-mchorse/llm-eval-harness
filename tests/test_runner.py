@@ -494,3 +494,41 @@ def test_diff_runs_no_longer_swallows_a_nan_regression(tmp_path: Path) -> None:
     assert loaded_base.rows["q1"] == (0.9, "a")
     with pytest.raises(ValueError, match=r"non-finite score"):
         load_run_result_from_json(cur)
+
+
+# Issue #156: #150 guarded the *top-level* non-object payload (and the per-row
+# shape) in both loaders, but the nested `rows`/`summary` *fields* were left
+# unguarded: a present-but-wrong-container value reached `dict(...)` / `for r in
+# ...` and raised a raw TypeError (exit 1), bypassing the exit-2 clean-failure
+# contract `_run_comment` / `_run_diff_json` honor for ValueError/KeyError. These
+# lock the nested-container siblings.
+
+
+@pytest.mark.parametrize("bad", [5, 5.0, True, "hi", [1, 2, 3]])
+def test_delta_from_json_rejects_non_object_summary(bad: object) -> None:
+    with pytest.raises(ValueError, match=r"'summary' must be a JSON object"):
+        DeltaReport.from_json({"summary": bad})
+
+
+@pytest.mark.parametrize("bad", [5, 5.0, True, {"a": 1}])
+def test_delta_from_json_rejects_non_array_rows(bad: object) -> None:
+    with pytest.raises(ValueError, match=r"'rows' must be a JSON array"):
+        DeltaReport.from_json({"rows": bad})
+
+
+def test_delta_from_json_treats_null_summary_as_empty() -> None:
+    # An explicit JSON null `summary` (like a missing key) is valid — it must not
+    # raise; `dict(None)` previously crashed with a raw TypeError on this path.
+    report = DeltaReport.from_json({"summary": None, "rows": []})
+    assert report.summary == {}
+    assert report.rows == ()
+
+
+def test_load_run_result_rejects_non_array_rows(tmp_path: Path) -> None:
+    p = tmp_path / "bad_rows.json"
+    p.write_text(
+        json.dumps({"run_id": "r", "suite": "s", "mean_score": 0.5, "n_rows": 0, "rows": 5}),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match=r"'rows' must be a JSON array"):
+        load_run_result_from_json(p)

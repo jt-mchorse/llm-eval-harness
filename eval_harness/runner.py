@@ -278,7 +278,19 @@ class DeltaReport:
                 f"non-finite threshold_drop {threshold_drop} in delta JSON; threshold_drop "
                 "must be finite — a NaN/Infinity value renders as 'nan' in the posted PR comment"
             )
-        summary = dict(payload.get("summary", {}))
+        # A present-but-non-object `summary` (a JSON number/list/bool) reaches
+        # `dict(...)` and raises a raw `TypeError` (exit 1) — the nested-container
+        # sibling of the top-level guard above (#150 covered the top level and the
+        # per-row shape, not the `summary`/`rows` fields). Reject it as a clean
+        # ValueError so the exit-2 contract holds. `summary=None` (explicit null)
+        # falls through to the default `{}` like a missing key.
+        summary_raw = payload.get("summary")
+        if summary_raw is not None and not isinstance(summary_raw, dict):
+            raise ValueError(
+                f"delta JSON 'summary' must be a JSON object when present; "
+                f"got {type(summary_raw).__name__}"
+            )
+        summary = dict(summary_raw or {})
         mean_delta = summary.get("mean_delta")
         # `mean_delta` may be legitimately absent or an explicit null (an
         # undefined mean Δ, e.g. an all-new suite — the renderer coerces that
@@ -304,12 +316,22 @@ class DeltaReport:
                     f"{_label} must be a string when present; got {_val!r} — a null value "
                     f"crashes the delta renderer's {_label}[:8] slice with a raw TypeError"
                 )
+        # A present-but-non-array `rows` (a JSON number/object/bool) reaches the
+        # `for r in ...` and raises a raw `TypeError: not iterable` (exit 1) —
+        # the same nested-container sibling as `summary` above. Reject it as a
+        # clean ValueError; a missing `rows` still defaults to the empty tuple.
+        rows_raw = payload.get("rows", ())
+        if "rows" in payload and not isinstance(rows_raw, list):
+            raise ValueError(
+                f"delta JSON 'rows' must be a JSON array when present; "
+                f"got {type(rows_raw).__name__}"
+            )
         return cls(
             current_run_id=current_run_id,
             baseline_run_id=baseline_run_id,
             suite=payload.get("suite", "(unknown)"),
             threshold_drop=threshold_drop,
-            rows=tuple(RowDelta.from_json(r) for r in payload.get("rows", ())),
+            rows=tuple(RowDelta.from_json(r) for r in rows_raw),
             summary=summary,
         )
 
@@ -594,8 +616,17 @@ def load_run_result_from_json(path: str | Path) -> StoredRun:
         raise ValueError(
             f"run JSON top-level value must be a JSON object; got {type(payload).__name__}"
         )
+    # A present-but-non-array `rows` (a JSON number/object/bool) reaches the
+    # `for r in ...` and raises a raw `TypeError: not iterable` (exit 1) — the
+    # nested-container sibling of the top-level guard above and the per-row guard
+    # below (#150 covered the top level and per-row shape, not the `rows` field).
+    rows_field = payload.get("rows", [])
+    if "rows" in payload and not isinstance(rows_field, list):
+        raise ValueError(
+            f"run JSON 'rows' must be a JSON array when present; got {type(rows_field).__name__}"
+        )
     rows: dict[str, tuple[float, str]] = {}
-    for r in payload.get("rows", []):
+    for r in rows_field:
         # A non-object row (a bare string/number in the `rows` array) otherwise
         # reached `r["example_id"]` and raised a raw `TypeError` (exit 1) — the
         # per-row sibling of the top-level guard above. Reject it as a clean
