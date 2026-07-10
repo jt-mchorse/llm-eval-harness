@@ -768,3 +768,59 @@ def test_comment_non_object_delta_row_exits_two(tmp_path: Path, capsys) -> None:
     rc = main(_comment_dry_run(delta))
     assert rc == 2
     assert "::error::" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    "count_key",
+    ["n_flagged", "n_regressed", "n_improved", "n_new", "n_removed", "n_unchanged"],
+)
+@pytest.mark.parametrize("bad", [[1, 2], {"x": 1}, "abc"])
+def test_comment_malformed_summary_count_exits_two(
+    tmp_path: Path, capsys, count_key: str, bad
+) -> None:
+    # A present-but-non-numeric summary count field (a JSON array/object →
+    # `int([1,2])` TypeError, or a non-numeric string → `int("abc")` ValueError)
+    # reached comment._count's bare `int(v)`; #116 guarded only the null case,
+    # and render_delta_markdown runs *outside* _run_comment's exit-2 try, so it
+    # escaped as a raw traceback at exit 1. DeltaReport.from_json now validates
+    # each count at the parse boundary (sibling of the mean_delta guard) → exit 2.
+    delta = tmp_path / "d.json"
+    _delta_json(
+        delta,
+        {
+            "current_run_id": "c",
+            "baseline_run_id": "b",
+            "suite": "s",
+            "threshold_drop": 0.1,
+            "rows": [],
+            "summary": {"mean_delta": 0.0, count_key: bad},
+        },
+    )
+    rc = main(_comment_dry_run(delta))
+    assert rc == 2
+    err = capsys.readouterr().err
+    assert "::error::" in err
+    assert count_key in err
+    assert "Traceback" not in err
+
+
+@pytest.mark.parametrize("good", [2, 0, "3", 2.0, None])
+def test_comment_valid_summary_count_exits_zero(tmp_path: Path, capsys, good) -> None:
+    # A valid integer count (incl. a numeric string, a whole float, a genuine 0,
+    # or an explicit null that the renderer coerces to 0) must not regress to a
+    # usage error — the comment renders cleanly and --dry-run exits 0.
+    delta = tmp_path / "d.json"
+    _delta_json(
+        delta,
+        {
+            "current_run_id": "c",
+            "baseline_run_id": "b",
+            "suite": "s",
+            "threshold_drop": 0.1,
+            "rows": [],
+            "summary": {"mean_delta": 0.0, "n_flagged": good},
+        },
+    )
+    rc = main(_comment_dry_run(delta))
+    assert rc == 0
+    assert "Traceback" not in capsys.readouterr().err
