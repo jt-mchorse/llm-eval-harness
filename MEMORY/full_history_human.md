@@ -1083,3 +1083,13 @@ Added a `_require_number(value, field)` isinstance guard (mirroring the #150/#15
 **Why prioritized.** Static priority:high queue globally exhausted; found via the sibling-incomplete-fix meta-lens. The leh exit-2 data-layer contract is now complete across container shape (#150/#156), null scalars (#116), and numeric coercion (#160).
 
 **Open questions / blockers.** None — PR ready for review.
+
+## 2026-07-10 — Issue #162: exit-2 parity for malformed summary count fields (~25 min, night)
+
+**What got done.** `comment.render_delta_markdown`'s `_count` helper rendered the summary count fields (`n_flagged`, `n_regressed`, `n_improved`, `n_new`, `n_removed`, `n_unchanged`) via a bare `int(v)`. #116 guarded only the present-null case; a present-but-non-numeric count — a JSON array/object (`int([1,2])` → `TypeError`) or a non-numeric string (`int("abc")` → `ValueError`) — still crashed the renderer, which runs *outside* `_run_comment`'s exit-2 `try`, so it escaped as a raw traceback at exit 1 (read as "regression found" in CI). This is the count sibling of the #160/#161 numeric-coercion fix, which hardened the loaders' scalar numerics but never the summary count fields the renderer reads.
+
+Added a count-field validation loop to `DeltaReport.from_json` (after the `mean_delta` guard, the established parse boundary): each present-non-null count is checked via `int(_require_number(v, key))` — `_require_number` rejects containers, `int(...)` rejects non-numeric strings, both as a clean `ValueError` → exit 2. Missing/null counts still fall through to the renderer's null→0 coercion. 23 CLI-level test cases (6 count keys × 3 bad values → exit 2/no-traceback, plus 5 good values → exit 0); all fail pre-fix. Full suite (624) + ruff green. Verified the repro firsthand before and after.
+
+**Why prioritized.** Static priority:high queue globally exhausted; found via the sibling-incomplete-fix meta-lens on the just-merged #161. The leh exit-2 contract is now complete across container shape (#150/#156), null scalars (#116), loader numeric coercion (#160/#161), and now the comment renderer's count fields (#162).
+
+**Open questions / blockers.** None — PR ready for review.

@@ -324,6 +324,34 @@ class DeltaReport:
                 f"non-finite mean_delta {mean_delta} in delta JSON summary; mean_delta must be "
                 "finite — a NaN/Infinity value renders as '+nan' in the posted PR comment"
             )
+        # The summary count fields (`n_flagged` etc.) are rendered by
+        # `comment._count` via a bare `int(v)`; #116 guarded the present-but-null
+        # case there, but a present-but-non-numeric value — a JSON array/object
+        # (`int([1,2])` → TypeError) or a non-numeric string (`int("abc")` →
+        # ValueError) — still crashed the renderer, which runs *outside*
+        # `_run_comment`'s exit-2 try (cli.py), so it escaped as a raw traceback
+        # at exit 1. Validate each present-non-null count is int-coercible here at
+        # the parse boundary, the count sibling of the `mean_delta` guard above:
+        # `_require_number` rejects containers, `int(...)` rejects non-numeric
+        # strings, both as a clean ValueError → exit 2. A missing or null count
+        # falls through to the renderer's null→0 coercion unchanged.
+        for _count_key in (
+            "n_flagged",
+            "n_regressed",
+            "n_improved",
+            "n_new",
+            "n_removed",
+            "n_unchanged",
+        ):
+            _count_val = summary.get(_count_key)
+            if _count_val is not None:
+                try:
+                    int(_require_number(_count_val, _count_key))
+                except ValueError as e:
+                    raise ValueError(
+                        f"delta JSON summary '{_count_key}' must be an integer count when "
+                        f"present; got {_count_val!r} — {e}"
+                    ) from None
         # `.get` defaults only fire on a MISSING key; a present-but-null
         # current_run_id/baseline_run_id passes None straight to the renderers,
         # where `current_run_id[:8]` raises a raw TypeError (exit 1) instead of the
