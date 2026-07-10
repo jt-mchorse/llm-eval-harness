@@ -124,6 +124,26 @@ class RunSpec:
     tags: tuple[str, ...] = ()  # set-union filter on Example.tags; () = no filter
 
 
+def _require_number(value: Any, field_name: str) -> int | float | str:
+    """Reject a JSON container/null before a bare ``float()``/``int()`` coercion.
+
+    #150/#156 guarded the *container shape* of the run/delta payloads and #116
+    translated null ids/counts, but the scalar numeric fields were still fed to
+    a bare ``float()``/``int()``. A list/dict/null value (which ``json.loads``
+    produces natively) raises a raw ``TypeError`` — which ``cli``'s catch blocks
+    (``KeyError``/``ValueError``/``OSError``) don't translate — so it escaped as
+    a traceback at exit 1 instead of the documented exit-2 contract (#160).
+
+    Numbers and numeric strings pass through unchanged (a bad numeric string
+    like ``"abc"`` still raises the original ``ValueError`` at the coercion,
+    already exit-2); only a type ``float()``/``int()`` cannot accept is rejected
+    here with a clean ``ValueError``, mirroring the sibling isinstance guards.
+    """
+    if not isinstance(value, (int, float, str)):
+        raise ValueError(f"{field_name} must be a number; got {type(value).__name__}")
+    return value
+
+
 def _finite_or_none(value: Any, field_name: str, example_id: Any) -> float | None:
     """Pass ``None`` through; reject a present-but-non-finite score.
 
@@ -135,7 +155,7 @@ def _finite_or_none(value: Any, field_name: str, example_id: Any) -> float | Non
     """
     if value is None:
         return value
-    f = float(value)
+    f = float(_require_number(value, field_name))
     if not math.isfinite(f):
         raise ValueError(
             f"non-finite {field_name} {value} for example_id {example_id!r} in delta JSON; "
@@ -272,7 +292,9 @@ class DeltaReport:
             raise ValueError(
                 f"delta JSON top-level value must be a JSON object; got {type(payload).__name__}"
             )
-        threshold_drop = float(payload.get("threshold_drop", DEFAULT_THRESHOLD_DROP))
+        threshold_drop = float(
+            _require_number(payload.get("threshold_drop", DEFAULT_THRESHOLD_DROP), "threshold_drop")
+        )
         if not math.isfinite(threshold_drop):
             raise ValueError(
                 f"non-finite threshold_drop {threshold_drop} in delta JSON; threshold_drop "
@@ -295,7 +317,9 @@ class DeltaReport:
         # `mean_delta` may be legitimately absent or an explicit null (an
         # undefined mean Δ, e.g. an all-new suite — the renderer coerces that
         # to 0.0). Only a present, non-null, non-finite value is corruption.
-        if mean_delta is not None and not math.isfinite(float(mean_delta)):
+        if mean_delta is not None and not math.isfinite(
+            float(_require_number(mean_delta, "mean_delta"))
+        ):
             raise ValueError(
                 f"non-finite mean_delta {mean_delta} in delta JSON summary; mean_delta must be "
                 "finite — a NaN/Infinity value renders as '+nan' in the posted PR comment"
@@ -659,7 +683,7 @@ def load_run_result_from_json(path: str | Path) -> StoredRun:
             raise ValueError(
                 f"duplicate example_id {example_id!r} in run rows; ids must be unique within a run"
             )
-        score = float(r["score"])
+        score = float(_require_number(r["score"], "score"))
         # A non-finite score (NaN / +/-Infinity) is corruption, not a measurement.
         # `json.loads` parses the bare `NaN`/`Infinity` tokens natively, so an
         # externally-produced or hand-edited artifact can carry one. It must not
@@ -684,12 +708,14 @@ def load_run_result_from_json(path: str | Path) -> StoredRun:
     # rows still loads silently inconsistent — exactly the corruption that guard's
     # comment warns about, reached a different way. Reject a present-but-mismatched
     # `n_rows` loudly; keep the `len(rows)` default for payloads that omit it.
-    if "n_rows" in payload and int(payload["n_rows"]) != len(rows):
-        raise ValueError(
-            f"n_rows {int(payload['n_rows'])} disagrees with the actual row count "
-            f"{len(rows)}; a mismatch signals a corrupt or incompatible payload and "
-            "would corrupt the per-example deltas diff_runs computes off rows"
-        )
+    if "n_rows" in payload:
+        n_rows_declared = int(_require_number(payload["n_rows"], "n_rows"))
+        if n_rows_declared != len(rows):
+            raise ValueError(
+                f"n_rows {n_rows_declared} disagrees with the actual row count "
+                f"{len(rows)}; a mismatch signals a corrupt or incompatible payload and "
+                "would corrupt the per-example deltas diff_runs computes off rows"
+            )
     # `mean_score` is load-bearing: `diff_runs` computes `mean_delta` directly
     # off it (current - baseline), and `RunResult.to_json` always emits it. A
     # silent `.get("mean_score", 0.0)` made an absent field indistinguishable
@@ -704,7 +730,7 @@ def load_run_result_from_json(path: str | Path) -> StoredRun:
             "payload — refusing to default it to 0.0, which would silently corrupt "
             "the mean_delta diff_runs computes"
         )
-    mean_score = float(payload["mean_score"])
+    mean_score = float(_require_number(payload["mean_score"], "mean_score"))
     # `mean_score` feeds `diff_runs`' `mean_delta` (current - baseline) directly;
     # a non-finite value (parseable from a raw NaN/Infinity JSON token) propagates
     # NaN into the summary the PR comment renders and the dashboard reads. Reject
