@@ -195,6 +195,142 @@ def test_diff_json_null_run_id_exits_two(tmp_path: Path, capsys, fmt: str) -> No
     assert "::error::" in capsys.readouterr().err
 
 
+# --- #160: container/null-typed numeric field must not escape as a raw TypeError --
+
+
+@pytest.mark.parametrize("bad", [[1, 2], {"x": 1}, None])
+def test_diff_json_container_score_exits_two(tmp_path: Path, capsys, bad) -> None:
+    # A container/null-typed per-row `score` reached a bare `float(r["score"])`
+    # and raised an uncaught TypeError (exit 1) — #150/#156 guarded the container
+    # *shape*, not the scalar numeric coercion. Must now fail clean → exit 2.
+    cur = tmp_path / "cur.json"
+    cur.write_text(
+        json.dumps(
+            {
+                "run_id": "a",
+                "started_at": "2026-01-01T00:00:00Z",
+                "suite": "s",
+                "mean_score": 0.9,
+                "n_rows": 1,
+                "rows": [{"example_id": "ex1", "score": bad, "reasoning": "ok"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    base = tmp_path / "base.json"
+    _run_result_json(base, run_id="b")
+    rc = main(["diff-json", "--current", str(cur), "--baseline", str(base)])
+    assert rc == 2
+    err = capsys.readouterr().err
+    assert "::error::" in err
+    assert "score must be a number" in err
+    assert "Traceback" not in err
+
+
+@pytest.mark.parametrize("field", ["mean_score", "n_rows"])
+def test_diff_json_container_top_level_number_exits_two(tmp_path: Path, capsys, field: str) -> None:
+    # `mean_score` (float) and `n_rows` (int) fed a bare float()/int() too — a
+    # container value raised an uncaught TypeError at exit 1. Must be exit 2.
+    payload = {
+        "run_id": "a",
+        "started_at": "2026-01-01T00:00:00Z",
+        "suite": "s",
+        "mean_score": 0.9,
+        "n_rows": 1,
+        "rows": [{"example_id": "ex1", "score": 0.9, "reasoning": "ok"}],
+    }
+    payload[field] = [1, 2]
+    cur = tmp_path / "cur.json"
+    cur.write_text(json.dumps(payload), encoding="utf-8")
+    base = tmp_path / "base.json"
+    _run_result_json(base, run_id="b")
+    rc = main(["diff-json", "--current", str(cur), "--baseline", str(base)])
+    assert rc == 2
+    err = capsys.readouterr().err
+    assert "::error::" in err
+    assert f"{field} must be a number" in err
+    assert "Traceback" not in err
+
+
+def test_comment_container_threshold_drop_exits_two(tmp_path: Path, capsys) -> None:
+    # `threshold_drop` fed a bare float() in DeltaReport.from_json — a container
+    # value raised an uncaught TypeError at exit 1. Must be exit 2.
+    delta = tmp_path / "d.json"
+    _delta_json(
+        delta,
+        {
+            "current_run_id": "c",
+            "baseline_run_id": "b",
+            "suite": "s",
+            "threshold_drop": [0.1],
+            "rows": [],
+            "summary": {},
+        },
+    )
+    rc = main(_comment_dry_run(delta))
+    assert rc == 2
+    err = capsys.readouterr().err
+    assert "::error::" in err
+    assert "threshold_drop must be a number" in err
+    assert "Traceback" not in err
+
+
+def test_comment_container_mean_delta_exits_two(tmp_path: Path, capsys) -> None:
+    # `summary.mean_delta` fed a bare float() — a container value raised an
+    # uncaught TypeError at exit 1. Must be exit 2.
+    delta = tmp_path / "d.json"
+    _delta_json(
+        delta,
+        {
+            "current_run_id": "c",
+            "baseline_run_id": "b",
+            "suite": "s",
+            "threshold_drop": 0.1,
+            "rows": [],
+            "summary": {"mean_delta": [0.0]},
+        },
+    )
+    rc = main(_comment_dry_run(delta))
+    assert rc == 2
+    err = capsys.readouterr().err
+    assert "::error::" in err
+    assert "mean_delta must be a number" in err
+    assert "Traceback" not in err
+
+
+@pytest.mark.parametrize("field", ["baseline_score", "current_score", "delta"])
+def test_comment_container_row_score_exits_two(tmp_path: Path, capsys, field: str) -> None:
+    # A container-typed per-row score field fed `_finite_or_none`'s bare float()
+    # — an uncaught TypeError at exit 1. Must be exit 2.
+    row = {
+        "example_id": "ex1",
+        "status": "changed",
+        "baseline_score": 0.8,
+        "current_score": 0.9,
+        "delta": 0.1,
+        "flagged": False,
+    }
+    row[field] = [1, 2]
+    delta = tmp_path / "d.json"
+    _delta_json(
+        delta,
+        {
+            "current_run_id": "c",
+            "baseline_run_id": "b",
+            "suite": "s",
+            "threshold_drop": 0.1,
+            "rows": [row],
+            "summary": {},
+        },
+    )
+    rc = main(_comment_dry_run(delta))
+    assert rc == 2
+    err = capsys.readouterr().err
+    assert "::error::" in err
+    assert f"{field} must be a number" in err
+    assert "Traceback" not in err
+
+
 @pytest.mark.parametrize("field", ["current_run_id", "baseline_run_id"])
 def test_comment_null_run_id_exits_two(tmp_path: Path, capsys, field: str) -> None:
     # A present-null current/baseline run id in a delta JSON reached

@@ -1073,3 +1073,13 @@ Fixed the README line to the real output (no fabricated numbers — copied from 
 **Open questions / blockers.** None — ready for review.
 
 **Next session:** leh CLI exit-code contract is now complete on both axes (#104 read, #158 write) across all 7 write subcommands. Don't re-sweep this class in leh.
+
+## 2026-07-10 — Issue #160: numeric-coercion exit-2 parity in the loaders (~30 min, night)
+
+**What got done.** The run/delta JSON loaders coerced numeric fields with a bare `float()`/`int()`. A container- or null-typed value (which `json.loads` produces natively) raised a raw `TypeError`, which the CLI catch blocks (`KeyError`/`ValueError`/`OSError`/`JSONDecodeError`) don't translate — so it escaped as a traceback at exit 1, violating the documented exit-2 contract. #150/#156 guarded the container *shape* and #116 translated null ids/counts, but the scalar numeric coercions were left unguarded. Same field, same workflow: `score="abc"` already exited 2 via `ValueError`, but `score=[1,2]` exited 1 via an uncaught `TypeError`. Verified all six sites firsthand.
+
+Added a `_require_number(value, field)` isinstance guard (mirroring the #150/#156 container guards) that rejects a non-numeric container/null with a clean `ValueError` before coercion; numbers and numeric strings pass through unchanged (a bad numeric string still raises the original `ValueError`, already exit-2, so no message regression). Applied it at all six sites (`_finite_or_none`, `threshold_drop`, `mean_delta` on the comment path; `score`, `n_rows`, `mean_score` on the diff-json path). CLI-level tests lock exit-2/no-traceback for a container/null numeric field on both subcommands; all fail pre-fix. Full suite + ruff + mypy (D-016) green.
+
+**Why prioritized.** Static priority:high queue globally exhausted; found via the sibling-incomplete-fix meta-lens. The leh exit-2 data-layer contract is now complete across container shape (#150/#156), null scalars (#116), and numeric coercion (#160).
+
+**Open questions / blockers.** None — PR ready for review.
