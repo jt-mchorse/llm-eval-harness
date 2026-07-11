@@ -1105,3 +1105,12 @@ Fix: route the status cell through `md_table_cell` in `_row_to_md`, and add an `
 **Why prioritized.** Static priority:high queue globally exhausted; found via the sibling-incomplete-fix meta-lens (the recurring GFM-table pipe/newline-escaping class). This completes `md_table_cell` routing for every free-form GFM cell in the leh comment/calibration renderers.
 
 **Open questions / blockers.** None — PR ready for review.
+## 2026-07-11 — Issue #166: reject present-but-non-numeric judge score in drift._clamp01 (~18 min, night)
+
+**What got done.** `drift._clamp01` is the choke point every operator-supplied `judge_score_fn` result passes through in `compute_drift` (a public seam), and its docstring promises to fail loud "matching calibration.binarize (#45)". But it guarded only the numeric-but-non-finite case: a present-but-non-numeric return (str/None/list off the BYO judge seam, or None on an abstain) hit the bare `math.isfinite(x)` and raised a raw `TypeError` instead of the clean `ValueError` the contract promises. `binarize` — cited by name — rejects both non-numeric and non-finite (and bool); `_clamp01` honored only half.
+
+Broadened the guard to reject a non-real-number (and bool) the same as a non-finite one, keeping the exact `"judge score must be finite"` message so the existing NaN/Inf tests still match. Seven tests (str/None/list/dict/bool at `_clamp01`; non-numeric via `compute_drift`). Full suite + ruff green. Reproduced firsthand before/after.
+
+**Why prioritized.** Static priority:high queue globally exhausted; found via a broad llm-eval-harness sweep + the sibling-incomplete-fix meta-lens (the docstring cites binarize as the model; binarize guards both, `_clamp01` guarded only non-finite). Scope note: no CLI exit-code path (the drift CLI only uses `_judge_stub`), so this is a documented-contract-parity gap at the `compute_drift` Python-API layer, not a silent-wrong-result.
+
+**Open questions / blockers.** None — PR #167 ready for review.
