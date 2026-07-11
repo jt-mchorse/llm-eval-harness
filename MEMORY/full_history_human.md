@@ -1093,3 +1093,15 @@ Added a count-field validation loop to `DeltaReport.from_json` (after the `mean_
 **Why prioritized.** Static priority:high queue globally exhausted; found via the sibling-incomplete-fix meta-lens on the just-merged #161. The leh exit-2 contract is now complete across container shape (#150/#156), null scalars (#116), loader numeric coercion (#160/#161), and now the comment renderer's count fields (#162).
 
 **Open questions / blockers.** None — PR ready for review.
+
+## 2026-07-10 — Issue #164: escape pipe/newline in the status delta-row cell (~20 min, night)
+
+**What got done.** `comment._row_to_md` interpolated the delta row's `status` field **raw** into the GFM table (`| {r.status} | ...`), while the adjacent `example_id` cell — and `row.id` + `js.reasoning` in `calibration.py` — all route through `md_table_cell`. `status` was the one free-form cell left unescaped after the #130/#134/#142 sweep that introduced `md_table_cell` and wired every other cell through it. A `status` carrying a literal `|` injected an extra column (7 cells against the 6-column header); a newline split the row across two physical lines — corrupting the posted sticky PR comment at exit 0. The field is reachable via the shipped `comment --delta-json` entry point (the delta JSON round-trips through `RowDelta.from_json` and, per the module docstring, is CI-generated or hand-editable — the same trust model as `example_id`).
+
+A second seam: `RowDelta.from_json` read `status=payload["status"]` with a bare bracket access and no type guard, while its sibling required field `example_id` is validated to a non-empty string. A non-string status would reach `md_table_cell(...).replace` (AttributeError) or the ascii renderer's `f"{r.status:9}"` (TypeError) as a raw exit-1 traceback, breaking the comment path's exit-2 contract (#124).
+
+Fix: route the status cell through `md_table_cell` in `_row_to_md`, and add an `isinstance(status, str)` guard in `RowDelta.from_json` mirroring the `example_id` guard (clean ValueError → exit 2). Three regression tests (pipe-in-status renders one column, newline-in-status stays one line, from_json rejects dict/list/int/None status); all fail pre-fix. Full suite green; ruff check + format clean. Reproduced firsthand before and after, with the escaped `example_id` cell as the control.
+
+**Why prioritized.** Static priority:high queue globally exhausted; found via the sibling-incomplete-fix meta-lens (the recurring GFM-table pipe/newline-escaping class). This completes `md_table_cell` routing for every free-form GFM cell in the leh comment/calibration renderers.
+
+**Open questions / blockers.** None — PR ready for review.

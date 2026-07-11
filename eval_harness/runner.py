@@ -213,6 +213,20 @@ class RowDelta:
                 "null/non-string example_id renders as a literal 'None' row id in the "
                 "posted PR comment"
             )
+        # Same parity guard as `example_id` above: `status` is a required
+        # free-form string that lands in two renderers — the GFM table cell in
+        # `comment._row_to_md` (escaped via `md_table_cell`) and the ascii row
+        # in `render_delta_text` (`f"{r.status:9}"`). A present-but-non-string
+        # status from an externally-produced delta JSON would raise a raw
+        # AttributeError (`md_table_cell(...).replace`) or TypeError (the `:9`
+        # format spec) at exit 1, breaking the exit-2 contract the comment path
+        # honors (#124). Reject it as a clean ValueError here instead.
+        status = payload["status"]
+        if not isinstance(status, str):
+            raise ValueError(
+                f"status must be a string; got {type(status).__name__} for "
+                f"example_id {example_id!r}"
+            )
         return cls(
             example_id=example_id,
             baseline_score=_finite_or_none(
@@ -222,7 +236,7 @@ class RowDelta:
                 payload.get("current_score"), "current_score", example_id
             ),
             delta=_finite_or_none(payload.get("delta"), "delta", example_id),
-            status=payload["status"],
+            status=status,
             flagged=payload.get("flagged", False),
         )
 

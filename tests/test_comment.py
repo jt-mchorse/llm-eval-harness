@@ -194,6 +194,53 @@ def test_ascii_renderer_is_pipe_free_so_a_piped_id_cant_misalign_it():
     assert "a\\|b" not in piped
 
 
+def test_render_escapes_pipe_in_status_so_columns_dont_break():
+    # #164: `status` is a free-form cell too — it round-trips through
+    # externally-produced delta JSON (RowDelta.from_json reads payload["status"]).
+    # It was the one free-form cell left routed around `md_table_cell` after
+    # #130/#134/#142 wired every other cell through it. A `|` in status injects an
+    # extra GFM column; the row's unescaped-pipe count must equal the header's.
+    # Fails pre-fix (the piped status row carried one extra unescaped pipe).
+    md = render_delta_markdown(
+        _make_report(
+            [RowDelta("qa_01", 0.6, 0.9, 0.3, "improved | INJECTED", False)],
+            _default_summary(mean_delta=0.3, n_improved=1),
+        )
+    )
+    lines = md.splitlines()
+    header_line = next(ln for ln in lines if ln.startswith("| status |"))
+    row_line = next(ln for ln in lines if "INJECTED" in ln)
+
+    def unescaped_pipes(s: str) -> int:
+        return len(re.findall(r"(?<!\\)\|", s))
+
+    assert unescaped_pipes(row_line) == unescaped_pipes(header_line)
+    # The literal pipe is preserved (escaped), not dropped.
+    assert "improved \\| INJECTED" in row_line
+
+
+def test_render_neutralizes_newline_in_status_so_the_row_stays_one_line():
+    # #164 companion to the pipe case: a literal newline in status is a GFM *row*
+    # delimiter — it splits the cell across two physical lines, corrupting the
+    # table exactly as an unescaped pipe corrupts columns. The status-bearing row
+    # must render as exactly one physical line. Fails pre-fix (row split in two).
+    md = render_delta_markdown(
+        _make_report(
+            [RowDelta("qa_01", 0.9, 0.4, -0.5, "regressed\nEVIL", True)],
+            _default_summary(mean_delta=-0.5, n_regressed=1, n_flagged=1),
+        )
+    )
+    lines = md.splitlines()
+    header_line = next(ln for ln in lines if ln.startswith("| status |"))
+    evil_lines = [ln for ln in lines if "EVIL" in ln]
+
+    def unescaped_pipes(s: str) -> int:
+        return len(re.findall(r"(?<!\\)\|", s))
+
+    assert len(evil_lines) == 1, lines
+    assert unescaped_pipes(evil_lines[0]) == unescaped_pipes(header_line)
+
+
 def test_render_flagged_row_carries_warning():
     md = render_delta_markdown(
         _make_report(
@@ -539,6 +586,16 @@ def test_row_delta_from_json_raises_on_missing_required_key() -> None:
         RowDelta.from_json({"status": "improved"})
     with pytest.raises(KeyError, match="status"):
         RowDelta.from_json({"example_id": "qa_01"})
+
+
+def test_row_delta_from_json_rejects_non_string_status() -> None:
+    """#164: a present-but-non-string `status` from an externally-produced delta
+    JSON must fail clean (ValueError -> exit 2 on the comment path), mirroring the
+    `example_id` guard — not reach `md_table_cell(...).replace` (AttributeError)
+    or the ascii `f"{r.status:9}"` format (TypeError) as a raw exit-1 traceback."""
+    for bad in ({"a": 1}, ["regressed"], 3, None):
+        with pytest.raises(ValueError, match="status must be a string"):
+            RowDelta.from_json({"example_id": "qa_01", "status": bad})
 
 
 def test_delta_report_from_json_round_trips_populated_payload() -> None:

@@ -113,8 +113,15 @@ def _row_to_md(r: RowDelta) -> str:
     # (#142), both before inline-code spans are parsed. `md_table_cell` escapes
     # the pipe and collapses any CR/LF run so the id contributes zero column or
     # row delimiters.
+    # `status` is free-form too (it round-trips through externally-produced delta
+    # JSON, e.g. a hand-edited or CI-generated DeltaReport), so it defends the
+    # same two GFM delimiters as `example_id`: an unescaped `|` injects an extra
+    # column and a literal newline splits the row across two physical lines. It
+    # was the one free-form cell in this package left routed around
+    # `md_table_cell` after #130/#134/#142 wired every other cell through it.
     example_id = md_table_cell(r.example_id)
-    return f"| {r.status} | `{example_id}` | {fmt(r.baseline_score)} | {fmt(r.current_score)} | {delta_str} | {flag} |"
+    status = md_table_cell(r.status)
+    return f"| {status} | `{example_id}` | {fmt(r.baseline_score)} | {fmt(r.current_score)} | {delta_str} | {flag} |"
 
 
 # ---------------------------------------------------------------------------
