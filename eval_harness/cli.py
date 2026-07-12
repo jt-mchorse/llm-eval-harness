@@ -35,7 +35,7 @@ from eval_harness.comment import (
     render_delta_markdown,
     upsert_sticky_comment,
 )
-from eval_harness.dataset import validate_dataset
+from eval_harness.dataset import DatasetLoadError, validate_dataset
 from eval_harness.io_utils import atomic_write_text
 from eval_harness.judge import AnthropicBackend, Judge
 from eval_harness.runner import (
@@ -401,6 +401,18 @@ def _run_run(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return 2
+    except FileNotFoundError as e:
+        # A missing/unreadable/malformed --dataset is an I/O-or-usage error → exit
+        # 2, matching the `validate` sibling and the `0/1/2` contract `_fail`
+        # documents. `run` was the one input seam the #104/#110/#116/#122/#124
+        # exit-code sweep left with only the EmptyTagFilterError guard, so a bad
+        # dataset escaped as a raw traceback at exit 1. (FileNotFoundError before
+        # OSError — it's a subclass; DatasetLoadError is a ValueError, separate.)
+        return _fail(f"dataset not found: {e}")
+    except OSError as e:
+        return _fail(f"failed to read dataset {args.dataset}: {e}")
+    except DatasetLoadError as e:
+        return _fail(str(e))
     json_text = render_run_json(result)
     if args.out:
         if (rc := _write_output(args.out, json_text)) is not None:

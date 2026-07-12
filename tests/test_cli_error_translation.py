@@ -824,3 +824,30 @@ def test_comment_valid_summary_count_exits_zero(tmp_path: Path, capsys, good) ->
     rc = main(_comment_dry_run(delta))
     assert rc == 0
     assert "Traceback" not in capsys.readouterr().err
+
+
+# --- #168: run's --dataset seam must exit 2, not raw-traceback (sibling of validate) ---
+
+
+def test_run_missing_dataset_exits_two(tmp_path: Path, capsys) -> None:
+    # `run` constructs the (lazy) AnthropicBackend, but a missing --dataset fails
+    # at load inside run_suite before any judge/API call — so this is hermetic
+    # (no `judge` extra / API key). Pre-fix it escaped as a raw FileNotFoundError
+    # traceback at exit 1; now it maps to the `validate`-style clean exit 2.
+    missing = tmp_path / "no_such_dataset.jsonl"
+    rc = main(["run", "--suite", "demo", "--dataset", str(missing), "--db", str(tmp_path / "e.db")])
+    assert rc == 2
+    err = capsys.readouterr().err
+    assert "::error::" in err
+    assert "dataset not found" in err
+    assert str(missing) in err
+
+
+def test_run_malformed_dataset_exits_two(tmp_path: Path, capsys) -> None:
+    # A malformed dataset line raises DatasetLoadError (a ValueError) at load; it
+    # too must translate to exit 2 with a clean ::error:: line, not a traceback.
+    bad = tmp_path / "bad.jsonl"
+    bad.write_text("not valid json\n", encoding="utf-8")
+    rc = main(["run", "--suite", "demo", "--dataset", str(bad), "--db", str(tmp_path / "e.db")])
+    assert rc == 2
+    assert "::error::" in capsys.readouterr().err
