@@ -508,8 +508,16 @@ def _clamp01(x: float) -> float:
     JSD histogram. Fail loud at the choke point instead, matching the
     finiteness guards in ``runner.load_run_result_from_json`` (#86) and
     ``calibration.binarize`` (#45).
+
+    A *present-but-non-numeric* result (a ``str``/``None``/``list`` off the
+    same BYO ``judge_score_fn`` seam — a judge that forgot to parse its model
+    output to ``float``, or returned ``None`` on an abstain) hit the bare
+    ``math.isfinite(x)`` and raised a raw ``TypeError`` instead of this clean
+    ``ValueError`` — the non-numeric branch the cited ``binarize`` (#45) guards
+    but this only-non-finite guard missed. Reject it (and ``bool``, which
+    ``binarize`` also rejects) the same way so the parity contract holds.
     """
-    if not math.isfinite(x):
+    if not isinstance(x, (int, float)) or isinstance(x, bool) or not math.isfinite(x):
         raise ValueError(f"judge score must be finite; got {x!r}")
     if x < 0.0:
         return 0.0

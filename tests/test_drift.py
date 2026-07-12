@@ -481,6 +481,28 @@ def test_clamp01_rejects_non_finite(bad):
         clamp01(bad)
 
 
+# #166: the present-but-non-numeric sibling of the non-finite guard. A str/None/
+# list/bool judge score (a BYO judge_score_fn that forgot to parse to float, or
+# returned None on an abstain) hit the bare math.isfinite and raised a raw
+# TypeError; must now raise the same clean ValueError, matching the cited
+# calibration.binarize (#45) parity contract.
+@pytest.mark.parametrize("bad", ["0.7", None, [0.5], {"s": 1}, True, False])
+def test_clamp01_rejects_non_numeric(bad):
+    with pytest.raises(ValueError, match="judge score must be finite"):
+        clamp01(bad)  # type: ignore[arg-type]
+
+
+def test_compute_drift_rejects_non_numeric_judge_score_with_clear_error():
+    # A non-numeric judge_score_fn return previously raised a raw TypeError deep
+    # in _clamp01; now surfaces the same judge-score contract violation as NaN.
+    with pytest.raises(ValueError, match="judge score must be finite"):
+        compute_drift(
+            ["good"],
+            ["bad"],
+            judge_score_fn=lambda t: "0.7" if "bad" in t else 0.5,
+        )
+
+
 def test_clamp01_still_clamps_finite_out_of_range():
     assert clamp01(-0.5) == 0.0
     assert clamp01(1.5) == 1.0
