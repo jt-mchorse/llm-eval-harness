@@ -824,3 +824,43 @@ def test_comment_valid_summary_count_exits_zero(tmp_path: Path, capsys, good) ->
     rc = main(_comment_dry_run(delta))
     assert rc == 0
     assert "Traceback" not in capsys.readouterr().err
+
+
+# --- #168: run's --dataset seam must exit 2, not raw-traceback (sibling of validate) ---
+
+
+def _block_anthropic(monkeypatch) -> None:
+    # Simulate a minimal install (no `judge` extra): make `import anthropic`
+    # raise ImportError. This locks the load-BEFORE-backend ordering — `run` must
+    # validate the dataset and exit 2 without ever importing anthropic, otherwise
+    # AnthropicBackend construction (which imports anthropic) would mask the
+    # dataset error with an ImportError in CI's minimal install.
+    import sys
+
+    monkeypatch.setitem(sys.modules, "anthropic", None)
+
+
+def test_run_missing_dataset_exits_two(tmp_path: Path, capsys, monkeypatch) -> None:
+    # Pre-fix a missing --dataset escaped as a raw FileNotFoundError traceback at
+    # exit 1; now it maps to the `validate`-style clean exit 2 — hermetically,
+    # before the judge backend is built.
+    _block_anthropic(monkeypatch)
+    missing = tmp_path / "no_such_dataset.jsonl"
+    rc = main(["run", "--suite", "demo", "--dataset", str(missing), "--db", str(tmp_path / "e.db")])
+    assert rc == 2
+    err = capsys.readouterr().err
+    assert "::error::" in err
+    assert "dataset not found" in err
+    assert str(missing) in err
+
+
+def test_run_malformed_dataset_exits_two(tmp_path: Path, capsys, monkeypatch) -> None:
+    # A malformed dataset line raises DatasetLoadError (a ValueError) at load; it
+    # too must translate to exit 2 with a clean ::error:: line, not a traceback —
+    # and hermetically, without importing anthropic.
+    _block_anthropic(monkeypatch)
+    bad = tmp_path / "bad.jsonl"
+    bad.write_text("not valid json\n", encoding="utf-8")
+    rc = main(["run", "--suite", "demo", "--dataset", str(bad), "--db", str(tmp_path / "e.db")])
+    assert rc == 2
+    assert "::error::" in capsys.readouterr().err

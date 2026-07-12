@@ -1114,3 +1114,15 @@ Broadened the guard to reject a non-real-number (and bool) the same as a non-fin
 **Why prioritized.** Static priority:high queue globally exhausted; found via a broad llm-eval-harness sweep + the sibling-incomplete-fix meta-lens (the docstring cites binarize as the model; binarize guards both, `_clamp01` guarded only non-finite). Scope note: no CLI exit-code path (the drift CLI only uses `_judge_stub`), so this is a documented-contract-parity gap at the `compute_drift` Python-API layer, not a silent-wrong-result.
 
 **Open questions / blockers.** None — PR #167 ready for review.
+
+## 2026-07-12 — Issue #168: run's missing/malformed --dataset exits 2, not a traceback (~15 min, night)
+
+**What got done.** The `run` subcommand (`_run_run`, `eval_harness/cli.py`) wrapped `run_suite(...)` in a `try` that caught **only** `EmptyTagFilterError`. A missing/unreadable/malformed `--dataset` (read downstream via `runner._load → dataset.load_jsonl`, which raises `FileNotFoundError` / `DatasetLoadError`) escaped as a **raw traceback at exit 1**, breaking the CLI's `0 = clean / 1 = findings|regression / 2 = I/O or usage error` contract. `run` was the one input seam the #104/#110/#116/#122/#124 exit-code sweep skipped — and `_fail`'s own docstring *claims* `run` honors the contract.
+
+Pre-load the dataset (`list(load_jsonl(args.dataset))`) and translate `FileNotFoundError` → `_fail("dataset not found: ...")`, `OSError` → `_fail("failed to read dataset ...")`, `DatasetLoadError` → `_fail(str(e))` **before** constructing the judge backend, mirroring `_run_calibrate`'s load-before-backend ordering. 2 tests. Full suite 675, ruff + mypy (D-016) clean. Reproduced both cases firsthand (missing → exit 2 `dataset not found`; malformed → exit 2 `line 1: invalid JSON`).
+
+**CI caught a real subtlety.** My first attempt put the catch *after* `AnthropicBackend(model=...)`. But `AnthropicBackend.__init__` **imports `anthropic` at construction** (judge.py:163, not lazy), so in CI's minimal install (no `judge` extra) it raised `ModuleNotFoundError`/`ImportError` **before** the dataset catch → exit 1; the suite passed locally only because my `.venv` has `anthropic`. Fixed by validating the dataset **before** building the backend (exactly what `_run_calibrate` does); the two tests now `monkeypatch.setitem(sys.modules, "anthropic", None)` to lock hermeticity in any environment. Lesson: `run`-path tests must simulate the minimal install.
+
+**Why prioritized.** Found via a cross-repo exit-code/missing-file hunt (the lens that yielded vsas #85/#87 this run). The other 4 repos (rag/chunking/ems/lco) came back EMPTY on this lens — their bench scripts are self-contained generators with no operator-file input, or no in-repo exit-2 contract to diverge from. Verified firsthand. Not JT-gated.
+
+**Open questions / blockers.** None — PR #169 ready.
