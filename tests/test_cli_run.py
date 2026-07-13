@@ -150,6 +150,29 @@ def test_run_unknown_baseline_exits_2_not_traceback(tmp_path: Path, capsys) -> N
     assert "::error::" in stderr
 
 
+def test_run_non_utf8_dataset_exits_2_not_traceback(tmp_path: Path, capsys) -> None:
+    # #173: load_jsonl decodes lazily while iterating the file handle, outside
+    # the per-row json.loads try. A non-UTF-8 byte raises UnicodeDecodeError (a
+    # ValueError subclass, NOT an OSError and NOT a DatasetLoadError), which the
+    # dataset-load catches missed — so it escaped as a raw traceback at exit 1.
+    # It must translate to a clean ::error:: + exit 2 like the sibling read
+    # failures, before the backend is even constructed.
+    bad = tmp_path / "bad.jsonl"
+    # Latin-1 'é' (0xE9) — an invalid UTF-8 continuation byte.
+    bad.write_bytes(
+        b'{"id": "a", "input": "caf\xe9", "dataset_version": "1", "provenance": {}, "expected_outputs": ["x"]}\n'
+    )
+    db = tmp_path / "runs.db"
+    rc, _, stderr = _run_cli(
+        ["run", "--suite", "smoke", "--dataset", str(bad), "--db", str(db), "--no-diff"],
+        capsys=capsys,
+    )
+    assert rc == 2, f"expected exit 2 for a non-UTF-8 dataset, got {rc}"
+    assert "not valid UTF-8" in stderr
+    assert "::error::" in stderr
+    assert "Traceback" not in stderr
+
+
 def test_diff_exits_nonzero_when_regression_flagged(tmp_path: Path, capsys) -> None:
     db = tmp_path / "runs.db"
 

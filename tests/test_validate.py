@@ -319,6 +319,35 @@ def test_cli_malformed_fixture_exits_one_with_findings_on_stderr(tmp_path: Path)
     assert result.stdout.startswith("fail:")
 
 
+def test_cli_non_utf8_dataset_exits_two_no_traceback(tmp_path: Path) -> None:
+    # #173: validate_dataset decodes lazily while iterating the file handle,
+    # outside the per-row json.loads try. A non-UTF-8 byte raises
+    # UnicodeDecodeError (a ValueError subclass, NOT an OSError), which the
+    # narrow FileNotFoundError/OSError CLI catches missed — so it escaped as a
+    # raw traceback at exit 1. A whole-file decode failure is an I/O error
+    # (exit 2), not a per-row finding.
+    path = tmp_path / "bad.jsonl"
+    # Latin-1 'é' (0xE9) — an invalid UTF-8 continuation byte.
+    path.write_bytes(
+        b'{"id": "a", "input": "caf\xe9", "dataset_version": "1", "provenance": {}, "expected_outputs": ["x"]}\n'
+    )
+    result = _run_cli(str(path))
+    assert result.returncode == 2
+    assert "not valid UTF-8" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
+def test_cli_non_utf8_calibration_exits_two_no_traceback(tmp_path: Path) -> None:
+    # #173: `validate --calibration` routes through the same _run_validate
+    # handler, so it had the identical UnicodeDecodeError gap.
+    path = tmp_path / "bad_cal.jsonl"
+    path.write_bytes(b'{"id": "a", "input": "caf\xe9"}\n')
+    result = _run_cli("--calibration", str(path))
+    assert result.returncode == 2
+    assert "not valid UTF-8" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
 def test_cli_json_flag_emits_report_dict_and_respects_exit_code(tmp_path: Path) -> None:
     """``--json`` emits the ``to_dict()`` shape on stdout; exit code
     unchanged (1 because the fixture has a duplicate-id finding)."""

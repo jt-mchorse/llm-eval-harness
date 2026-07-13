@@ -397,6 +397,12 @@ def _run_run(args: argparse.Namespace) -> int:
         return _fail(f"dataset not found: {e}")
     except OSError as e:
         return _fail(f"failed to read dataset {args.dataset}: {e}")
+    except UnicodeDecodeError as e:
+        # load_jsonl decodes lazily while iterating the file handle, outside the
+        # per-row json.loads try. A non-UTF-8 byte raises UnicodeDecodeError (a
+        # ValueError subclass, NOT an OSError and NOT a DatasetLoadError), which
+        # the catches here miss — so it escaped as a raw traceback at exit 1.
+        return _fail(f"failed to read dataset {args.dataset}: not valid UTF-8: {e}")
     except DatasetLoadError as e:
         return _fail(str(e))
 
@@ -688,6 +694,17 @@ def _run_validate(args: argparse.Namespace) -> int:
         return 2
     except OSError as e:
         print(f"::error::failed to read {kind} {args.dataset}: {e}", file=sys.stderr)
+        return 2
+    except UnicodeDecodeError as e:
+        # The validators decode lazily while iterating the file handle, outside
+        # the per-row json.loads try. A non-UTF-8 byte raises UnicodeDecodeError
+        # (a ValueError subclass, NOT an OSError), which the narrow catches above
+        # miss — so it escaped as a raw traceback at exit 1, breaking the
+        # documented "0 clean / 1 findings / 2 I/O error" contract. A whole-file
+        # decode failure is an I/O error (exit 2), not a per-row finding.
+        print(
+            f"::error::failed to read {kind} {args.dataset}: not valid UTF-8: {e}", file=sys.stderr
+        )
         return 2
 
     if args.as_json:

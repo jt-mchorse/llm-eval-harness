@@ -1139,3 +1139,15 @@ Pre-load the dataset (`list(load_jsonl(args.dataset))`) and translate `FileNotFo
 **Open questions / blockers:** none — ready for review.
 
 **Next session:** check the remaining JS arch-doc repos (mcp-server-cookbook, ai-app-integration-tests) and the other Python repos (rag, lco, prs, ems, vsas, aop, pyasync) for the same directory-tree completeness gap — a fenced tree or module list stale vs the shipped package.
+
+## Session 2026-07-13 (night) — issue #173: validate/run exit 2 on non-UTF-8 dataset
+
+`eval-harness validate` (and `validate --calibration`) and `eval-harness run` leaked a raw `UnicodeDecodeError` traceback at exit 1 on a dataset/calibration JSONL that isn't valid UTF-8, breaking the documented "0 clean / 1 findings / 2 I/O error" contract. `load_jsonl`/`validate_dataset`/`validate_calibration` decode lazily while iterating the file handle, outside the per-row `json.loads` try, so a non-UTF-8 byte raises there. `UnicodeDecodeError` subclasses `ValueError` — not `OSError`, not `DatasetLoadError` — so it escaped `_run_validate`'s and `_run_run`'s narrow catches. `_run_calibrate` was already robust because it catches bare `ValueError`.
+
+The fix adds `except UnicodeDecodeError` → exit 2 to both gap seams (the `_run_validate` fix covers both `validate` and `validate --calibration`, which route through the same handler). Verified all three seams firsthand before and after. Three lock tests; full suite green, ruff clean.
+
+**Why this work, this session:** Eighth hit of the night run, and the second of a *second-order cross-repo* sweep: after shipping the prompt-regression-suite #125 `UnicodeDecodeError`-at-utf8-read-seam fix, the same lens surfaced this in embedding-model-shootout (#101) and here. The decode-failure mode is a `ValueError` subclass that slips past `OSError`/`DatasetLoadError`-only catches at seams with a documented exit-code contract that decode lazily while iterating the handle. Verified firsthand before filing.
+
+**Open questions / blockers:** none — PR #174 ready for review.
+
+**Next session:** Phase A merge PR for #173.
