@@ -336,3 +336,44 @@ def test_resolvable_prefixes_hard_pin_set() -> None:
 
 def test_min_active_decision_id_hard_pin() -> None:
     assert MIN_ACTIVE_DECISION_ID == 2
+
+
+# ---------------------------------------------------------------------------
+# Directory-tree completeness lock (#171).
+#
+# The doc opens with a fenced `eval_harness/` directory tree annotating each
+# module. Its bare `foo.py` entries are neither backtick-quoted path tokens (so
+# `test_backtick_paths_resolve_on_disk` skips them) nor dotted `<module>.<symbol>`
+# refs (so the symbol resolver skips them), and nothing asserts the tree is
+# *complete* against the package. That is exactly how `eval_harness/markdown.py`
+# (the GFM escaper, #142) shipped without ever landing in the tree, CI-green.
+# Lock it: every module the package actually ships is named in the doc.
+_PKG = REPO_ROOT / "eval_harness"
+
+
+def _package_module_basenames() -> list[str]:
+    """Every `eval_harness/*.py` module basename (flat package; excludes
+    dunder-only files other than the public `__init__.py`, which the tree does
+    list)."""
+    return sorted(p.name for p in _PKG.glob("*.py"))
+
+
+def test_every_package_module_named_in_doc(doc_text: str) -> None:
+    """Every `eval_harness/*.py` module basename appears in docs/architecture.md
+    (#171). Catches a module that ships without a directory-tree update."""
+    names = _package_module_basenames()
+    assert names, "expected eval_harness/*.py modules on disk"
+    missing = [n for n in names if n not in doc_text]
+    assert not missing, (
+        "docs/architecture.md does not name these eval_harness/ modules anywhere "
+        "(add them to the directory tree so the architecture stays complete):\n"
+        + "\n".join(f"  - {m}" for m in missing)
+    )
+
+
+def test_package_module_completeness_flags_injected_gap(doc_text: str) -> None:
+    """Inverse safety net: a synthetic module absent from the doc is flagged,
+    while the real modules still resolve (guards a vacuously-green check)."""
+    names = [*_package_module_basenames(), "totally_unlisted_module.py"]
+    missing = [n for n in names if n not in doc_text]
+    assert missing == ["totally_unlisted_module.py"]
