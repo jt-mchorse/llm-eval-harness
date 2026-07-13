@@ -18,6 +18,7 @@ eval_harness/
 ├── comment.py          ← #6: sticky-comment renderer + marker-based upsert (D-009)
 ├── cli.py              ← #7: argparse entry point binding every layer
 ├── io_utils.py         ← cross-cutting: atomic_write_text (D-015)
+├── markdown.py         ← cross-cutting: md_table_cell GFM escaper (#130/#134/#142)
 └── __init__.py         ← public surface (#24)
 ```
 

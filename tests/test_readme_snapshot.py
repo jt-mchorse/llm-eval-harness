@@ -1,8 +1,8 @@
 """README snapshot: lock the surface bullet list to reality.
 
 Sister to the portfolio-wide snapshot pattern landed 2026-05-18+.
-The README's "What this is" enumerates nine pieces and pins each to a
-closed issue (#1..#7, #15, #17). The CLI bullet (#7) lists the public
+The README's "What this is" enumerates eleven pieces and pins each to a
+closed issue (#1..#7, #15, #17, #56, #58). The CLI bullet (#7) lists the public
 subcommand surface. Without this test, a renamed subcommand or a newly
 closed issue can leave the prose stale and the snapshot pattern across
 the portfolio (one repo missing it after seven sister PRs landed
@@ -56,13 +56,29 @@ def _readme() -> str:
     return README.read_text(encoding="utf-8")
 
 
-def test_what_this_is_section_lists_nine_closed_issues_in_order() -> None:
-    """The numbered list under `## What this is` cites every shipped issue
-    once, in the order the implementations landed."""
+# Number-words the intro sentence may use, mapped to their integer value.
+# Extend as the surface list grows past twelve.
+_NUMBER_WORDS = {
+    "nine": 9,
+    "ten": 10,
+    "eleven": 11,
+    "twelve": 12,
+    "thirteen": 13,
+    "fourteen": 14,
+}
+
+
+def _what_this_is_section() -> str:
     body = _readme()
     start = body.index("## What this is")
     end = body.index("##", start + 1)
-    section = body[start:end]
+    return body[start:end]
+
+
+def test_what_this_is_section_lists_eleven_closed_issues_in_order() -> None:
+    """The numbered list under `## What this is` cites every shipped issue
+    once, in the order the implementations landed."""
+    section = _what_this_is_section()
     expected = [
         "(#1)",
         "(#2)",
@@ -81,10 +97,47 @@ def test_what_this_is_section_lists_nine_closed_issues_in_order() -> None:
         if ref in section:
             found_order.append(ref)
     assert found_order == expected, (
-        "What this is section must cite (#1)..(#7), (#15), (#17) in landing order; "
+        "What this is section must cite (#1)..(#7), (#15), (#17), (#56), (#58) in landing order; "
         f"found order: {found_order}. "
-        "If a new feature shipped, append a tenth bullet with its issue ref."
+        "If a new feature shipped, append the next bullet with its issue ref."
     )
+
+
+def test_what_this_is_intro_count_word_matches_bullet_count() -> None:
+    """The intro's number-word ("Eleven closed issues map to eleven pieces …")
+    must equal the count of top-level numbered bullets below it (#170).
+
+    Before #170 the intro said "Nine" while the list had grown to eleven
+    bullets — the issue-ref lock covered the refs but nothing tied the prose
+    count to the list length, so the intro silently drifted. This assertion
+    closes that gap: a future 12th piece must bump the intro word too.
+    """
+    section = _what_this_is_section()
+    intro = section.splitlines()[: _bullet_start_index(section)]
+    intro_text = " ".join(intro).lower()
+    words_present = [w for w in _NUMBER_WORDS if w in intro_text]
+    assert words_present, (
+        "expected a spelled-out count word (e.g. 'eleven') in the "
+        f"'What this is' intro; extend _NUMBER_WORDS if a larger count shipped. Intro:\n{intro_text}"
+    )
+    # The intro repeats the count ("Eleven … eleven pieces"); all occurrences
+    # must agree, and equal the number of top-level `N.` bullets.
+    claimed = {_NUMBER_WORDS[w] for w in words_present}
+    n_bullets = len(re.findall(r"(?m)^\d+\.\s", section))
+    assert claimed == {n_bullets}, (
+        f"'What this is' intro claims count(s) {sorted(claimed)} but the section has "
+        f"{n_bullets} top-level numbered bullets. Update the intro number-word to match "
+        "(both occurrences) when a piece is added or removed."
+    )
+
+
+def _bullet_start_index(section: str) -> int:
+    """Line index of the first top-level `1.` numbered bullet in the section,
+    so the intro prose is everything above it."""
+    for i, line in enumerate(section.splitlines()):
+        if re.match(r"^\d+\.\s", line):
+            return i
+    return len(section.splitlines())
 
 
 def test_cli_subcommand_bullet_matches_argparse_surface() -> None:

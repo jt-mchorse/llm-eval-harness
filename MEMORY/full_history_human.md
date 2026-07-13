@@ -1126,3 +1126,16 @@ Pre-load the dataset (`list(load_jsonl(args.dataset))`) and translate `FileNotFo
 **Why prioritized.** Found via a cross-repo exit-code/missing-file hunt (the lens that yielded vsas #85/#87 this run). The other 4 repos (rag/chunking/ems/lco) came back EMPTY on this lens — their bench scripts are self-contained generators with no operator-file input, or no in-repo exit-2 contract to diverge from. Verified firsthand. Not JT-gated.
 
 **Open questions / blockers.** None — PR #169 ready.
+
+## 2026-07-13 (Night) — Issues #171 + #170: architecture-tree + README surface-count completeness
+**Duration:** ~25 min · **Branch:** `session/2026-07-13-0525-issue-171` · **PR:** #172 (closes both)
+
+- **#171 (new):** `docs/architecture.md`'s directory tree listed 11 of `eval_harness/`'s 12 modules — `markdown.py` (the cross-cutting GFM escaper `md_table_cell`, #130/#134/#142, sibling of the listed `io_utils.py`) was absent. Uncaught because the fenced tree's bare `foo.py` entries are neither backtick paths nor dotted symbols and nothing asserted completeness. Added it to the tree + a code-tied lock (every `eval_harness/*.py` basename must appear in the doc, inverse-verified). Left the "nine pieces of code" prose — it counts the 9 *feature* modules; `markdown.py` is cross-cutting.
+- **#170 (filed, priority:low):** the README "What this is" intro said "Nine closed issues map to nine pieces" while the list had grown to 11 bullets (#56/#58 uncounted). Fixed the intro to "Eleven", de-staled the readme-snapshot lock test name/docstring/message, and added an assertion tying the intro's spelled-out count to the number of top-level numbered bullets.
+- Both fixed in one PR (same repo, same drift class, same investigation, one MEMORY entry to avoid append-only sibling conflicts). Verified both new locks flag the pre-fix state. Full suite 678 pass; ruff format/check clean.
+
+**Why this work, this session:** the "arch-doc drift beyond the lock lens" — directory-tree/count-completeness variant — ported from chunking-strategies-lab #122 and nextjs-streaming-ai-patterns #83 earlier the same night; third repo in a row this lens hit.
+
+**Open questions / blockers:** none — ready for review.
+
+**Next session:** check the remaining JS arch-doc repos (mcp-server-cookbook, ai-app-integration-tests) and the other Python repos (rag, lco, prs, ems, vsas, aop, pyasync) for the same directory-tree completeness gap — a fenced tree or module list stale vs the shipped package.

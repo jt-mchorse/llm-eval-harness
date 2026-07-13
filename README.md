@@ -8,7 +8,7 @@
 
 A small, dep-disciplined Python package every other repo in this
 portfolio (rag, agents, cost-optimizer) imports to express its evals as
-code. Nine closed issues map to nine pieces of surface:
+code. Eleven closed issues map to eleven pieces of surface:
 
 1. **Versioned golden datasets** (#1) — `fixtures/*.jsonl`. Each line
    carries `id`, `input`, `expected_outputs`, `tags`, `dataset_version`,
