@@ -1151,3 +1151,16 @@ The fix adds `except UnicodeDecodeError` → exit 2 to both gap seams (the `_run
 **Open questions / blockers:** none — PR #174 ready for review.
 
 **Next session:** Phase A merge PR for #173.
+
+## 2026-07-14 (night) — Issue #175: atomic_write_text overflows NAME_MAX on a long basename
+**Duration:** ~15 min · **Branch:** `session/2026-07-14-0734-issue-175` · **PR:** #176
+
+`atomic_write_text` built its temp file name as `.<basename>.<random>.tmp`, so a destination basename near `NAME_MAX` (255 bytes) overflowed the limit and raised `OSError` ENAMETOOLONG — even though a plain `write_text` of that same path succeeds. Reachable from every operator-controlled `--out`/`--output` path and `Dataset.dump_jsonl`. This is the identical bug already fixed in `rag-production-kit#128` and `mcp-server-cookbook#96`; leh still carried the pre-fix construction. Verified firsthand: a 250-byte basename that `write_text` accepts failed via `atomic_write_text`.
+
+Fixed by porting the rag#128 fix — cap the basename's contribution to the temp name to a 200-byte budget (`_cap_base_for_temp`, trimming on a char boundary since NAME_MAX is a byte limit and a multibyte codepoint must never be split). One regression test; full suite green, ruff clean.
+
+**Why this work, this session:** Fifth hit of the night run, surfaced by a cross-repo `atomic_write_text` overflow hunt. The helper is copy-pasted (identically vulnerable) across every remaining Python repo (ems, prs, chunking, vsas, lco, pyasync) — a multi-repo sweep of a real bug already deemed worth fixing twice (rag, mcp), one PR per repo.
+
+**Open questions / blockers:** none — PR #176 ready for review.
+
+**Next session:** Phase A merge PR for #175.
