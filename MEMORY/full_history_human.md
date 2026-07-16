@@ -1164,3 +1164,19 @@ Fixed by porting the rag#128 fix — cap the basename's contribution to the temp
 **Open questions / blockers:** none — PR #176 ready for review.
 
 **Next session:** Phase A merge PR for #175.
+
+## 2026-07-15 — Issue #178: bool threshold disables the eval gate (sibling of #154)
+
+The #154 fix added range-validation to the `@pytest.mark.eval(threshold=...)`
+marker, but used a bare `float(...)` + bounds check. Because `bool` is an `int`
+subclass, `float(True)==1.0` and `float(False)==0.0` land inside `[0,1]` and slip
+through — `threshold=False` silently disables the gate (a broken judge scoring 0.0
+passes green), `threshold=True` makes every eval impossible to pass. The guard's own
+comment claimed to mirror calibration.py/judge.py, which explicitly reject `bool` —
+but this seam didn't. A comment that lies about parity is a strong incomplete-fix tell.
+
+Fixed by rejecting `bool`/non-numerics before coercing, mirroring the siblings.
+Verified firsthand; full suite green.
+
+Why prioritized: sibling-incomplete-fix meta-lens (surfaced by a hunt agent, verified
+firsthand) on a priority-tier repo.

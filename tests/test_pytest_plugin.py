@@ -224,7 +224,21 @@ def test_marker_explicit_empty_rubric_raises_at_collection(pytester: pytest.Pyte
 
 
 @pytest.mark.parametrize(
-    "bad_threshold", ["float('nan')", "float('-inf')", "float('inf')", "1.5", "-0.1"]
+    "bad_threshold",
+    [
+        "float('nan')",
+        "float('-inf')",
+        "float('inf')",
+        "1.5",
+        "-0.1",
+        # `bool` is an `int` subclass, so `float(True)==1.0` / `float(False)==0.0`
+        # land IN [0, 1] and slip past the bounds check — `threshold=False`
+        # silently disables the gate (a broken 0.0-scoring judge passes green),
+        # `threshold=True` makes every eval impossible to pass. The sibling
+        # guards (calibration.py, judge.py) reject `bool`; this seam must too.
+        "True",
+        "False",
+    ],
 )
 def test_marker_out_of_range_threshold_raises_at_collection(
     pytester: pytest.Pytester, bad_threshold: str
