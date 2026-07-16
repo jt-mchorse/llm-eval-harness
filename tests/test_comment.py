@@ -170,6 +170,25 @@ def test_render_neutralizes_newline_in_example_id_so_the_row_stays_one_line():
     assert "\\| INJ" in inj_lines[0]
 
 
+def test_render_neutralizes_backtick_in_example_id_so_the_code_span_stays_single():
+    # #180: example_id is WRAPPED in an inline-code span (`` `{id}` ``). A backtick
+    # in the id closes that span early — `` `a`b`c` `` tokenizes as two code spans
+    # with `b` leaking out as prose. example_id reaches here from dataset
+    # `Example.id` (any non-empty string), so a backtick is reachable. The id's
+    # cell must carry exactly the two backticks of its own wrapping span.
+    md = render_delta_markdown(
+        _make_report(
+            [RowDelta("suite/case`rm -rf`x", 0.9, 0.4, -0.5, "regressed", True)],
+            _default_summary(mean_delta=-0.5, n_regressed=1, n_flagged=1),
+        )
+    )
+    row_line = next(ln for ln in md.splitlines() if "rm -rf" in ln)
+    id_cell = row_line.split("|")[2]
+    assert id_cell.count("`") == 2, row_line
+    # The middle stays inside the span (backtick neutralized), not leaked as prose.
+    assert "rm -rf" in id_cell
+
+
 def test_ascii_renderer_is_pipe_free_so_a_piped_id_cant_misalign_it():
     # #130 scope guard: render_delta_ascii uses 2-space separators, not `|`
     # delimiters, so a pipe in example_id is a harmless literal there (and must

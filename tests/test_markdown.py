@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import re
 
-from eval_harness.markdown import md_table_cell
+from eval_harness.markdown import md_code_cell, md_table_cell
 
 
 def test_escapes_pipe_as_literal():
@@ -47,3 +47,29 @@ def test_valid_single_line_content_unchanged():
     # overwhelmingly common case.
     assert md_table_cell("qa-001_v2") == "qa-001_v2"
     assert md_table_cell("") == ""
+
+
+def test_md_code_cell_neutralizes_backtick_so_span_stays_single():
+    # #180: a value WRAPPED in an inline-code span has a third hazard beyond the
+    # pipe/newline delimiters — a backtick closes the span early, splitting
+    # `` `a`b`c` `` into two code spans with `b` leaking out as prose. The wrapped
+    # result must contain exactly two backticks (the span's own delimiters).
+    out = md_code_cell("suite/case`rm -rf`x")
+    assert out.count("`") == 2
+    assert out.startswith("`")
+    assert out.endswith("`")
+    assert "rm -rf" in out  # legible, just not as its own leaked prose
+
+
+def test_md_code_cell_still_defends_pipe_and_newline():
+    # A code cell is still a table cell: the pipe/newline escaping applies inside
+    # the wrap. Interior pipes are `\|`-escaped (GFM's table extension unescapes
+    # them to a literal `|` before the code span is parsed) and CR/LF runs
+    # collapse to a single space.
+    assert md_code_cell("a|b") == "`a\\|b`"
+    assert md_code_cell("a\r\nb") == "`a b`"
+
+
+def test_md_code_cell_valid_id_just_wrapped():
+    # The common case: a clean id is simply wrapped, no mangling.
+    assert md_code_cell("qa-001_v2") == "`qa-001_v2`"

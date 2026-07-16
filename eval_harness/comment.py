@@ -22,7 +22,7 @@ import os
 from typing import Any
 from urllib import error, request
 
-from eval_harness.markdown import md_table_cell
+from eval_harness.markdown import md_code_cell, md_table_cell
 from eval_harness.runner import DeltaReport, RowDelta
 
 STICKY_MARKER = "<!-- eval-harness:sticky-comment -->"
@@ -110,18 +110,18 @@ def _row_to_md(r: RowDelta) -> str:
     # Wrap example_id in `code` so multi-word IDs stay legible — but backticks
     # protect neither GFM table delimiter: a literal `|` injects an extra column
     # (#130) and a literal newline splits the row across two physical lines
-    # (#142), both before inline-code spans are parsed. `md_table_cell` escapes
-    # the pipe and collapses any CR/LF run so the id contributes zero column or
-    # row delimiters.
+    # (#142), both before inline-code spans are parsed. AND a backtick in the id
+    # closes the wrapping code span early, splitting it and leaking the middle out
+    # as prose (#180). `md_code_cell` escapes the pipe, collapses any CR/LF run,
+    # neutralizes interior backticks, and wraps the result in a single span.
     # `status` is free-form too (it round-trips through externally-produced delta
     # JSON, e.g. a hand-edited or CI-generated DeltaReport), so it defends the
     # same two GFM delimiters as `example_id`: an unescaped `|` injects an extra
-    # column and a literal newline splits the row across two physical lines. It
-    # was the one free-form cell in this package left routed around
-    # `md_table_cell` after #130/#134/#142 wired every other cell through it.
-    example_id = md_table_cell(r.example_id)
+    # column and a literal newline splits the row across two physical lines. It is
+    # NOT wrapped in a code span, so `md_table_cell` (no backtick pass) suffices.
+    example_id = md_code_cell(r.example_id)
     status = md_table_cell(r.status)
-    return f"| {status} | `{example_id}` | {fmt(r.baseline_score)} | {fmt(r.current_score)} | {delta_str} | {flag} |"
+    return f"| {status} | {example_id} | {fmt(r.baseline_score)} | {fmt(r.current_score)} | {delta_str} | {flag} |"
 
 
 # ---------------------------------------------------------------------------

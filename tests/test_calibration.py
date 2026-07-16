@@ -457,3 +457,34 @@ def test_render_report_neutralizes_newline_in_id_so_the_row_stays_one_line():
     assert unescaped_pipes(inj_lines[0]) == unescaped_pipes(header_line)
     # The literal pipe is preserved as an escape, not dropped.
     assert "\\| INJ" in inj_lines[0]
+
+
+def test_render_report_neutralizes_backtick_in_id_so_the_code_span_stays_single():
+    # #180 (sibling to comment.py #180 and chunking#135): `row.id` is WRAPPED in
+    # an inline-code span (`` `{id}` ``). A backtick in the id closes that span
+    # early — `` `a`b`c` `` tokenizes as two code spans with `b` leaking out as
+    # prose. `load_calibration` only requires `id` be a non-empty string, so a
+    # backtick is reachable. The id cell must carry exactly its own two backticks.
+    from eval_harness.calibration import CalibrationResult
+    from eval_harness.judge import JudgeScore
+
+    rows = [
+        CalibrationRow(
+            id="suite/case`rm -rf`x",
+            prompt="p",
+            response="r",
+            rubric="score it",
+            human_score=0.5,
+            provenance={},
+        )
+    ]
+    judge_scores = [JudgeScore(score=0.5, reasoning="fine", raw="raw")]
+    result = CalibrationResult(
+        n=1, cohens_kappa=1.0, pearson_r=1.0, judge_scores=judge_scores, rows=rows
+    )
+    md = render_report(result, judge_model="stub", threshold_kappa=0.6)
+
+    row_line = next(line for line in md.splitlines() if "rm -rf" in line)
+    id_cell = row_line.split("|")[1]
+    assert id_cell.count("`") == 2, row_line
+    assert "rm -rf" in id_cell

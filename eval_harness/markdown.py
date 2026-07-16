@@ -43,5 +43,27 @@ def md_table_cell(value: str) -> str:
     The pipe escape runs first; it only ever inserts a backslash before an
     existing `|`, so it can neither create nor consume a newline and the two
     passes don't interact.
+
+    NOTE: this defends only the two *structural* table delimiters. A cell that a
+    caller then WRAPS in an inline-code span (`` `{cell}` ``) has a third hazard —
+    a backtick in the value closes the span early — which this function does not
+    handle. Use `md_code_cell` for code-span cells.
     """
     return _NEWLINE_RUN.sub(" ", value.replace("|", "\\|"))
+
+
+def md_code_cell(value: str) -> str:
+    """Render *value* as an inline-code span occupying exactly one GFM table cell.
+
+    Some emitters wrap a free-form id in `` ` `` for legibility
+    (`` `{example_id}` ``). That adds a hazard `md_table_cell` doesn't cover: a
+    backtick IN the value closes the span early, so `` `a`b`c` `` tokenizes as
+    two code spans with `b` leaking out as prose — the same corruption class as
+    the pipe/newline delimiters, one level up. Backticks can't be backslash-
+    escaped inside a code span (the backslash renders literally), so neutralize
+    them to a straight quote — the identifier stays legible and the span stays a
+    single span. The pipe/newline escaping still applies (a table cell is still a
+    table cell), then the whole value is wrapped so callers don't re-add the
+    backticks and drift back into the raw-backtick-interpolation bug.
+    """
+    return f"`{md_table_cell(value.replace('`', chr(39)))}`"
