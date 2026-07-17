@@ -19,7 +19,7 @@ from pathlib import Path
 
 from eval_harness.dataset import ValidationFinding, ValidationReport
 from eval_harness.judge import Judge, JudgeScore
-from eval_harness.markdown import md_code_cell, md_table_cell
+from eval_harness.markdown import md_code_cell, md_code_span, md_table_cell
 
 
 @dataclass(frozen=True)
@@ -402,7 +402,7 @@ def render_report(
     lines = [
         "# Judge calibration report",
         "",
-        f"- judge model: `{judge_model}`",
+        f"- judge model: {md_code_span(judge_model)}",
         f"- calibration set: {result.n} rows",
         f"- threshold for κ: {threshold_kappa}",
         f"- result: **{pass_fail}**",

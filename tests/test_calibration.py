@@ -373,6 +373,21 @@ def test_render_report_marks_fail_below_threshold():
     assert "**FAIL**" in md
 
 
+def test_render_report_neutralizes_backtick_in_judge_model_so_span_stays_single():
+    # #182: the `` - judge model: `{judge_model}` `` list item is a non-table code
+    # span (#180 fixed only the table cells). judge_model derives from `--model`,
+    # so a backtick in it closes the span early. The list-item line must carry
+    # exactly the two backticks of its own span.
+    rows = load_calibration(REPO_ROOT / "fixtures" / "calibration.jsonl")[:10]
+    backend = EchoBackend({r.response: r.human_score for r in rows})
+    judge = Judge(backend=backend)
+    result = calibrate(judge, rows)
+    md = render_report(result, judge_model="claude`rm -rf`x", threshold_kappa=0.6)
+    line = next(ln for ln in md.splitlines() if ln.startswith("- judge model:"))
+    assert line.count("`") == 2, line
+    assert "rm -rf" in line
+
+
 def test_render_report_escapes_pipe_in_id_and_reasoning_so_columns_dont_break():
     # #134 (sibling to comment.py #130): `row.id` and the free-form
     # `js.reasoning` land in a GFM per-row table cell. Backticks do NOT protect

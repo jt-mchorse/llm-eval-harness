@@ -22,7 +22,7 @@ import os
 from typing import Any
 from urllib import error, request
 
-from eval_harness.markdown import md_code_cell, md_table_cell
+from eval_harness.markdown import md_code_cell, md_code_span, md_table_cell
 from eval_harness.runner import DeltaReport, RowDelta
 
 STICKY_MARKER = "<!-- eval-harness:sticky-comment -->"
@@ -69,7 +69,11 @@ def render_delta_markdown(report: DeltaReport) -> str:
     n_same = _count("n_unchanged")
 
     lines: list[str] = [STICKY_MARKER, ""]
-    lines.append(f"# Eval delta · `{report.suite}`")
+    # `suite` is a free-form operator-chosen name; a backtick in it closes this
+    # heading's code span early (#180 fixed the same class in the table cells but
+    # not this non-table span). `md_code_span` neutralizes the backtick without
+    # pipe-escaping (a `\|` would render literal outside a table).
+    lines.append(f"# Eval delta · {md_code_span(report.suite)}")
     headline_status = "[X]" if n_flag > 0 else "[!]" if n_reg > 0 else "[+]" if n_imp > 0 else "[=]"
     lines.append(
         f"{headline_status} mean Δ **{mean_delta:+.3f}** · "
@@ -77,8 +81,12 @@ def render_delta_markdown(report: DeltaReport) -> str:
         f"unchanged {n_same} · new {n_new} · removed {n_rem}"
     )
     lines.append("")
+    # The run ids load from the delta JSON (hand-editable); a backtick in the
+    # first 8 chars breaks these code spans just like the suite heading above.
+    # `threshold_drop` is a formatted float — no backtick possible — so it stays raw.
     lines.append(
-        f"_current_ `{report.current_run_id[:8]}` vs _baseline_ `{report.baseline_run_id[:8]}` "
+        f"_current_ {md_code_span(report.current_run_id[:8])} "
+        f"vs _baseline_ {md_code_span(report.baseline_run_id[:8])} "
         f"· threshold drop: `{report.threshold_drop:.3f}`"
     )
     lines.append("")
