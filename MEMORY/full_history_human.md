@@ -1186,3 +1186,18 @@ firsthand) on a priority-tier repo.
 `comment.py` and `calibration.py` wrap `md_table_cell(id)` in an inline-code span (`` `{id}` ``). `md_table_cell` escapes the pipe and collapses newlines but never neutralizes a backtick *in the value* — so a backtick in `example_id`/`row.id` (both free-form external input) closes the wrapping span early, leaking the middle out as prose into the posted PR comment / calibration report. This is the second-order cross-repo sibling of this run's own chunking-strategies-lab #135.
 
 Fixed by adding `md_code_cell(value)` to `markdown.py` — it applies the `md_table_cell` pipe/newline escaping, neutralizes interior backticks to a straight quote, and wraps the result in a single span — then routing both emitters through it (keeping the module's "single home for GFM-cell escaping" invariant). Verified firsthand; 6 tests added. The leh sibling-hunt agent had reported leh SATURATED but missed this — it checked the threshold/judge/cli angle, not the markdown code-span-backtick one. PR #181. Lens: the backtick-in-code-span class transfers across every repo whose emitters wrap free-form strings in `` ` ``.
+
+## 2026-07-17 — Issue #182: backtick in non-table code spans
+
+#180 fixed backtick-breaks-the-code-span for the markdown table cells (via
+`md_code_cell`), but three non-table code spans that wrap free-form strings were
+left raw: the eval-delta suite heading and the run-id summary line in
+`comment.py`, and the judge-model list item in `calibration.py`. A backtick in
+the suite name, a run id loaded from a hand-edited delta JSON, or the `--model`
+value closes the span early and leaks the rest as prose. `md_code_cell` couldn't
+be reused because its pipe-escaping is table-only (a `\|` renders a literal
+backslash in a heading/list). Added `md_code_span` (backtick + newline
+neutralization, no pipe escape) and routed all three sites through it — output is
+byte-identical for clean values, so existing snapshots stay green. A firsthand
+`grep` for backtick-wrapped interpolations found the two extra sites the hunt
+agent missed. Shipped as PR #183 (ready).
