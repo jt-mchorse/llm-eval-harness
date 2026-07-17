@@ -1180,3 +1180,9 @@ Verified firsthand; full suite green.
 
 Why prioritized: sibling-incomplete-fix meta-lens (surfaced by a hunt agent, verified
 firsthand) on a priority-tier repo.
+
+## 2026-07-16 (night) — md_code_cell: backtick-safe code-span table cells (#180)
+
+`comment.py` and `calibration.py` wrap `md_table_cell(id)` in an inline-code span (`` `{id}` ``). `md_table_cell` escapes the pipe and collapses newlines but never neutralizes a backtick *in the value* — so a backtick in `example_id`/`row.id` (both free-form external input) closes the wrapping span early, leaking the middle out as prose into the posted PR comment / calibration report. This is the second-order cross-repo sibling of this run's own chunking-strategies-lab #135.
+
+Fixed by adding `md_code_cell(value)` to `markdown.py` — it applies the `md_table_cell` pipe/newline escaping, neutralizes interior backticks to a straight quote, and wraps the result in a single span — then routing both emitters through it (keeping the module's "single home for GFM-cell escaping" invariant). Verified firsthand; 6 tests added. The leh sibling-hunt agent had reported leh SATURATED but missed this — it checked the threshold/judge/cli angle, not the markdown code-span-backtick one. PR #181. Lens: the backtick-in-code-span class transfers across every repo whose emitters wrap free-form strings in `` ` ``.

@@ -19,7 +19,7 @@ from pathlib import Path
 
 from eval_harness.dataset import ValidationFinding, ValidationReport
 from eval_harness.judge import Judge, JudgeScore
-from eval_harness.markdown import md_table_cell
+from eval_harness.markdown import md_code_cell, md_table_cell
 
 
 @dataclass(frozen=True)
@@ -423,15 +423,17 @@ def render_report(
         # Backticks protect neither GFM delimiter: an unescaped `|` injects an
         # extra column (#134) and a literal newline splits the row across two
         # physical lines (#142) — both before inline-code spans are parsed.
-        # `md_table_cell` escapes the pipe and collapses any CR/LF run so each
-        # cell contributes zero column or row delimiters. `row.id` can carry a
-        # newline (the loader only requires a non-empty string); `js.reasoning`
-        # is single-line-guaranteed by `_REASON_RE` today but shares the guard
-        # defensively so a future reasoning path can't regress the table.
-        row_id = md_table_cell(row.id)
+        # `row.id` is additionally WRAPPED in a code span, so a backtick in it
+        # would close the span early and leak the middle out as prose (#180);
+        # `md_code_cell` escapes pipe + newline, neutralizes interior backticks,
+        # and wraps the result in a single span. `row.id` can carry a newline (the
+        # loader only requires a non-empty string). `js.reasoning` is a bare cell
+        # (single-line-guaranteed by `_REASON_RE` today but wired through
+        # `md_table_cell` defensively so a future path can't regress the table).
+        row_id = md_code_cell(row.id)
         reasoning = md_table_cell(js.reasoning)
         lines.append(
-            f"| `{row_id}` | {row.human_score:.2f} | {js.score:.2f} | {abs(row.human_score - js.score):.2f} | {reasoning} |"
+            f"| {row_id} | {row.human_score:.2f} | {js.score:.2f} | {abs(row.human_score - js.score):.2f} | {reasoning} |"
         )
     lines.append("")
     return "\n".join(lines)
