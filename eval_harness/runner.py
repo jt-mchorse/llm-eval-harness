@@ -138,9 +138,19 @@ def _require_number(value: Any, field_name: str) -> int | float | str:
     like ``"abc"`` still raises the original ``ValueError`` at the coercion,
     already exit-2); only a type ``float()``/``int()`` cannot accept is rejected
     here with a clean ``ValueError``, mirroring the sibling isinstance guards.
+
+    ``bool`` is rejected explicitly: it is a subclass of ``int``, so a bare
+    ``isinstance(value, (int, float, str))`` accepts ``True``/``False`` and the
+    caller's ``float()``/``int()`` then fabricates a perfect ``1.0`` (from a JSON
+    ``true``) or a zero ``0.0`` (from ``false``) — silently flipping the
+    regression gate at exit 0, the same corruption class the sibling non-finite
+    score guard rejects. ``SweepResult.from_dict`` in embedding-model-shootout
+    (#108) rejects bool-before-coercion for the identical reason; this is its
+    cross-repo twin at the run/delta loaders' single numeric choke-point.
     """
-    if not isinstance(value, (int, float, str)):
-        raise ValueError(f"{field_name} must be a number; got {type(value).__name__}")
+    if isinstance(value, bool) or not isinstance(value, (int, float, str)):
+        got = "bool" if isinstance(value, bool) else type(value).__name__
+        raise ValueError(f"{field_name} must be a number; got {got}")
     return value
 
 
