@@ -1201,3 +1201,14 @@ neutralization, no pipe escape) and routed all three sites through it — output
 byte-identical for clean values, so existing snapshots stay green. A firsthand
 `grep` for backtick-wrapped interpolations found the two extra sites the hunt
 agent missed. Shipped as PR #183 (ready).
+
+## 2026-07-20 (night) — issue #184: boolean scores silently fabricated 1.0/0.0
+
+`_require_number` in the run/delta JSON loaders guarded against list/dict/null
+scalars but not `bool`. Since `bool` is an `int` subclass, a JSON `true`/`false`
+at any numeric field (score, mean_score, n_rows, and five more) passed the guard
+and the caller's `float()`/`int()` turned it into a fabricated perfect `1.0` or a
+zero `0.0` — silently flipping the regression gate at exit 0 with no diagnostic.
+This was the cross-repo twin of embedding-model-shootout #108, found by running
+the sibling-incomplete-fix lens on the freshest merged surface. One-line fix at
+the single numeric choke-point closes all eight fields; four tests added. PR #185.
