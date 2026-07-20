@@ -67,3 +67,22 @@ def md_code_cell(value: str) -> str:
     backticks and drift back into the raw-backtick-interpolation bug.
     """
     return f"`{md_table_cell(value.replace('`', chr(39)))}`"
+
+
+def md_code_span(value: str) -> str:
+    """Render *value* as an inline-code span OUTSIDE a GFM table.
+
+    Some emitters wrap a free-form string in `` ` `` in a heading, a list item, or
+    a prose line — `` # Eval delta · `{suite}` ``, `` - judge model: `{model}` `` —
+    not a table cell. Those share `md_code_cell`'s backtick hazard (a backtick in
+    the value closes the span early and leaks the tail as prose), so neutralize
+    backticks to a straight quote, and collapse every `\\r`/`\\n` run to a single
+    space so the span can't spill onto a second physical line and break the
+    surrounding block.
+
+    Unlike `md_code_cell` the pipe is NOT escaped: outside a table `|` is an
+    ordinary character, and a `\\|` would render a literal backslash *inside* the
+    code span. That is the one difference from `md_code_cell` and the reason this
+    is a separate function rather than a reuse.
+    """
+    return f"`{_NEWLINE_RUN.sub(' ', value.replace('`', chr(39)))}`"

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import re
 
-from eval_harness.markdown import md_code_cell, md_table_cell
+from eval_harness.markdown import md_code_cell, md_code_span, md_table_cell
 
 
 def test_escapes_pipe_as_literal():
@@ -73,3 +73,26 @@ def test_md_code_cell_still_defends_pipe_and_newline():
 def test_md_code_cell_valid_id_just_wrapped():
     # The common case: a clean id is simply wrapped, no mangling.
     assert md_code_cell("qa-001_v2") == "`qa-001_v2`"
+
+
+def test_md_code_span_neutralizes_backtick_so_span_stays_single():
+    # #182: the non-table code-span sibling of #180 — a heading/list-item span
+    # (`` # Eval delta · `{suite}` ``) has the same backtick hazard. The wrapped
+    # result must carry exactly the two span-delimiter backticks.
+    out = md_code_span("claude`rm -rf`x")
+    assert out.count("`") == 2
+    assert out.startswith("`")
+    assert out.endswith("`")
+    assert "rm -rf" in out
+
+
+def test_md_code_span_collapses_newline_but_leaves_pipe_literal():
+    # Newlines still collapse (a span spilling onto a new physical line breaks the
+    # surrounding heading/list). But unlike `md_code_cell`, the pipe is NOT escaped:
+    # outside a table `|` is ordinary and a `\|` would render a literal backslash.
+    assert md_code_span("a\r\nb") == "`a b`"
+    assert md_code_span("a|b") == "`a|b`"
+
+
+def test_md_code_span_valid_value_just_wrapped():
+    assert md_code_span("claude-opus-4-6") == "`claude-opus-4-6`"

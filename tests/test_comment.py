@@ -189,6 +189,44 @@ def test_render_neutralizes_backtick_in_example_id_so_the_code_span_stays_single
     assert "rm -rf" in id_cell
 
 
+def test_render_neutralizes_backtick_in_suite_heading_so_span_stays_single():
+    # #182: the suite heading `` # Eval delta · `{suite}` `` is a non-table code
+    # span (#180 only fixed the table cells). `suite` is a free-form operator name,
+    # so a backtick in it closes the heading's span early. The heading must carry
+    # exactly the two backticks of its own span.
+    report = DeltaReport(
+        current_run_id="cur_runid_abcdef0123",
+        baseline_run_id="base_runid_0123abcdef",
+        suite="qa`rm -rf`suite",
+        threshold_drop=0.1,
+        rows=(),
+        summary=_default_summary(),
+    )
+    md = render_delta_markdown(report)
+    heading = next(ln for ln in md.splitlines() if ln.startswith("# Eval delta"))
+    assert heading.count("`") == 2, heading
+    assert "rm -rf" in heading
+
+
+def test_render_neutralizes_backtick_in_run_id_span_so_it_stays_single():
+    # #182: the `` _current_ `{run_id[:8]}` `` summary line is a non-table code
+    # span; run ids load from the delta JSON (hand-editable), so a backtick in the
+    # first 8 chars breaks the span. Each run-id span must carry exactly two
+    # backticks, and the threshold-drop span (a formatted float) is unaffected.
+    report = DeltaReport(
+        current_run_id="a`bcdef0123",
+        baseline_run_id="x`yzab0123",
+        suite="demo-suite",
+        threshold_drop=0.1,
+        rows=(),
+        summary=_default_summary(),
+    )
+    md = render_delta_markdown(report)
+    line = next(ln for ln in md.splitlines() if ln.startswith("_current_"))
+    # two run-id spans + one threshold-drop span = 6 backticks, none leaked early.
+    assert line.count("`") == 6, line
+
+
 def test_ascii_renderer_is_pipe_free_so_a_piped_id_cant_misalign_it():
     # #130 scope guard: render_delta_ascii uses 2-space separators, not `|`
     # delimiters, so a pipe in example_id is a harmless literal there (and must
