@@ -475,6 +475,58 @@ def test_load_run_result_rejects_non_finite_mean_score(tmp_path: Path) -> None:
         load_run_result_from_json(p)
 
 
+# `bool` is a subclass of `int`, so a JSON `true`/`false` at a numeric field
+# passes a bare `isinstance(int, float, str)` guard and the caller's
+# `float()`/`int()` fabricates a perfect 1.0 / zero 0.0 — silently flipping the
+# regression gate at exit 0. `_require_number` must reject bool before coercion,
+# the same corruption class as the non-finite guard above and the cross-repo
+# twin of embedding-model-shootout#108 (`SweepResult.from_dict`).
+
+
+@pytest.mark.parametrize("bad", [True, False])
+def test_load_run_result_rejects_boolean_row_score(tmp_path: Path, bad: bool) -> None:
+    p = _write_run_json(
+        tmp_path / "bool_score.json",
+        [
+            {"example_id": "q1", "score": 0.9, "reasoning": "a"},
+            {"example_id": "q2", "score": bad, "reasoning": "b"},
+        ],
+        n_rows=2,
+    )
+    with pytest.raises(ValueError, match=r"score must be a number; got bool"):
+        load_run_result_from_json(p)
+
+
+def test_load_run_result_rejects_boolean_mean_score(tmp_path: Path) -> None:
+    payload = {
+        "run_id": "r1",
+        "started_at": "2026-06-22T00:00:00Z",
+        "suite": "s",
+        "mean_score": True,
+        "n_rows": 1,
+        "rows": [{"example_id": "q1", "score": 0.9, "reasoning": "a"}],
+    }
+    p = tmp_path / "bool_mean.json"
+    p.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match=r"mean_score must be a number; got bool"):
+        load_run_result_from_json(p)
+
+
+def test_load_run_result_rejects_boolean_n_rows(tmp_path: Path) -> None:
+    payload = {
+        "run_id": "r1",
+        "started_at": "2026-06-22T00:00:00Z",
+        "suite": "s",
+        "mean_score": 0.8,
+        "n_rows": True,
+        "rows": [{"example_id": "q1", "score": 0.9, "reasoning": "a"}],
+    }
+    p = tmp_path / "bool_n_rows.json"
+    p.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match=r"n_rows must be a number; got bool"):
+        load_run_result_from_json(p)
+
+
 def test_diff_runs_no_longer_swallows_a_nan_regression(tmp_path: Path) -> None:
     # End-to-end: before the loader guard, a current run whose score went to NaN
     # loaded clean and diffed to status='unchanged'/n_flagged=0, so the gate
