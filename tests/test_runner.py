@@ -475,6 +475,58 @@ def test_load_run_result_rejects_non_finite_mean_score(tmp_path: Path) -> None:
         load_run_result_from_json(p)
 
 
+def _write_run_json_with_kappa(path: Path, kappa: object) -> Path:
+    payload = {
+        "run_id": "r1",
+        "started_at": "2026-06-22T00:00:00Z",
+        "suite": "s",
+        "mean_score": 0.8,
+        "judge_kappa": kappa,
+        "n_rows": 1,
+        "rows": [{"example_id": "q1", "score": 0.9, "reasoning": "a"}],
+    }
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    return path
+
+
+@pytest.mark.parametrize("bad", [True, False])
+def test_load_run_result_rejects_boolean_judge_kappa(tmp_path: Path, bad: bool) -> None:
+    # `judge_kappa` was the one numeric field read by a bare `.get()`, skipping the
+    # `_require_number` contract its siblings enforce — bool subclasses int, so a
+    # JSON `true`/`false` silently loaded as a Python bool, violating `float | None`
+    # (the same #185 corruption class, one field over). Must fail loud.
+    p = _write_run_json_with_kappa(tmp_path / "bool_kappa.json", bad)
+    with pytest.raises(ValueError, match=r"judge_kappa must be a number"):
+        load_run_result_from_json(p)
+
+
+def test_load_run_result_rejects_non_numeric_judge_kappa(tmp_path: Path) -> None:
+    # A present-but-container judge_kappa must raise a clean ValueError, like the
+    # sibling mean_score / n_rows guards, not load as a mistyped field.
+    p = _write_run_json_with_kappa(tmp_path / "list_kappa.json", [1, 2])
+    with pytest.raises(ValueError, match=r"judge_kappa must be a number"):
+        load_run_result_from_json(p)
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
+def test_load_run_result_rejects_non_finite_judge_kappa(tmp_path: Path, bad: float) -> None:
+    # A NaN/Infinity judge_kappa round-trips natively via json and would re-emit as
+    # an invalid bare `NaN` token in the run JSON the dashboard reads (strict JSON
+    # parsers reject it) — same finiteness contract as mean_score.
+    p = _write_run_json_with_kappa(tmp_path / "nan_kappa.json", bad)
+    with pytest.raises(ValueError, match=r"(non-finite judge_kappa|judge_kappa must be a number)"):
+        load_run_result_from_json(p)
+
+
+def test_load_run_result_accepts_valid_and_absent_judge_kappa(tmp_path: Path) -> None:
+    # The guard is present-value-only: a valid float loads, and an absent/null field
+    # stays None (judge_kappa is optional, `float | None`).
+    p = _write_run_json_with_kappa(tmp_path / "ok_kappa.json", 0.83)
+    assert load_run_result_from_json(p).judge_kappa == 0.83
+    p2 = _write_run_json_with_kappa(tmp_path / "null_kappa.json", None)
+    assert load_run_result_from_json(p2).judge_kappa is None
+
+
 # `bool` is a subclass of `int`, so a JSON `true`/`false` at a numeric field
 # passes a bare `isinstance(int, float, str)` guard and the caller's
 # `float()`/`int()` fabricates a perfect 1.0 / zero 0.0 — silently flipping the
