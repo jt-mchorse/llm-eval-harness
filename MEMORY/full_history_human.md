@@ -1212,3 +1212,19 @@ zero `0.0` — silently flipping the regression gate at exit 0 with no diagnosti
 This was the cross-repo twin of embedding-model-shootout #108, found by running
 the sibling-incomplete-fix lens on the freshest merged surface. One-line fix at
 the single numeric choke-point closes all eight fields; four tests added. PR #185.
+
+## 2026-07-21 — judge_kappa run-JSON validation (#186, PR #187)
+
+`load_run_result_from_json` validates every numeric field at the parse boundary
+(`n_rows`, `mean_score` + finiteness, per-row `score`) via `_require_number` —
+except `judge_kappa`, read by a bare `payload.get()`. #185 hardened the
+`_require_number` choke-point against bool, but `judge_kappa` never called it, so a
+JSON `true`/`false` loaded as a Python bool (violating `float | None`), a
+string/list loaded mistyped, and a NaN token loaded as `nan` then re-emitted as an
+invalid bare `NaN` token in the run JSON the dashboard reads (strict parsers reject
+it — the same corruption the `mean_score` finiteness guard prevents). Routed the
+optional field through `_require_number` + `math.isfinite` (null stays None),
+mirroring the `mean_score` and `DeltaReport.from_json` `mean_delta` guards. Five
+tests. Lesson: hardening a shared validation choke-point doesn't help a field that
+never routes through it — audit every numeric assignment for a bare `.get()` that
+skips the choke-point. Found via the sibling-incomplete-fix lens on #185.

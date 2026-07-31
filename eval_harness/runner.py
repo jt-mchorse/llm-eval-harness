@@ -805,13 +805,33 @@ def load_run_result_from_json(path: str | Path) -> StoredRun:
             f"run_id must be a non-empty string; got {run_id!r} — a null/empty run_id "
             "crashes the delta renderers' run_id[:8] slice with a raw TypeError"
         )
+    # `judge_kappa` is the one numeric field this loader read by a bare `.get()`,
+    # skipping the `_require_number` + finiteness contract its siblings (`mean_score`,
+    # `n_rows`, per-row `score`) all enforce. It is optional (`float | None`), so a
+    # missing/null value stays None — but a present, non-null value must be a finite
+    # number: a bool/string/container silently violated the `float | None` type
+    # contract (bool slipped past #185's choke-point because it never called it),
+    # and a NaN/Infinity token (round-tripped natively by `json.dumps`/`json.loads`)
+    # egresses as an invalid bare `NaN` token in the run JSON `cli` re-emits — which
+    # strict JSON parsers (the dashboard, `jq`, browser `JSON.parse`) reject. Same
+    # finiteness rationale as the `mean_score` guard above, mirrored for the optional
+    # `mean_delta` field in `DeltaReport.from_json`.
+    judge_kappa_raw = payload.get("judge_kappa")
+    if judge_kappa_raw is not None:
+        judge_kappa_raw = float(_require_number(judge_kappa_raw, "judge_kappa"))
+        if not math.isfinite(judge_kappa_raw):
+            raise ValueError(
+                f"non-finite judge_kappa {judge_kappa_raw}; judge_kappa must be finite when "
+                "present — a NaN/Infinity value egresses as an invalid bare NaN token in the "
+                "run JSON the dashboard reads"
+            )
     return StoredRun(
         run_id=run_id,
         started_at=payload["started_at"],
         suite=payload["suite"],
         dataset_version=payload.get("dataset_version", ""),
         judge_model=payload.get("judge_model"),
-        judge_kappa=payload.get("judge_kappa"),
+        judge_kappa=judge_kappa_raw,
         mean_score=mean_score,
         n_rows=int(payload.get("n_rows", len(rows))),
         git_sha=payload.get("git_sha"),
