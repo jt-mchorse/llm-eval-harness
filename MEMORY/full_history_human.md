@@ -1264,3 +1264,59 @@ just formatter scope.
 Pinning a ruff range in `.[dev]` is the deeper fix, but that is a dependency
 policy call across six repos rather than a bug fix, so it is flagged for JT
 rather than made unilaterally.
+
+## 2026-08-04 — Issue #190: two things `int()` does that the guard in front of it didn't cover
+
+`_require_number` is the one numeric choke-point for the run and delta JSON
+loaders, and its docstring states the contract the CLI leans on: a bad value is
+rejected "with a clean `ValueError`", which `cli` turns into the documented exit
+2. Two callers coerced its result with `int(...)`, and `int()` has two failure
+modes that guard says nothing about.
+
+The first breaks the contract outright. `int(float("inf"))` raises
+`OverflowError`, which is not a `ValueError` subclass, so it walked through
+`_run_diff_json`'s and `_run_comment`'s `except ValueError` and out as a raw
+traceback at exit 1. The reachability is the part worth noting: this needs no
+bare `Infinity` token, because `json.loads("1e400")` is `inf`. A spec-valid JSON
+number literal gets there, so a strict producer reaches it too.
+
+The second is quieter and, I think, more interesting. `n_rows`'s guard exists
+because "a mismatch signals a corrupt or incompatible payload" — its own comment
+says so. But `"n_rows": 2.7` next to two rows became `int(2.7) == 2`, matched
+`len(rows)`, and loaded clean. The coercion sitting *in front of* the guard
+erased the very signal the guard was written to catch. The six summary counts
+truncated the same way.
+
+This is the cross-repo twin of llm-cost-optimizer#166 from 2026-07-31, which
+found both halves at `_sdk_request_total`. Same shape, different choke-point.
+
+`_require_int` rejects a non-finite and a non-integral float with a field-named
+`ValueError` and otherwise defers to what `int()` already did correctly. That
+deference is the part I spent the most care on: an int, an integral float
+(`3.0`, which a JSON round-trip of an int can produce), and a numeric string
+(`"3"`) all still load at exit 0, and `"abc"` still raises the `ValueError`
+`int()` itself raises with the message another test already asserts. A fix like
+this is only safe if it is narrow, so the behaviour-preservation tests carry as
+much weight as the failure ones.
+
+The lock scans for the *shape* — any `int(...)` wrapped directly around a
+`_require_number(...)` call — instead of asserting that the two known sites use
+the helper. Asserting the sites would go stale the moment a third whole-number
+field is added, and that is precisely how this landed: `n_rows` and the summary
+counts each grew their own bare coercion, independently, months apart. I
+reverted both call sites and confirmed ten of the new tests fail, the lock among
+them, before shipping.
+
+One test does nothing but pin `int(float("inf"))` raising a non-`ValueError`. If
+a future Python changes that, the guards become belt-and-braces rather than
+load-bearing, and I would rather a test say so than leave the next reader to
+re-derive the rationale from the docstring.
+
+Swept the rest of the repo for the same shape and it is clean: `drift._clamp01`
+already rejects non-finite scores before `_judge_histogram`'s `int(s * 10)`,
+`percentile`'s `q` is range-checked, and `mean_score` / `mean_delta` /
+`judge_kappa` all carry finiteness guards. The renderers' bare `int(v)` sits
+downstream of the loader boundary, which is where the exit-2 contract is
+documented and now enforced.
+
+Full suite 732 passed, ruff 0.16.1 and mypy clean. Shipped as PR #191.
