@@ -1320,3 +1320,68 @@ downstream of the loader boundary, which is where the exit-2 contract is
 documented and now enforced.
 
 Full suite 732 passed, ruff 0.16.1 and mypy clean. Shipped as PR #191.
+
+## 2026-08-05 — a degenerate judge scored a perfect 1.0 (#192)
+
+`parse_judge_output` clamped its parsed score with a hand-rolled
+`max(0.0, min(1.0, float(...)))`. `_SCORE_RE`'s numeric group is unbounded
+(`[0-9]+`), and `float()` does not raise on a long digit run — `float("9" * 309)`
+is `inf`. Clamped, that is exactly `1.0`.
+
+So a judge model stuck in a degenerate repetition loop — the exact pathology an
+eval harness exists to detect — scored full marks. That 1.0 flows into
+`mean_score`, into `diff_runs`' `mean_delta`, and into the CI regression gate. A
+degenerate judge made the gate *greener*, which is the worst possible direction
+for a silent failure. A negative run scored 0.0 the same way.
+
+The contract was already written down, one module over. `drift._clamp01`:
+
+> Clamping is for finite-but-out-of-range values; a *non-finite* score (NaN/±Inf)
+> is corruption, not something to clamp — NaN would later crash
+> `_judge_histogram` cryptically at `int(s * 10)` and ±Inf would silently clamp
+> to 1.0/0.0, poisoning `mean_score` and the JSD histogram.
+
+Three judge-score seams enforced that — `_clamp01`, `load_run_result_from_json`
+(#86), `binarize` (#45) — and the fourth, the one that actually parses the
+model's output, did precisely what that docstring calls out as wrong.
+
+I nearly talked myself out of this one. `SCORE: 100` also clamps to 1.0, and
+that is deliberate, so "`inf` → 1.0" looked merely consistent. The test suite
+settled it: `test_clamp01_rejects_non_finite` and
+`test_clamp01_still_clamps_finite_out_of_range` sit side by side, so the repo had
+already drawn the line between "finite out-of-range → clamp" and "non-finite →
+reject". `parse_judge_output` just never got the second half. Worth remembering
+that grepping the suite for a test naming the behavior can *confirm* a bug, not
+only refute one — the usual use of that check is the other direction.
+
+The fix extracts the rules as `judge.clamp_judge_score` and makes
+`drift._clamp01` delegate to it. `judge.py` imports no local modules, so it is
+the safe home and there is no cycle. `parse_judge_output` converts the resulting
+`ValueError` into `JudgeParseError`, which already subclasses `ValueError`, so
+the CLI's exit-2 translation needs no new arm — there is a test for that too.
+The two seams previously agreed by accident and diverged on the half that
+mattered; they are now literally the same callable, with a test asserting it.
+
+Everything deliberate is preserved: `1.05` → `1.0`, `-0.1` → `0.0`, `+1.5`,
+the trailing-dot and leading-dot forms from #132, and — the test that proves the
+guard keys off *representability* rather than length — a 308-digit score, which
+is representable, still clamps to `1.0` rather than raising. 309 is where a digit
+run first exceeds float's range.
+
+Two process notes. Reverting both source files for the anti-vacuous check only
+produced an `ImportError` at collection, which proves the tests depend on the
+change but never actually runs the assertions; patching *only* the clamp call
+back to its old form, with the helper still present, gave exactly the six
+expected failures. When a revert breaks collection, the check hasn't run — narrow
+it. And ruff's `PT011`/`PT017` make the obvious ways of testing a subclass
+relationship both fail lint; the clean form is
+`pytest.raises(BroadType, match=…) as excinfo` followed by
+`assert isinstance(excinfo.value, Subclass)`.
+
+This came from asking where else the portfolio parses a number out of
+*model-produced* text, after reading the `prompt-regression-suite#131` fix that
+merged this morning — it closed the same "`int` raises loudly, `float` overflows
+silently" asymmetry on its slot extractor. Here there was no `try` at all, and
+only the silent half is reachable because no `int()` is involved.
+
+Full suite 746 passed; ruff clean under 0.15.13 and 0.16.1.
