@@ -43,6 +43,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from eval_harness.io_utils import atomic_write_text
+from eval_harness.judge import clamp_judge_score
 
 # ----------------------------------------------------------------------
 # Public types
@@ -516,14 +517,15 @@ def _clamp01(x: float) -> float:
     ``ValueError`` — the non-numeric branch the cited ``binarize`` (#45) guards
     but this only-non-finite guard missed. Reject it (and ``bool``, which
     ``binarize`` also rejects) the same way so the parity contract holds.
+
+    The rules now live in ``judge.clamp_judge_score`` and this delegates to
+    them. They were stated here and hand-rolled a *second* time in
+    ``judge.parse_judge_output``, which kept the clamp and dropped the
+    finiteness half — so the seam closest to the actual model output was the
+    one place ±Inf still silently became 1.0/0.0 (#192). One implementation,
+    two call sites; the behavior and error message here are unchanged.
     """
-    if not isinstance(x, (int, float)) or isinstance(x, bool) or not math.isfinite(x):
-        raise ValueError(f"judge score must be finite; got {x!r}")
-    if x < 0.0:
-        return 0.0
-    if x > 1.0:
-        return 1.0
-    return x
+    return clamp_judge_score(x)
 
 
 # ----------------------------------------------------------------------
