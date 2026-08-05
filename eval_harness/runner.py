@@ -154,6 +154,51 @@ def _require_number(value: Any, field_name: str) -> int | float | str:
     return value
 
 
+def _require_int(value: Any, field_name: str) -> int:
+    """``int()``-coerce a whole-number field, closing the two gaps ``int()`` leaves.
+
+    ``_require_number`` guarantees the value is a type ``int()`` *accepts*, but
+    ``int()`` still has two failure modes past that point, and the callers that
+    coerce a count relied on neither being possible (#190).
+
+    **Infinity escapes the exit-2 contract.** ``int(float("inf"))`` raises
+    ``OverflowError``, which is *not* a ``ValueError`` subclass, so it walks
+    through ``cli``'s ``except ValueError`` translation and out as a raw
+    traceback at exit 1 — the documented clean-failure contract the surrounding
+    guards exist to honor. And it needs no exotic token: ``json.loads("1e400")``
+    is ``inf``, a spec-valid JSON number literal, so a strict producer reaches it
+    too. This is the cross-repo sibling of llm-cost-optimizer#166, where ``inf``
+    defeated the same ``except ValueError`` at ``_sdk_request_total``.
+
+    **A non-integral float truncates into agreement.** ``n_rows``'s guard exists
+    because "a mismatch signals a corrupt or incompatible payload"; a payload
+    declaring ``2.7`` next to two rows became ``2`` and matched, erasing the
+    corruption signal in the coercion in front of the guard meant to catch it.
+
+    Everything ``int()`` handles correctly is left alone: an ``int``, an integral
+    float (``3.0`` — what a JSON round-trip of an int can produce), and a numeric
+    string (``"3"``) all pass through as before, and a bad numeric string
+    (``"abc"``) still raises the ``ValueError`` ``int()`` itself raises, keeping
+    the existing caller messages intact.
+    """
+    number = _require_number(value, field_name)
+    if isinstance(number, float):
+        if not math.isfinite(number):
+            raise ValueError(
+                f"{field_name} must be a finite whole number; got {value!r} — an "
+                "infinite value (JSON `1e400`, or a bare `Infinity` token) raises "
+                "OverflowError from int(), which is not a ValueError and so escapes "
+                "the CLI's exit-2 translation as a raw traceback"
+            )
+        if not number.is_integer():
+            raise ValueError(
+                f"{field_name} must be a whole number; got {value!r} — truncating it "
+                "would silently erase the corrupt-payload signal the surrounding "
+                "count checks exist to catch"
+            )
+    return int(number)
+
+
 def _finite_or_none(value: Any, field_name: str, example_id: Any) -> float | None:
     """Pass ``None`` through; reject a present-but-non-finite score.
 
@@ -356,9 +401,13 @@ class DeltaReport:
         # `_run_comment`'s exit-2 try (cli.py), so it escaped as a raw traceback
         # at exit 1. Validate each present-non-null count is int-coercible here at
         # the parse boundary, the count sibling of the `mean_delta` guard above:
-        # `_require_number` rejects containers, `int(...)` rejects non-numeric
-        # strings, both as a clean ValueError → exit 2. A missing or null count
-        # falls through to the renderer's null→0 coercion unchanged.
+        # `_require_int` rejects containers, non-finite and non-integral values,
+        # and `int(...)` rejects non-numeric strings, all as a clean ValueError →
+        # exit 2. A missing or null count falls through to the renderer's null→0
+        # coercion unchanged. The `_require_int` wrapper (rather than a bare
+        # `int(_require_number(...))`) is what keeps an infinite count — `1e400`
+        # is a plain JSON number — from raising OverflowError straight through
+        # the `except ValueError` below and out as a traceback at exit 1 (#190).
         for _count_key in (
             "n_flagged",
             "n_regressed",
@@ -370,7 +419,7 @@ class DeltaReport:
             _count_val = summary.get(_count_key)
             if _count_val is not None:
                 try:
-                    int(_require_number(_count_val, _count_key))
+                    _require_int(_count_val, _count_key)
                 except ValueError as e:
                     raise ValueError(
                         f"delta JSON summary '{_count_key}' must be an integer count when "
@@ -760,8 +809,13 @@ def load_run_result_from_json(path: str | Path) -> StoredRun:
     # rows still loads silently inconsistent — exactly the corruption that guard's
     # comment warns about, reached a different way. Reject a present-but-mismatched
     # `n_rows` loudly; keep the `len(rows)` default for payloads that omit it.
+    # Coerce via `_require_int`, not a bare `int(...)`: a non-integral `2.7` used
+    # to truncate to `2`, match `len(rows)` and load clean — the coercion in front
+    # of this guard erasing the very corruption signal the guard is here to catch —
+    # and an infinite `1e400` raised OverflowError past the CLI's exit-2 translation
+    # (#190).
     if "n_rows" in payload:
-        n_rows_declared = int(_require_number(payload["n_rows"], "n_rows"))
+        n_rows_declared = _require_int(payload["n_rows"], "n_rows")
         if n_rows_declared != len(rows):
             raise ValueError(
                 f"n_rows {n_rows_declared} disagrees with the actual row count "
