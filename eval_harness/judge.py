@@ -113,6 +113,74 @@ def is_transient_error(exc: BaseException) -> bool:
     return type(exc).__name__ in _TRANSIENT_EXC_NAMES
 
 
+#: Credential failures. 401 is a missing/invalid key, 403 a key without
+#: access to the requested model — both are operator misconfiguration, not
+#: a bug in this harness, so both belong on the exit-2 path.
+_AUTH_STATUS_CODES = frozenset({401, 403})
+
+#: Matched by class name for the same reason ``_TRANSIENT_EXC_NAMES`` is:
+#: the classifier must stay import-free so it works (and is testable)
+#: without the optional ``judge`` extra installed.
+_AUTH_EXC_NAMES = frozenset({"AuthenticationError", "PermissionDeniedError"})
+
+#: The SDK raises a bare ``TypeError`` — no status code, no dedicated class —
+#: when it cannot resolve *any* credential, because that happens while
+#: building request headers, before a request is ever sent. This substring is
+#: the only handle on it. Kept deliberately short (the message continues with
+#: a list of accepted header names) and lowercased at the comparison site.
+_AUTH_TYPEERROR_MARKER = "could not resolve authentication method"
+
+
+class JudgeAuthError(ValueError):
+    """The judge backend could not authenticate. Operator misconfiguration.
+
+    A ``ValueError`` subclass so it lands on the same side of the CLI's
+    exit-code contract as every other bad-input failure (``JudgeParseError``
+    is a ``ValueError`` for the same reason).
+    """
+
+
+def is_auth_error(exc: BaseException) -> bool:
+    """True when ``exc`` is a credential failure, not a bug or a blip.
+
+    Sibling of :func:`is_transient_error`, same duck-typed / import-free
+    design, and deliberately consulted *after* the request has already
+    failed rather than predicted before it (#194).
+
+    A construction-time ``ANTHROPIC_API_KEY`` check was the obvious
+    alternative and is wrong: ``anthropic>=0.116`` resolves credentials from
+    four channels — ``ANTHROPIC_API_KEY``, ``ANTHROPIC_AUTH_TOKEN``, a named
+    ``ANTHROPIC_PROFILE``, and workload-identity federation — and the
+    ``judge`` extra's floor is ``>=0.32``, so this repo cannot pin that list.
+    An env check would tell a profile-authenticated operator their key is
+    missing and refuse to run: a false positive that breaks a *working*
+    setup, which is worse than the traceback it replaces. Classifying an
+    actual failure can only ever fire on a request that already failed.
+
+    Three handles, in decreasing robustness:
+
+    - ``status_code`` 401/403 — the invalid-key and no-model-access cases.
+    - Class name — ``AuthenticationError`` / ``PermissionDeniedError``, for
+      an SDK that ever stops exposing ``status_code``.
+    - A ``TypeError`` naming credential resolution — the *no* credential
+      case, which fails while building headers, so it has neither a status
+      code nor a dedicated class. If a future SDK rewords it this stops
+      matching and the failure degrades to the pre-#194 raw traceback,
+      never to a false rejection of a working setup.
+    """
+    status = getattr(exc, "status_code", None)
+    if isinstance(status, bool):
+        # Same `bool`-subclasses-`int` guard `is_transient_error` carries.
+        status = None
+    if isinstance(status, int):
+        return status in _AUTH_STATUS_CODES
+    if type(exc).__name__ in _AUTH_EXC_NAMES:
+        return True
+    # Narrow to TypeError: the marker must not reclassify, say, a ValueError
+    # from our own code that happens to quote the phrase.
+    return isinstance(exc, TypeError) and _AUTH_TYPEERROR_MARKER in str(exc).lower()
+
+
 def retry_call(
     fn: Callable[[], _T],
     *,
@@ -230,13 +298,36 @@ class AnthropicBackend:
                     out.append(text)
             return "".join(out)
 
-        return retry_call(
-            _once,
-            max_attempts=self.max_attempts,
-            base_delay=self.base_retry_delay,
-            max_delay=self.max_retry_delay,
-            sleep=self._sleep,
-        )
+        try:
+            return retry_call(
+                _once,
+                max_attempts=self.max_attempts,
+                base_delay=self.base_retry_delay,
+                max_delay=self.max_retry_delay,
+                sleep=self._sleep,
+            )
+        except Exception as exc:
+            # A credential failure is operator misconfiguration, not a harness
+            # bug — but the SDK reports "no credential resolved" as a bare
+            # `TypeError` (raised while building headers, so it never gets a
+            # status code). `TypeError` is not a `ValueError`, so it walked
+            # straight past the CLI's exit-2 translation and out as a raw
+            # traceback at exit 1 — from four frames deep, on the very first
+            # row of a run, for the single most likely misconfiguration of a
+            # harness whose whole test suite is designed to run *without* a key
+            # (#194). Retag it so the CLI can fail cleanly. Everything else
+            # propagates untouched, including a genuine `TypeError` from our own
+            # code: `is_auth_error` only claims one whose message names
+            # credential resolution.
+            if is_auth_error(exc):
+                raise JudgeAuthError(
+                    "judge backend could not authenticate with the Anthropic API "
+                    f"({type(exc).__name__}: {exc}). Set ANTHROPIC_API_KEY (or another "
+                    "credential the SDK accepts), or use the hermetic judge stub — "
+                    "`eval-harness drift --judge-stub`, or pass your own callable to "
+                    "the library API — which needs no key at all."
+                ) from exc
+            raise
 
 
 # ----------------------------------------------------------------------

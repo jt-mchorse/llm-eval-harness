@@ -235,7 +235,7 @@ Score a subset by tag with `--tags` (comma-separated, set-union match —
 any row whose `tags` intersects the requested set is included):
 
 ```bash
-eval-harness run \
+ANTHROPIC_API_KEY=sk-... eval-harness run \
   --suite faithfulness \
   --dataset fixtures/sample_factuality_v1.jsonl \
   --tags geography,history \
@@ -243,6 +243,12 @@ eval-harness run \
 # → scores only the geography + history rows.
 # → exits 2 with the dataset's tag inventory on stderr if --tags matches zero rows.
 ```
+
+`run` and `calibrate` are the only subcommands that call the live judge,
+so they're the only two that need a credential. Without one they exit 2
+with a clean `::error::` line naming `ANTHROPIC_API_KEY` (#194) — no
+traceback. Everything else in this README, and the whole test suite, is
+hermetic.
 
 Run history is stored in SQLite at `~/.eval-harness/runs.db` (override
 with `--db`); two tables, `runs` and `rows`, with a foreign key from
