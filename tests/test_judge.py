@@ -9,6 +9,8 @@ network access.
 
 from __future__ import annotations
 
+import math
+
 import pytest
 
 from eval_harness.judge import (
@@ -17,6 +19,7 @@ from eval_harness.judge import (
     Judge,
     JudgeParseError,
     JudgeScore,
+    clamp_judge_score,
     is_transient_error,
     parse_judge_output,
     retry_call,
@@ -418,3 +421,85 @@ def test_backend_rejects_bad_retry_knobs(kwargs):
     # raises ValueError even without the `judge` extra installed.
     with pytest.raises(ValueError, match="must be a"):
         AnthropicBackend(**kwargs)
+
+
+# ----- non-finite SCORE is corruption, not something to clamp (#192) ---------
+#
+# `_SCORE_RE`'s numeric group is unbounded (`[0-9]+`), and `float()` does NOT
+# raise on a long digit run — `float("9" * 309)` is `inf`. The hand-rolled
+# `max(0.0, min(1.0, ...))` then turned that into a PERFECT 1.0, so a judge
+# stuck in a degenerate repetition loop — the exact pathology this harness
+# exists to catch — scored full marks and made the CI regression gate greener.
+#
+# `drift._clamp01` had already drawn the line ("clamping is for
+# finite-but-out-of-range values; a non-finite score is corruption"); this seam,
+# the one closest to the actual model output, was the copy that kept the clamp
+# and dropped the finiteness half. Both now call `clamp_judge_score`.
+
+
+# 309 is where a digit run first exceeds float's range; 4400 is past CPython's
+# int<->str digit cap, included to show the silent float path is the only one
+# reachable here (no `int()` is involved, so nothing raises on its own).
+@pytest.mark.parametrize("n_digits", [309, 400, 4400])
+def test_parse_rejects_non_finite_score_instead_of_fabricating_a_perfect_one(n_digits: int):
+    raw = f"SCORE: {'9' * n_digits}\nREASONING: degenerate repetition loop"
+    # Anchored to the corruption: pre-fix this returned exactly 1.0.
+    assert math.isinf(float("9" * n_digits))
+    with pytest.raises(JudgeParseError, match="non-finite SCORE"):
+        parse_judge_output(raw)
+
+
+@pytest.mark.parametrize("n_digits", [309, 400])
+def test_parse_rejects_non_finite_negative_score(n_digits: int):
+    raw = f"SCORE: -{'9' * n_digits}\nREASONING: degenerate repetition loop"
+    with pytest.raises(JudgeParseError, match="non-finite SCORE"):
+        parse_judge_output(raw)
+
+
+def test_non_finite_score_error_is_still_a_valueerror():
+    """`JudgeParseError` subclasses `ValueError`, so callers that catch
+    `ValueError` (the CLI's exit-2 translation) are unaffected by the new raise."""
+    assert issubclass(JudgeParseError, ValueError)
+    raw = f"SCORE: {'9' * 400}\nREASONING: loop"
+    # Caught as the *broad* ValueError on purpose: that's the property keeping
+    # the CLI's exit-2 translation working without a new arm.
+    with pytest.raises(ValueError, match="non-finite SCORE") as excinfo:
+        parse_judge_output(raw)
+    assert isinstance(excinfo.value, JudgeParseError)
+
+
+@pytest.mark.parametrize(
+    ("line", "expected"),
+    [
+        # The finite clamp is deliberate and must survive untouched — these
+        # mirror test_parse_clamps_above_one / _below_zero and the #132
+        # trailing-dot forms.
+        ("1.05", 1.0),
+        ("-0.1", 0.0),
+        ("+1.5", 1.0),
+        ("1.", 1.0),
+        ("0.7", 0.7),
+        (".5", 0.5),
+        # A large but FINITE score still clamps rather than raising: 1e308 is
+        # representable, so it is "out of range", not "corrupt".
+        ("9" * 308, 1.0),
+    ],
+)
+def test_finite_scores_still_clamp_exactly_as_before(line: str, expected: float):
+    parsed = parse_judge_output(f"SCORE: {line}\nREASONING: fine")
+    assert parsed.score == pytest.approx(expected)
+
+
+def test_clamp_is_one_implementation_shared_with_drift():
+    """`drift._clamp01` and `judge.parse_judge_output` clamp the same domain.
+    They agreed by accident before and diverged on the finiteness half; assert
+    they are now literally the same callable so they can't drift again."""
+    from eval_harness.drift import _clamp01
+
+    assert _clamp01(1.5) == clamp_judge_score(1.5) == 1.0
+    assert _clamp01(-0.5) == clamp_judge_score(-0.5) == 0.0
+    for bad in (float("nan"), float("inf"), float("-inf"), "x", None, True):
+        with pytest.raises(ValueError, match="judge score must be finite"):
+            _clamp01(bad)  # type: ignore[arg-type]
+        with pytest.raises(ValueError, match="judge score must be finite"):
+            clamp_judge_score(bad)  # type: ignore[arg-type]

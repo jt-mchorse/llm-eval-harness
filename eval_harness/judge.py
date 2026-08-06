@@ -12,12 +12,44 @@ deterministic stub without an API key. The production backend is
 
 from __future__ import annotations
 
+import math
 import os
 import re
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol, TypeVar
+
+
+def clamp_judge_score(x: float) -> float:
+    """Clamp a judge score into ``[0, 1]``, rejecting corruption.
+
+    The single implementation of the judge-score contract. Clamping is for
+    *finite*-but-out-of-range values — a model returning ``1.05`` or ``-0.1``
+    is rounding noise, and squashing it is correct. A **non-finite** score is
+    corruption, not something to clamp: ``NaN`` later crashes
+    ``drift._judge_histogram`` cryptically at ``int(s * 10)``, and ``±Inf``
+    silently becomes a perfect ``1.0`` / a total ``0.0``, poisoning
+    ``mean_score``, ``diff_runs``' ``mean_delta`` and the CI regression gate.
+    A present-but-non-numeric value (``str``/``None``/``list`` off a BYO
+    ``judge_score_fn``, or ``bool``) is rejected for the same reason.
+
+    ``drift._clamp01`` guarded exactly this and ``judge.parse_judge_output``
+    hand-rolled the same ``max(0.0, min(1.0, …))`` without the finiteness half
+    — so the model-output parser, the seam closest to the actual judge, was the
+    one place ±Inf still clamped silently (#192). Both now call this, so the
+    two cannot drift apart again.
+
+    Matches the finiteness guards in ``runner.load_run_result_from_json``
+    (#86) and ``calibration.binarize`` (#45).
+    """
+    if not isinstance(x, (int, float)) or isinstance(x, bool) or not math.isfinite(x):
+        raise ValueError(f"judge score must be finite; got {x!r}")
+    if x < 0.0:
+        return 0.0
+    if x > 1.0:
+        return 1.0
+    return x
 
 
 @dataclass(frozen=True)
@@ -282,10 +314,23 @@ def parse_judge_output(raw: str) -> JudgeScore:
         raise JudgeParseError(f"missing SCORE: line in judge output: {raw!r}")
     if reason_match is None:
         raise JudgeParseError(f"missing REASONING: line in judge output: {raw!r}")
-    score = float(score_match.group(1))
     # Clamp out-of-range scores symmetrically: the model occasionally returns
     # just over 1.0 (e.g. 1.05) or, less often, just under 0.0 (e.g. -0.1).
     # The SCORE regex now matches a leading sign (#71) so both ends reach here.
-    score = max(0.0, min(1.0, score))
+    #
+    # Via `clamp_judge_score`, not a second hand-rolled `max(0.0, min(1.0, …))`:
+    # the regex's digit run is unbounded (`[0-9]+`) and `float()` does NOT raise
+    # on a long one — `float("9" * 309)` is `inf`. Clamped naively that became a
+    # **perfect 1.0**, so a judge stuck in a degenerate repetition loop — the
+    # exact pathology this harness exists to catch — scored full marks and made
+    # the CI regression gate greener (#192). Finite out-of-range values still
+    # clamp exactly as before; only the non-finite case is rejected, matching
+    # the contract `drift._clamp01` already stated.
+    try:
+        score = clamp_judge_score(float(score_match.group(1)))
+    except ValueError as e:
+        raise JudgeParseError(
+            f"non-finite SCORE in judge output ({score_match.group(1)[:32]}…): {e}"
+        ) from e
     reasoning = reason_match.group(1).strip()
     return JudgeScore(score=score, reasoning=reasoning, raw=raw)
