@@ -1385,3 +1385,113 @@ silently" asymmetry on its slot extractor. Here there was no `try` at all, and
 only the silent half is reachable because no `int()` is involved.
 
 Full suite 746 passed; ruff clean under 0.15.13 and 0.16.1.
+
+## Session 2026-08-06 — the one misconfiguration that didn't exit 2 (#194)
+
+Every operator mistake `eval-harness run` can make already ends in a
+clean `::error::` line and exit 2: a missing dataset, an unreadable one,
+non-UTF-8 bytes, a malformed row, a `--tags` filter that matches nothing.
+Every one except the mistake an operator is most likely to make.
+
+```
+$ eval-harness run --suite faithfulness --dataset fixtures/sample_factuality_v1.jsonl \
+    --tags geography,history --no-diff
+Traceback (most recent call last):
+  ...
+TypeError: "Could not resolve authentication method. ..."
+exit=1
+```
+
+That is the README's own `--tags` example, copy-pasted verbatim. (It was
+the one `run` example without an `ANTHROPIC_API_KEY=sk-...` prefix; the
+two above it have one.) `calibrate` had the identical gap.
+
+### Why it escaped
+
+`anthropic.Anthropic()` resolves credentials **lazily**. Construction
+succeeds with `api_key=None`. The failure appears at the first
+`messages.create` — while *building request headers*, before anything is
+sent — as a bare **`TypeError`**. `TypeError` isn't a `ValueError`, so it
+walked past every translation in `_run_run` and out through four frames
+of `run_suite` → `Judge.score` → `retry_call` → `_once` as a raw
+traceback, on the very first row.
+
+An *invalid* key is the same story one layer over: `AuthenticationError`
+(401) is correctly classified non-transient, re-raises out of
+`retry_call`, and also lands at exit 1 with a traceback.
+
+There's an irony in `AnthropicBackend.__init__`. It opens with a comment
+saying it validates "before the lazy `import anthropic` so misconfig
+fails fast," and it does — thoroughly — for `max_tokens`, `max_attempts`,
+`base_retry_delay`, and `max_retry_delay`. The one piece of configuration
+that is actually absent on a fresh clone was the one that failed slow.
+
+And this repo is *built* to run without a key: `pytest # full hermetic
+suite (no API key)`, `--judge-stub`, stub backends throughout. "No key"
+isn't an exotic state here. It's the default one.
+
+### The obvious fix is wrong
+
+Reject at construction when `ANTHROPIC_API_KEY` is unset. It's one line
+and it's a trap. `anthropic>=0.116` resolves credentials from four
+channels: `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, a named
+`ANTHROPIC_PROFILE`, and workload-identity federation. The `judge`
+extra's floor is `>=0.32`, so this repo can't pin that list — a future
+release can add a fifth.
+
+An env check would tell a profile-authenticated operator that their key
+is missing and refuse to run. That's a false positive that breaks a
+*working* setup, which is worse than the traceback it replaces. The
+general rule: when a dependency has more configuration channels than you
+can enumerate, a pre-check risks false positives on valid setups while a
+post-failure classifier risks none — it only ever runs on a request that
+already failed. Pick the direction where the failure mode is "degrade to
+the old behaviour," not "block a valid user."
+
+### So: classify, don't predict
+
+`is_auth_error(exc)` is a sibling of the existing `is_transient_error`,
+with the same duck-typed, import-free design so it works (and is
+testable) without the `judge` extra. Three handles, in decreasing
+robustness: `status_code` 401/403; class name `AuthenticationError` /
+`PermissionDeniedError`; and, for the no-credential case that has neither
+a status code nor a dedicated class, a `TypeError` whose message names
+credential resolution. `complete()` retags a classified failure as
+`JudgeAuthError(ValueError)`; the CLI turns that into exit 2 at both
+seams, naming `ANTHROPIC_API_KEY` and pointing at the hermetic stub path.
+
+If a future SDK rewords that message, the sniff stops matching and
+behaviour degrades to the pre-fix traceback — never to a false rejection.
+
+### The tests are mostly about what it must *not* claim
+
+Eighteen of the twenty-five: 400, 404, 429, 500, a connection error, a
+genuine `TypeError` from our own code, a `ValueError` that quotes the
+marker phrase (this module's own docstring does), a `bool` masquerading
+as a status code. Over-claiming is the entire risk of a message sniff.
+
+One test pins the marker against the **real** SDK, skipped without the
+`judge` extra. It clears every `ANTHROPIC_*` variable first, and that is
+load-bearing rather than hygiene: `Anthropic(api_key=None)` still
+consults the environment, so the first draft made a live network call and
+failed on a real 401 on a machine with a key exported.
+
+`test_backend_complete_reraises_permanent_error_without_retry` used a
+401, which this change reclassifies, so it now uses 400. Its subject is
+the *no-retry* property, which 400 exercises identically, and the new
+tests pin the same `calls == 1` / `sleeps == []` for 401/403. A 500 is
+still transient and still exhausts the retry budget.
+
+547 green, ruff clean, mypy clean. The anti-vacuous check reverted only
+the two behavioural arms, leaving `is_auth_error` defined so collection
+still works: 7 behavioural tests fail, 18 classification tests stay green.
+The first attempt at that revert deleted `calibrate`'s whole `try` block,
+left a bare `try:`, and produced a `SyntaxError` that broke collection in
+ten files — a suite that never runs its assertions proves nothing.
+
+### Found the same way, filed separately
+
+Running every README command verbatim also turned up
+`fixtures/broken.jsonl`: referenced twice by the validator section, never
+committed, so `eval-harness validate fixtures/broken.jsonl --json` exits
+2 on a fresh clone.
