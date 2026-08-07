@@ -167,9 +167,56 @@ eval-harness validate fixtures/sample_factuality_v1.jsonl
 
 ```bash
 eval-harness validate fixtures/broken.jsonl --json
-# → stdout: { "ok": false, "n_rows": …, "n_valid": …, "findings": [...] }
 # → exit 1 (any findings); exit 2 (file missing / I/O error)
 ```
+
+`fixtures/broken.jsonl` is a committed six-row fixture that carries one
+of each non-`empty` finding code, so the output below is the real
+payload rather than an illustration (`tests/test_readme_validator_fixture.py`
+runs this exact command and locks it):
+
+```json
+{
+  "dataset_version": "broken-v0.1",
+  "findings": [
+    {
+      "code": "parse",
+      "line_no": 2,
+      "reason": "invalid JSON: Unterminated string starting at"
+    },
+    {
+      "code": "schema",
+      "line_no": 3,
+      "reason": "missing required field(s): ['provenance']"
+    },
+    {
+      "code": "duplicate_id",
+      "line_no": 4,
+      "reason": "duplicate id 'qa_001'; first seen at line 1; ids must be unique within a file"
+    },
+    {
+      "code": "version_drift",
+      "line_no": 5,
+      "reason": "dataset_version 'broken-v0.2' does not match file version 'broken-v0.1'"
+    }
+  ],
+  "n_rows": 6,
+  "n_valid": 2,
+  "ok": false,
+  "path": "fixtures/broken.jsonl",
+  "tag_counts": [
+    { "count": 2, "tag": "factuality" },
+    { "count": 1, "tag": "geography" },
+    { "count": 1, "tag": "science" }
+  ]
+}
+```
+
+Note the two surviving rows: `duplicate_id` and `version_drift` rows are
+rejected rather than counted, so `n_valid` (2) is not `n_rows` (6) minus
+the number of *parse* failures. `empty` can't appear alongside the other
+four — it only fires when a file yields zero valid rows and no other
+finding — so it's covered in `tests/test_validate.py` instead.
 
 Finding codes (`parse` / `schema` / `duplicate_id` / `version_drift` /
 `empty`) are stable so CI consumers can route on shape without parsing
