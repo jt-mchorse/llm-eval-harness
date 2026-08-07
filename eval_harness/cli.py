@@ -37,7 +37,7 @@ from eval_harness.comment import (
 )
 from eval_harness.dataset import DatasetLoadError, load_jsonl, validate_dataset
 from eval_harness.io_utils import atomic_write_text
-from eval_harness.judge import AnthropicBackend, Judge
+from eval_harness.judge import AnthropicBackend, Judge, JudgeAuthError
 from eval_harness.runner import (
     DEFAULT_THRESHOLD_DROP,
     DatasetEchoSource,
@@ -338,7 +338,15 @@ def _run_calibrate(args: argparse.Namespace) -> int:
         return _fail(f"no rows to calibrate against in {args.calibration}")
     backend = AnthropicBackend(model=args.model)
     judge = Judge(backend=backend)
-    result = calibrate(judge, rows)
+    try:
+        result = calibrate(judge, rows)
+    except JudgeAuthError as e:
+        # The SDK resolves credentials lazily, so a missing/invalid key does
+        # not surface until the first judge call — as a bare `TypeError` from
+        # header-building, which is not a `ValueError` and so escaped every
+        # translation above as a raw traceback at exit 1 (#194). Same seam,
+        # same treatment as `run` below.
+        return _fail(str(e))
 
     report = render_report(result, judge_model=backend.model, threshold_kappa=args.threshold_kappa)
     if (rc := _write_output(args.report, report)) is not None:
@@ -418,6 +426,15 @@ def _run_run(args: argparse.Namespace) -> int:
     )
     try:
         result = run_suite(spec, db_path=args.db)
+    except JudgeAuthError as e:
+        # Every other operator misconfiguration `run` can hit already exits 2
+        # with a clean ::error:: line — missing dataset, unreadable dataset,
+        # non-UTF-8 bytes, a malformed row, a zero-match --tags filter. A
+        # missing or invalid API key was the sole exception, and the most
+        # likely one: the SDK resolves credentials lazily, so it surfaced four
+        # frames deep on the first row as a bare `TypeError` — not a
+        # `ValueError`, so past every catch here — at exit 1 (#194).
+        return _fail(str(e))
     except EmptyTagFilterError as e:
         # Silent-empty-run is the worst failure mode; surface the requested
         # tags and the dataset's tag inventory so the operator can self-correct.

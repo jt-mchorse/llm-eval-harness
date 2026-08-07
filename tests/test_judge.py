@@ -393,8 +393,13 @@ def test_backend_complete_retries_transient_then_returns_text():
 
 
 def test_backend_complete_reraises_permanent_error_without_retry():
+    # 400, not 401: #194 reclassifies 401/403 (credential failures) into
+    # `JudgeAuthError` so the CLI can exit 2 on them. This test's subject is
+    # the *no-retry* property of a permanent error, which 400 exercises
+    # identically; the auth-code path gets its own test below, and pins the
+    # same `calls == 1` / `sleeps == []` property so nothing is lost here.
     clock = _Clock()
-    msgs = _FakeMessages(fail_times=5, status_code=401, text="unused")
+    msgs = _FakeMessages(fail_times=5, status_code=400, text="unused")
     be = _backend_with_fake(_FakeClient(msgs), sleep=clock)
     with pytest.raises(_FakeAPIError):
         be.complete("sys", "user")
