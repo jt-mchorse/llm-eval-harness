@@ -72,8 +72,7 @@ def test_readme_json_command_exits_1_with_one_of_each_finding_code() -> None:
     proc = _run("validate", "fixtures/broken.jsonl", "--json")
 
     assert proc.returncode == 1, (
-        f"README documents exit 1 (findings present); got {proc.returncode}. "
-        f"stderr={proc.stderr!r}"
+        f"README documents exit 1 (findings present); got {proc.returncode}. stderr={proc.stderr!r}"
     )
     payload = json.loads(proc.stdout)
 
