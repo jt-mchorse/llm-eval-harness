@@ -1,0 +1,6 @@
+{"dataset_version":"broken-v0.1","expected_outputs":[{"kind":"exact","value":"Paris"}],"id":"qa_001","input":"What is the capital of France?","provenance":{"added_on":"2026-08-07","source":"public_domain_trivia"},"tags":["geography","factuality"]}
+{"dataset_version":"broken-v0.1","expected_outputs":[{"kind":"exact","value":"6"}],"id":"qa_002","input":"How many sides does a hexagon
+{"dataset_version":"broken-v0.1","expected_outputs":[{"kind":"exact","value":"1969"}],"id":"qa_003","input":"In what year did Apollo 11 land on the Moon?","tags":["history","factuality"]}
+{"dataset_version":"broken-v0.1","expected_outputs":[{"kind":"exact","value":"Lisbon"}],"id":"qa_001","input":"What is the capital of Portugal?","provenance":{"added_on":"2026-08-07","source":"public_domain_trivia"},"tags":["geography","factuality"]}
+{"dataset_version":"broken-v0.2","expected_outputs":[{"kind":"exact","value":"nitrogen"}],"id":"qa_005","input":"What is the most abundant gas in Earth's atmosphere?","provenance":{"added_on":"2026-08-07","source":"public_domain_trivia"},"tags":["science","factuality"]}
+{"dataset_version":"broken-v0.1","expected_outputs":[{"kind":"exact","value":"8"}],"id":"qa_006","input":"How many planets are in the Solar System?","provenance":{"added_on":"2026-08-07","source":"public_domain_trivia"},"tags":["science","factuality"]}

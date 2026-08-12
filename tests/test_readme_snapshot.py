@@ -192,6 +192,52 @@ def test_referenced_files_exist() -> None:
     )
 
 
+def test_bash_fence_fixture_paths_exist() -> None:
+    """Every ``fixtures/`` path an operator is told to *type* must exist.
+
+    Closes the enumeration gap that let #196 ship: the sister test above
+    only matches markdown-link parens ``(path.ext)``, so it never looked at
+    a single path inside a ```bash fence — which is every path a reader
+    actually runs a command against. ``fixtures/broken.jsonl`` was
+    documented but uncommitted for that entire window, and both documented
+    commands exited 2 on a fresh clone.
+
+    Scoped to ``fixtures/`` on purpose, so the check stays quiet and a
+    finding means something:
+
+    - Output paths (``report.json``, ``/tmp/delta.json``,
+      ``docs/calibration_report.md``) are *written* by the command; they
+      must not exist beforehand.
+    - ``fixtures/main-baseline.json`` and ``results/current.json`` appear
+      only in the ```yaml block under "Downstream repos … use the same two
+      CLI steps in their own workflow" — placeholders in someone else's
+      tree, not this repo's. Restricting to ```bash fences excludes them.
+
+    Nothing in the README writes into ``fixtures/``, so within a bash fence
+    the directory is unambiguously an input.
+    """
+    fence_re = re.compile(r"^```(\w*)\s*$")
+    path_re = re.compile(r"fixtures/[A-Za-z0-9_./-]+\.[A-Za-z0-9]+")
+
+    refs: set[str] = set()
+    lang: str | None = None
+    for line in _readme().splitlines():
+        fence = fence_re.match(line)
+        if fence:
+            lang = None if lang is not None else fence.group(1)
+            continue
+        if lang == "bash":
+            refs.update(path_re.findall(line))
+
+    assert refs, "no fixtures/ paths found in any ```bash fence — pattern went stale"
+    missing = sorted(r for r in refs if not (REPO_ROOT / r).exists())
+    assert not missing, (
+        f"README's shell examples reference fixtures that don't exist: {missing}. "
+        "A reader running them from a fresh clone gets exit 2. Commit the "
+        "fixture or fix the command."
+    )
+
+
 def _max_active_decision_id() -> int:
     """Highest non-superseded ``D-NNN`` in ``MEMORY/core_decisions_ai.md``.
 

@@ -1495,3 +1495,43 @@ Running every README command verbatim also turned up
 `fixtures/broken.jsonl`: referenced twice by the validator section, never
 committed, so `eval-harness validate fixtures/broken.jsonl --json` exits
 2 on a fresh clone.
+
+## 2026-08-07 — the README's validator examples ran against a file that wasn't there (#196)
+
+The README's dataset-validator section documents two commands against
+`fixtures/broken.jsonl`. That file was never committed, so on a fresh clone
+both of them exited 2 with `dataset not found`. The cost wasn't just a dead
+command: the section exists to show the *findings* output — the `--json`
+payload shape, the stable code strings CI consumers route on — and none of
+it was demonstrable. The `--out` example was worse still, documenting
+"exit 2 leaves `--out` untouched" as a contrast with an exit-1 path it had
+no way to show.
+
+The fix commits a six-row fixture that carries exactly one of each
+non-`empty` finding code, on a known line each, and pastes the real payload
+into the README in place of the elision. `empty` can't join them — it only
+fires when a file yields zero valid rows *and* no other finding — so it
+stays covered by the unit tests, and the README now says so.
+
+The more interesting part is why this survived. There is already a test
+whose docstring promises that every path the README references resolves on
+disk, and it has been green the whole time. Its pattern only matches paths
+inside markdown-link parentheses. Every path in the README that a reader is
+told to actually *type* sits inside a ```bash fence, and the lock had never
+looked at a single one of them. A lock that enumerates the wrong entry
+points is worse than no lock, because it makes the gap read as covered.
+
+So the new sister test walks bash fences specifically, scoped to
+`fixtures/` paths. That scoping is what keeps it quiet: output paths like
+`report.json` are written *by* the command and must not pre-exist, and
+`fixtures/main-baseline.json` appears only inside a YAML block explicitly
+labelled as what *downstream* repos put in their own workflows — a
+placeholder in someone else's tree. Restricting to bash fences excludes
+both classes without needing a denylist to maintain.
+
+One fixture-design note. The first draft used `{"kind": "contains"}` on the
+row meant to trigger `version_drift`, and it reported `schema` instead: an
+invalid kind is caught inside record validation, which `continue`s before
+the version comparison ever runs. An earlier check masks a later one. That
+took one command invocation to find and would have taken a long time to
+spot by reading.
