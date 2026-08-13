@@ -1535,3 +1535,43 @@ invalid kind is caught inside record validation, which `continue`s before
 the version comparison ever runs. An earlier check masks a later one. That
 took one command invocation to find and would have taken a long time to
 spot by reading.
+
+## 2026-08-12 — the entry point nobody's sweep ever listed (#198)
+
+This repo has swept its exit-code contract six separate times (#104, #110,
+#116, #122, #124, #128). Every one of those passes walked `eval_harness/`.
+None of them walked `scripts/`. `scripts/capture_demo.py` has a
+`main(argv) -> int` under `raise SystemExit(main())` — it is an entry point by
+every structural definition the repo uses — and four of its own seams were
+bare.
+
+The `--pause-seconds` flag was `type=float` with nothing behind it, and it
+failed in both directions. `inf` reached `time.sleep` and raised an
+`OverflowError`, and because `_pause` is called *between* stages, it fired
+only after STAGE 1 had already run: the operator gets a half-finished capture
+and a traceback. The quiet half is worse. `_pause` guards `if seconds > 0`,
+and `nan > 0` is `False`, so `--pause-seconds=nan` exited 0 having paused
+nowhere. The pauses are the only reason this script exists — they're the cue
+points the screen recorder cuts on — so that's a clean, successful-looking run
+that produces an unusable recording, with no diagnostic anywhere.
+
+The other two were writes, and it's worth noting they are genuinely two, not
+one. `output_dir.mkdir(...)` catches the `--output-dir` that's a file, or
+under a file parent. But a *read-only* directory already exists, so it sails
+through `mkdir(exist_ok=True)` and dies at `shutil.copy2` instead — after both
+hermetic examples have run. The hostile input that reaches the second seam is
+precisely the one the first seam accepts.
+
+What settled that this was an oversight rather than a deliberate "scripts
+don't owe you an exit contract" call is an asymmetry inside the file itself.
+`main` already hand-writes a failure path — but only for the examples it
+drives: `if rc1 != 0: print("[capture] ...", file=sys.stderr); return rc1`. So
+the script does have exit-code discipline. It just applied it to the one
+failure source that wasn't its own. A file that guards the failures it
+*imports* while leaving bare the ones it *originates* is worth a second look
+anywhere in the portfolio.
+
+Reverting the source and keeping the tests puts 9 of 10 in the red. The two
+that stay green are meant to: one pins the `nan > 0 is False` mechanism (true
+before and after — that's the point of it), and one asserts a valid run still
+exits 0.

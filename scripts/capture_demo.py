@@ -29,6 +29,7 @@ from __future__ import annotations
 import argparse
 import importlib
 import io
+import math
 import re
 import shutil
 import sys
@@ -46,9 +47,55 @@ DEFAULT_OUTPUT_DIR = REPO_ROOT / "docs" / "demo-artifacts"
 DRIFT_REPORT_FILENAME = "drift_report.html"
 
 
+def _fail(message: str) -> int:
+    """Print a clean ``::error::`` line to stderr and return exit code 2.
+
+    Same shape as ``eval_harness.cli._fail``. This script is an entry point in
+    its own right (``main(argv) -> int`` under ``raise SystemExit(main())``),
+    so it owes the operator the same ``0 = clean / 1 = findings /
+    2 = I/O or usage error`` contract the subcommands honor — the reason
+    ``drift.cli`` puts its guard in the module rather than in
+    ``cli._run_drift``. ``main`` already hand-writes a failure path for a
+    non-zero example ``rc``; these are the seams that were left bare (#198).
+    """
+    print(f"::error::{message}", file=sys.stderr)
+    return 2
+
+
 def _banner(stage: int, title: str) -> str:
     line = "=" * 72
     return f"\n{line}\n  STAGE {stage}  {title}\n{line}\n"
+
+
+def _validate_pause_seconds(seconds: float) -> str | None:
+    """Return an error message for an unusable ``--pause-seconds``, else ``None``.
+
+    ``type=float`` is not validation. Both directions of the unguarded domain
+    were live (#198):
+
+    - ``inf`` reached ``time.sleep`` and raised a raw ``OverflowError``
+      ("timestamp out of range for platform time_t") *after* STAGE 1 had
+      already run, so the operator got a half-finished capture and a
+      traceback at exit 1.
+    - ``nan`` and negatives were the quiet half: ``_pause`` guards
+      ``if seconds > 0``, and ``nan > 0`` is ``False``, so the run exited 0
+      having taken no pause at all. The inter-stage pauses are the script's
+      only reason to exist ("cue points to cut on"), so a silent exit-0 run
+      whose recording is unusable is the worse of the two failures.
+
+    Guard shape mirrors ``calibration.render_report``'s ``threshold_kappa``
+    and ``calibration.binarize``'s ``threshold`` — the repo's established form
+    for a finite-float parameter, including the ``bool`` exclusion (``True``
+    would otherwise pass as ``1.0``) for callers that pass ``argv=None`` and
+    reach ``main`` programmatically.
+    """
+    if not isinstance(seconds, (int, float)) or isinstance(seconds, bool):
+        return f"--pause-seconds must be a number; got {seconds!r}"
+    if math.isnan(seconds) or math.isinf(seconds):
+        return f"--pause-seconds must be finite; got {seconds!r}"
+    if seconds < 0:
+        return f"--pause-seconds must be >= 0; got {seconds!r}"
+    return None
 
 
 def _pause(seconds: float) -> None:
@@ -154,8 +201,22 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
+    # Validate before any stage runs. The pre-fix `inf` crash fired inside
+    # `_pause`, i.e. after STAGE 1 had already completed — a usage error that
+    # costs the operator a partial capture. Checking here makes it free.
+    if (msg := _validate_pause_seconds(args.pause_seconds)) is not None:
+        return _fail(msg)
+
     output_dir: Path = args.output_dir
-    output_dir.mkdir(parents=True, exist_ok=True)
+    # `mkdir` was bare: an `--output-dir` that is an existing file raised
+    # FileExistsError, one under a file parent raised NotADirectoryError, and an
+    # unwritable parent raised PermissionError — all as raw tracebacks at exit 1
+    # (#198). Same write-seam translation as `cli._write_output` and the
+    # `atomic_write_text` guard in `drift.cli`.
+    try:
+        output_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as e:
+        return _fail(f"failed to create output directory {output_dir}: {e}")
 
     # STAGE 1 — regression runner + ASCII delta table.
     print(_banner(1, "Regression runner + diff (examples/regression_run_and_diff.py)"))
@@ -182,7 +243,14 @@ def main(argv: list[str] | None = None) -> int:
 
     src_html = _extract_html_path(out2)
     stable_html = output_dir / DRIFT_REPORT_FILENAME
-    shutil.copy2(src_html, stable_html)
+    # The second, later write seam — a read-only `--output-dir` survives the
+    # `mkdir` above (it already exists) and fails here instead, after *both*
+    # hermetic examples have run. Bare, it surfaced as a raw PermissionError
+    # traceback at exit 1 (#198).
+    try:
+        shutil.copy2(src_html, stable_html)
+    except OSError as e:
+        return _fail(f"failed to copy drift report to {stable_html}: {e}")
     # Replace the tempfile path in the captured stdout so the recording
     # shows the stable destination, not the random tempdir path. The
     # operator's browser tab is pre-positioned on the stable path.
