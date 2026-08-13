@@ -1575,3 +1575,17 @@ Reverting the source and keeping the tests puts 9 of 10 in the red. The two
 that stay green are meant to: one pins the `nan > 0 is False` mechanism (true
 before and after — that's the point of it), and one asserts a valid run still
 exits 0.
+
+## 2026-08-13 — The judge parser could return a score and a reasoning from different blocks (#200)
+
+**Duration:** ~45 min · **Issue:** #200 · **PR:** #201
+
+`parse_judge_output` built its result from two independent searches — one for the `SCORE:` line, one for the `REASONING:` line — with nothing tying them to the same part of the response. Both patterns are line-anchored and have no notion of block context. Three ways to get a well-formed, confidently wrong score fell out of a fourteen-row variant table.
+
+The sharpest is induced by the harness's own prompt. `SYSTEM_TEMPLATE` tells the judge to answer in exactly `SCORE: <number between 0 and 1>` / `REASONING: <one sentence>`, and restating an instruction before complying is about the most common thing a language model does. When it happens, the score skips the placeholder — it isn't numeric — and advances to the real answer, while the reasoning stays pinned to the echoed placeholder. The returned pair describes two different blocks. A prompt template that shows a literal format example is an input generator for its own parser, which is worth remembering.
+
+The second is a direct transfer of the chunking bug shipped earlier in this same run: a `SCORE:` line inside a fenced code block won over the real one below it, so a judge quoting the rubric's worked example got scored at the example's value. The fence-span helper was ported across repos unchanged. The third: a judge explaining what 0.0 means was scored 0.0 for it, and now raises instead.
+
+Rejecting loudly is the right direction here. #192 hardened this same function on the same principle — a wrong-but-plausible judge score is precisely the failure this harness exists to catch, so it is the one failure it must not manufacture itself.
+
+One thing deliberately left alone: when a judge gives two scores, the first still wins. Whether a self-correcting judge's *last* score should win instead is a real design question and deserves its own issue rather than riding along in a correctness fix.
