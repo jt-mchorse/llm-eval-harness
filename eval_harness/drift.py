@@ -131,11 +131,48 @@ def jensen_shannon(p: Sequence[float], q: Sequence[float]) -> float:
     that silently drops every >=1M-char input) reported "no drift" when
     drift was maximal -- a false-negative that bypassed the regression gate
     (#91). Consistent with D-014 (JSD base-2 bounded [0, 1]).
+
+    Value-domain contract (#202): "non-negative weight vector" was stated
+    here in prose and enforced only for *length*. Both unenforced halves
+    failed silently, and this function is the primitive every ``AxisReport``
+    verdict is computed from:
+
+    - A ``NaN`` entry made ``sum()`` ``NaN``; ``nan <= 0.0`` is ``False``, so
+      both empty-side branches fell through, and ``_kl``'s
+      ``if ai > 0.0 and bi > 0.0`` is ``False`` for every ``NaN``, so the
+      corrupt slots contributed *nothing*. The divergence was computed over
+      the surviving slots and landed on ``0.0`` -- which is this function's
+      encoding of "identical distributions", i.e. ``status="ok"`` on the
+      axis. The same false-negative shape as #91 and #93, reached through
+      the value domain rather than through an all-zero histogram.
+    - A negative entry either produced a plausible in-range number
+      (``[10, -5]`` normalizes to ``[2.0, -1.0]``; ``_kl`` skips the negative
+      slot and returns ``0.347...``, which passes every bounds check) or, when
+      the whole vector summed non-positive (``[-1, -1]``), tripped the
+      ``sp <= 0.0`` *empty* branch and was reported as **maximal drift**.
+
+    Reject both at the boundary, the same posture as ``cluster_k``, the three
+    axis thresholds, and ``_clamp01`` (#96). No internal caller can reach
+    either branch -- the three call sites pass non-negative ``int`` histograms
+    -- but the name is exported in ``__all__``.
     """
     if len(p) != len(q):
         raise ValueError(f"distributions must have equal length; got {len(p)} vs {len(q)}")
     if not p:
         return 0.0
+    # Before the empty-side guards below: an all-negative vector sums to a
+    # non-positive number and would otherwise be laundered into the "empty
+    # support" branch and reported as maximal drift (1.0) rather than rejected.
+    for _label, _vec in (("p", p), ("q", q)):
+        for _i, _x in enumerate(_vec):
+            if not math.isfinite(_x):
+                raise ValueError(
+                    f"{_label} must contain only finite weights; got {_x!r} at index {_i}"
+                )
+            if _x < 0.0:
+                raise ValueError(
+                    f"{_label} must be a non-negative weight vector; got {_x!r} at index {_i}"
+                )
     sp = sum(p)
     sq = sum(q)
     if sp <= 0.0 and sq <= 0.0:
@@ -164,9 +201,28 @@ def jensen_shannon(p: Sequence[float], q: Sequence[float]) -> float:
 
 
 def percentile(values: Sequence[float], q: float) -> float:
-    """NIST type-7 linear-interp percentile (matches the rag-kit pattern)."""
+    """NIST type-7 linear-interp percentile (matches the rag-kit pattern).
+
+    A non-finite value (NaN / +/-Infinity) is rejected (#202). The parity this
+    docstring claims is with ``rag_kit.telemetry.percentile``, which has
+    guarded this since rag-production-kit#80 -- the claim was aspirational
+    until this guard existed, since the two bodies were otherwise identical.
+
+    Unguarded, ``sorted()`` leaves a ``NaN`` in an implementation-defined slot
+    (every ``NaN`` comparison is ``False``), so the result is silently wrong
+    *and position-dependent*: the multiset ``{1.0, 3.0, 4.0, NaN}`` returned
+    ``2.0``, ``3.5`` or ``nan`` at ``q=0.5`` depending only on where the
+    ``NaN`` sat in the caller's list.
+
+    No internal caller can reach this -- ``_length_stats`` passes
+    ``float(len(s))``, always finite -- but the name is exported in
+    ``__all__``, which is the same reason rag-kit guards its own copy. Fail
+    loud at the metric boundary, matching the ``q``-range guard below.
+    """
     if not values:
         return 0.0
+    if any(not math.isfinite(v) for v in values):
+        raise ValueError(f"values must all be finite numbers; got {list(values)!r}")
     if not 0.0 <= q <= 1.0:
         raise ValueError(f"q must be in [0.0, 1.0]; got {q}")
     s = sorted(values)

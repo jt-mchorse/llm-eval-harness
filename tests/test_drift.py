@@ -587,3 +587,137 @@ def test_percentile_rejects_q_out_of_unit_range():
         percentile([1.0, 2.0], -0.1)
     with pytest.raises(ValueError, match=r"q must be in \[0.0, 1.0\]"):
         percentile([1.0, 2.0], 1.5)
+
+
+# ----------------------------------------------------------------------
+# Value-domain guards on the two exported math primitives (#202)
+#
+# `jensen_shannon`'s docstring stated "non-negative weight vectors of equal
+# length" and enforced only the length half; `percentile`'s docstring claimed
+# parity with `rag_kit.telemetry.percentile`, which has rejected non-finite
+# values since rag-production-kit#80.
+#
+# Each guard test below is anchored to the *measured pre-fix value*, not just
+# to the exception type. A later widening of a guard that reintroduces the
+# silent path has to make one of these corrupt numbers come back, which is a
+# far louder failure than "the ValueError stopped being raised".
+# ----------------------------------------------------------------------
+
+
+def test_jensen_shannon_rejects_nan_which_previously_read_as_no_drift():
+    # Pre-fix: sum([1, nan]) is nan, `nan <= 0.0` is False so both empty-side
+    # branches fell through, and `_kl`'s `ai > 0.0` is False for every nan, so
+    # the corrupt slot contributed nothing and the result was 0.0 — this
+    # function's encoding of "identical distributions", i.e. status="ok" on
+    # the axis. The most false-negative answer a drift gate can return.
+    nan = float("nan")
+    with pytest.raises(ValueError, match=r"p must contain only finite weights"):
+        jensen_shannon([1.0, nan], [1.0, 1.0])
+    with pytest.raises(ValueError, match=r"q must contain only finite weights"):
+        jensen_shannon([1.0, 1.0], [1.0, nan])
+    # nan in the same slot on both sides was also 0.0 pre-fix.
+    with pytest.raises(ValueError, match=r"p must contain only finite weights"):
+        jensen_shannon([1.0, nan], [1.0, nan])
+
+
+def test_jensen_shannon_rejects_infinite_weights():
+    inf = float("inf")
+    # Pre-fix: [1, inf] vs [1, 1] returned 0.25 — a plausible in-range number.
+    with pytest.raises(ValueError, match=r"p must contain only finite weights"):
+        jensen_shannon([1.0, inf], [1.0, 1.0])
+    # Pre-fix: [1, -inf] summed to -inf, tripped the `sp <= 0.0` *empty*
+    # branch, and was reported as maximal drift (1.0).
+    with pytest.raises(ValueError, match=r"p must contain only finite weights"):
+        jensen_shannon([1.0, -inf], [1.0, 1.0])
+
+
+def test_jensen_shannon_rejects_negative_weights_that_summed_positive():
+    # Pre-fix: [10, -5] sums to 5, normalizes to [2.0, -1.0]; `_kl` skips the
+    # negative slot and the result was 0.34758988139079716 — inside [0, 1], so
+    # it survived every bounds check downstream.
+    with pytest.raises(ValueError, match=r"p must be a non-negative weight vector"):
+        jensen_shannon([10.0, -5.0], [1.0, 1.0])
+    with pytest.raises(ValueError, match=r"q must be a non-negative weight vector"):
+        jensen_shannon([1.0, 1.0], [10.0, -5.0])
+
+
+def test_jensen_shannon_rejects_all_negative_vector_before_the_empty_branch():
+    # This is why the guard sits *above* the `sp <= 0.0` branches. Pre-fix,
+    # [-1, -1] summed to -2, was laundered into the "empty support" branch,
+    # and came back as 1.0 — maximal drift for a vector that is not a
+    # distribution at all. A guard placed after the empty checks would never
+    # see it.
+    with pytest.raises(ValueError, match=r"p must be a non-negative weight vector"):
+        jensen_shannon([-1.0, -1.0], [1.0, 1.0])
+    # Same for a vector summing to exactly zero via cancellation, which took
+    # the same branch and also returned 1.0.
+    with pytest.raises(ValueError, match=r"p must be a non-negative weight vector"):
+        jensen_shannon([1.0, -1.0], [1.0, 1.0])
+
+
+def test_jensen_shannon_empty_side_contract_is_unchanged_by_the_guard():
+    # #91's contract must survive: the guard rejects *negative* mass, not
+    # *zero* mass. All-zero vectors are still legal and still mean "empty".
+    assert jensen_shannon([0, 0, 0], [0, 0, 0]) == 0.0  # both empty -> identical
+    assert jensen_shannon([0, 0, 0], [1, 2, 3]) == 1.0  # one empty -> disjoint
+    assert jensen_shannon([1, 2, 3], [0, 0, 0]) == 1.0  # symmetric
+    assert jensen_shannon([], []) == 0.0  # length-0 short-circuits first
+    # And the equal-length guard still fires before the value-domain scan, so
+    # a mismatched pair reports the length problem rather than a stray weight.
+    with pytest.raises(ValueError, match=r"equal length"):
+        jensen_shannon([1.0, -1.0], [1.0])
+
+
+def test_percentile_rejects_nan_which_was_silently_position_dependent():
+    # The measured pre-fix matrix for the multiset {1.0, 3.0, 4.0, NaN} at
+    # q=0.5 — three different answers for one multiset, decided purely by
+    # where the caller happened to put the NaN:
+    #
+    #   [1.0, nan, 3.0, 4.0] -> nan
+    #   [nan, 1.0, 3.0, 4.0] -> 2.0
+    #   [1.0, 3.0, 4.0, nan] -> 3.5
+    #
+    # `sorted()` leaves the NaN in an implementation-defined slot because
+    # every NaN comparison is False. All three now raise.
+    nan = float("nan")
+    for ordering in ([1.0, nan, 3.0, 4.0], [nan, 1.0, 3.0, 4.0], [1.0, 3.0, 4.0, nan]):
+        with pytest.raises(ValueError, match=r"values must all be finite numbers"):
+            percentile(ordering, 0.5)
+
+
+def test_percentile_rejects_infinities():
+    inf = float("inf")
+    # Pre-fix both returned 2.5 — the infinity sorted to an end and the
+    # interpolation never touched it, so the corruption was invisible at p50
+    # and would have surfaced at p95.
+    with pytest.raises(ValueError, match=r"values must all be finite numbers"):
+        percentile([1.0, 2.0, 3.0, inf], 0.5)
+    with pytest.raises(ValueError, match=r"values must all be finite numbers"):
+        percentile([-inf, 2.0, 3.0, 4.0], 0.5)
+
+
+def test_percentile_empty_and_finite_paths_are_unchanged_by_the_guard():
+    # The empty short-circuit runs before the finiteness scan, so an empty
+    # sequence is still 0.0 rather than a ValueError.
+    assert percentile([], 0.5) == 0.0
+    # And the ordinary finite path is byte-identical to before.
+    assert percentile([1.0, 2.0, 3.0, 4.0], 0.5) == 2.5
+    assert percentile([42.0], 0.5) == 42.0
+
+
+def test_percentile_finiteness_guard_matches_the_rag_kit_message_shape():
+    # The docstring's parity claim is with `rag_kit.telemetry.percentile`.
+    # Pin the message so the two copies stay diffable by grep, which is how
+    # the divergence was found in the first place.
+    with pytest.raises(ValueError, match=r"values must all be finite numbers; got "):
+        percentile([1.0, float("nan")], 0.5)
+
+
+def test_compute_drift_still_works_end_to_end_after_the_guards():
+    # The guards sit on the primitives every axis is computed from; a
+    # mis-scoped guard (e.g. rejecting zero counts) would break every drift
+    # run. Empty histogram buckets are extremely common, so this is the
+    # regression that matters most.
+    report = compute_drift(["short", "a bit longer input here"], ["x", "y", "z"])
+    assert 0.0 <= report.length.drift_score <= 1.0
+    assert 0.0 <= report.embedding.drift_score <= 1.0
