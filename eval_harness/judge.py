@@ -379,6 +379,55 @@ _SCORE_RE = re.compile(
 )
 _REASON_RE = re.compile(r"^\s*REASONING:\s*(.+)$", re.MULTILINE | re.IGNORECASE)
 
+# A fenced code block opener: optional indent, then 3+ backticks or tildes,
+# then an optional info string. A fence closes only on a run of the SAME
+# character at least as long as the opener, so a ```` block is not closed by an
+# inner ```. Ported from `chunking_lab.strategies.structure` (#152), which hit
+# the identical class: a line-anchored `re.MULTILINE` pattern over free-form
+# text has no notion of block context, so it reads structure out of quoted
+# examples. Here the consequence is a *score*, not a chunk title — a judge that
+# quotes the rubric's worked example in a code block was scored at the
+# example's value (#200).
+_FENCE_RE = re.compile(r"^[ \t]*(?P<fence>`{3,}|~{3,})[ \t]*(?P<info>[^\n]*)$", re.MULTILINE)
+
+
+def _fenced_spans(text: str) -> list[tuple[int, int]]:
+    """Return the ``[start, end)`` character spans covered by fenced code blocks.
+
+    An unclosed fence extends to end-of-text. That is the conservative
+    direction here: the parser would rather refuse a score it cannot trust
+    (a loud ``JudgeParseError``) than lift one out of a code block, because a
+    wrong-but-plausible judge score is the exact failure this harness exists to
+    catch (#192).
+    """
+    spans: list[tuple[int, int]] = []
+    open_at: int | None = None
+    open_char = ""
+    open_len = 0
+    for m in _FENCE_RE.finditer(text):
+        fence = m.group("fence")
+        if open_at is None:
+            open_at = m.start()
+            open_char = fence[0]
+            open_len = len(fence)
+            continue
+        if fence[0] == open_char and len(fence) >= open_len and not m.group("info").strip():
+            spans.append((open_at, m.end()))
+            open_at = None
+    if open_at is not None:
+        spans.append((open_at, len(text)))
+    return spans
+
+
+def _first_match_outside_fences(
+    pattern: re.Pattern[str], text: str, spans: list[tuple[int, int]], start: int = 0
+) -> re.Match[str] | None:
+    """First match of ``pattern`` at or after ``start`` that begins outside a fence."""
+    for m in pattern.finditer(text, start):
+        if not any(lo <= m.start() < hi for lo, hi in spans):
+            return m
+    return None
+
 
 class JudgeParseError(ValueError):
     """Raised when the judge backend's output doesn't match the SCORE/REASONING format."""
@@ -399,12 +448,34 @@ class Judge:
 
 def parse_judge_output(raw: str) -> JudgeScore:
     """Parse the SCORE/REASONING format. Public so re-recorded judge fixtures can be replayed."""
-    score_match = _SCORE_RE.search(raw)
-    reason_match = _REASON_RE.search(raw)
+    # Two independent `.search()` calls used to produce these, with nothing
+    # tying them to the same block of text — so a `JudgeScore` could be a
+    # chimera of two different parts of the response (#200). The harness's own
+    # `SYSTEM_TEMPLATE` induces the input that does it: a judge that restates
+    # "SCORE: <number between 0 and 1> / REASONING: <one sentence>" before
+    # complying gave a score from the real answer (the placeholder isn't
+    # numeric, so `_SCORE_RE` skipped it) and a reasoning of
+    # `'<one sentence>'` (`_REASON_RE`'s `(.+)` matches anything, so it stayed
+    # pinned to the placeholder).
+    #
+    # Two changes close it. Matches beginning inside a fenced code block are
+    # skipped, so quoting the rubric's worked example no longer decides the
+    # score. And REASONING is searched *from the end of the chosen SCORE line*,
+    # which is the ordering `SYSTEM_TEMPLATE` documents — so the pair either
+    # comes from one block or the output is rejected, never silently mixed.
+    #
+    # First-match semantics for SCORE are deliberately unchanged. Whether a
+    # self-correcting judge's *last* score should win instead is a separate
+    # design question and does not ride along in a correctness fix.
+    spans = _fenced_spans(raw)
+    score_match = _first_match_outside_fences(_SCORE_RE, raw, spans)
     if score_match is None:
         raise JudgeParseError(f"missing SCORE: line in judge output: {raw!r}")
+    reason_match = _first_match_outside_fences(_REASON_RE, raw, spans, score_match.end())
     if reason_match is None:
-        raise JudgeParseError(f"missing REASONING: line in judge output: {raw!r}")
+        raise JudgeParseError(
+            f"missing REASONING: line after the SCORE: line in judge output: {raw!r}"
+        )
     # Clamp out-of-range scores symmetrically: the model occasionally returns
     # just over 1.0 (e.g. 1.05) or, less often, just under 0.0 (e.g. -0.1).
     # The SCORE regex now matches a leading sign (#71) so both ends reach here.
