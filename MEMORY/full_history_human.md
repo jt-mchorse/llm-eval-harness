@@ -1589,3 +1589,65 @@ The second is a direct transfer of the chunking bug shipped earlier in this same
 Rejecting loudly is the right direction here. #192 hardened this same function on the same principle — a wrong-but-plausible judge score is precisely the failure this harness exists to catch, so it is the one failure it must not manufacture itself.
 
 One thing deliberately left alone: when a judge gives two scores, the first still wins. Whether a self-correcting judge's *last* score should win instead is a real design question and deserves its own issue rather than riding along in a correctness fix.
+
+## 2026-08-14 — drift's two exported math primitives didn't enforce the domains they document (#202)
+
+`eval_harness.drift` exports `jensen_shannon` and `percentile` in `__all__`.
+Both docstrings state a value-domain precondition. Neither enforced it.
+
+`jensen_shannon`'s docstring promises "non-negative weight vectors of equal
+length". The length half raises; the non-negative half never existed. Feed it a
+`NaN` and it returns `0.0` — which is this function's own encoding of *"the
+distributions are identical"*. The mechanism is a chain of guards that each
+individually look correct: `sum()` becomes `NaN`, `nan <= 0.0` is `False` so
+both empty-side branches fall through, and `_kl`'s `if ai > 0.0 and bi > 0.0`
+is `False` for every `NaN`, so the corrupt slots contribute nothing at all. The
+divergence gets computed over whatever survived and lands on zero. Every drift
+axis built on it reports `status="ok"`. That is the same false-negative shape
+issues #91 and #93 fixed at other seams — this time reached through the value
+domain rather than through an all-zero histogram.
+
+Negative weights had two separate silent modes. `[10, -5]` sums to 5,
+normalizes to `[2.0, -1.0]`, and `_kl` skips the negative slot, returning
+`0.3475…` — inside `[0, 1]`, so it survives every bounds check downstream.
+`[-1, -1]` sums to `-2`, trips the `sp <= 0.0` *empty* branch, and is reported
+as **maximal drift** for a vector that isn't a distribution at all. That second
+mode is why the new guard sits *above* the empty-side branches: a guard placed
+below them would never have seen it. There's a test named for that placement.
+
+`percentile`'s docstring was a single line: "matches the rag-kit pattern".
+`rag_kit.telemetry.percentile` has rejected non-finite values since
+rag-production-kit#80, and the two function bodies were otherwise identical —
+so the parity claim was aspirational rather than true. The consequence is worth
+stating precisely: the multiset `{1.0, 3.0, 4.0, NaN}` at `q=0.5` returned
+`2.0`, `3.5`, or `nan` depending only on where the caller happened to put the
+`NaN` in the list, because `sorted()` leaves it in an implementation-defined
+slot.
+
+Neither defect is reachable through `compute_drift` or `drift.cli` today. I
+checked every internal feed firsthand and said so in the issue, the PR, and the
+close comment: `_length_stats` passes `float(len(s))`, the three
+`jensen_shannon` call sites pass non-negative integer histograms, `_clamp01`
+already guards the judge seam, and the CLI reads JSONL of strings. So this is a
+public-API contract gap, not a live corruption path — which is the same
+argument rag-kit made when it guarded its own copy.
+
+How it was found is worth recording. Grepping the repo for prose assertions
+("never", "cannot", "mirrors", "matches", "in parity with") turned up a rich
+vein, and `percentile`'s parity claim was the thread. Rather than read the two
+functions and reason about them, I AST-extracted all five `percentile` copies
+in the portfolio and ran one input table through all of them side by side. A
+first attempt to import the real modules died on `rag_kit.db` requiring
+`psycopg`; pulling the function *source* out with `ast.get_source_segment` and
+exec'ing it in a stub namespace sidesteps every repo dependency, and is the
+technique to reuse for any cross-repo pure-function differential. The matrix
+showed the three-different-answers-for-one-multiset row immediately.
+
+Two hunts came back empty and are recorded so they aren't repeated. A 19-case
+differential between `validate_dataset` and `validate_calibration` — blank
+lines, BOM, CRLF, NUL bytes, bad UTF-8, duplicate ids, `null`/list/bare-number
+rows, and five malformed id shapes — found **full parity on all 19**, so that
+prose assertion genuinely holds. Both validators do abort on undecodable bytes,
+which looked like a live instance of the collecting-mode class fixed in
+prompt-regression-suite#133, but `cli.py` already translates
+`UnicodeDecodeError` to a clean exit 2 for both. Not a bug.
