@@ -1651,3 +1651,68 @@ prose assertion genuinely holds. Both validators do abort on undecodable bytes,
 which looked like a live instance of the collecting-mode class fixed in
 prompt-regression-suite#133, but `cli.py` already translates
 `UnicodeDecodeError` to a clean exit 2 for both. Not a bug.
+
+## 2026-08-19 — `cohens_kappa` validated length and nothing else (#204)
+
+`eval_harness` exports three calibration metric entry points — `binarize`,
+`pearson_r`, `cohens_kappa` — and two of the three validate their inputs.
+`cohens_kappa` checked that the two rater lists were the same length and
+non-empty, and then never looked at an element. `_require_finite_numbers`
+sits one definition below it in the same file doing exactly that job for
+`pearson_r`, and its docstring spells out the argument in words that are true
+of κ verbatim: an unguarded non-finite value "renders it as a confidently-wrong
+'very strong' correlation."
+
+For κ the rendering is worse, because `_interpret_kappa` is a ladder of `<`
+comparisons and every comparison against `NaN` is `False`. A `NaN` rating falls
+all the way through to the final branch and comes out labelled **"almost
+perfect"**. Rendered firsthand, the report reads:
+
+```
+- result: **FAIL**
+
+| metric | value | interpretation |
+|--------|-------|----------------|
+| Cohen's κ (binarized at 0.5) | nan | almost perfect |
+```
+
+That is `docs/calibration_report.md`, the file D-005 gates CI on. A report
+that says FAIL and "almost perfect" in the same table is worse than one that
+refuses to render.
+
+The docstring's "on a binary scale" turned out to be load-bearing rather than
+decorative: `pe = a_pos*b_pos + (1-a_pos)*(1-b_pos)` is a chance-agreement
+*probability* only when every element is in `{0, 1}`. Rather than hand-pick
+variants, I brute-forced the element domain `{-1,0,1,2,3}` at n=2 and n=3 and
+found 8088 input pairs whose κ is `NaN` or outside `[-1, 1]`. The extreme is
+`cohens_kappa([3,3,0], [1,0,1]) == -9007199254740991.0`, but the dangerous set
+is the quiet one — `[0,2,0,2]` vs `[0,1,0,1]` returns `0.0` and `[0.5,0.5]` vs
+`[0,1]` returns `-1.0`. Both sit comfortably inside κ's real range and read as
+ordinary calibration results. Nothing downstream could notice.
+
+A second, sharper half fell out of the same reading. `render_report` computes
+`result.cohens_kappa >= threshold_kappa` and has a five-line guard rejecting a
+non-finite or out-of-range `threshold_kappa`, justified in its docstring by
+"finite values outside that range cannot ever match ... so the gate is silently
+broken." Every word of that is equally true of the *left* operand, which was
+unvalidated — and since `CalibrationResult` is a public export, that is the
+path the `NaN` report above was produced through. The general lens: when a
+guard exists to protect a comparison, check whether it covers both sides.
+
+One judgment call is worth flagging because it narrows working behaviour.
+`cohens_kappa([True, False], [1, 0])` returned a correct `1.0` and now raises.
+I took that anyway so the module holds one opinion about `True` instead of
+three — `binarize` and `_require_finite_numbers` already reject it, and
+`calibrate` feeds all three from the same rows. The error message names the fix
+and the test is called `test_bool_is_rejected_even_though_it_returned_the_right_answer`,
+so if JT disagrees the change is one line and obvious.
+
+Neither gap is reachable from inside the repo today: `calibrate` feeds
+`cohens_kappa` guarded `binarize` output. That is the same standing as the two
+guards merged in #203, and the same reason applies — the names are in
+`eval_harness.__all__`, other portfolio repos import this one as a library, and
+`docs/architecture.md` names the math as the reusable part.
+
+27 tests, every assertion anchored to a value measured on the pre-fix tree
+rather than to an exception type. Reverting only the four behavioural lines —
+keeping the new symbols so collection still works — turns 22 of them red.
