@@ -278,6 +278,58 @@ def binarize(score: float, threshold: float = 0.5) -> int:
     return 1 if score >= threshold else 0
 
 
+def _require_binary_labels(values: list[int], label: str) -> None:
+    """Reject any element that is not an integral ``0`` or ``1`` (#204).
+
+    ``cohens_kappa`` says "on a binary scale" and validated only *length* and
+    *emptiness*. The scale claim is load-bearing, not decorative:
+    ``pe = a_pos*b_pos + (1-a_pos)*(1-b_pos)`` is a chance-agreement
+    *probability* only when ``sum(values)/n`` is a class proportion, which
+    requires every element to be in ``{0, 1}``. Outside that domain the
+    expression is still arithmetic — it just isn't κ.
+
+    Measured on the unguarded function:
+
+    - ``NaN`` or ``±inf`` in either list returned ``nan``, and
+      ``_interpret_kappa(nan)`` renders it as **"almost perfect"** (every
+      ``<`` comparison against ``NaN`` is ``False``, so it falls through the
+      whole ladder to the last branch). That lands in
+      ``docs/calibration_report.md``, the file D-005 gates CI on. It is the
+      identical failure mode ``_require_finite_numbers`` was written to close
+      for ``pearson_r`` one definition below — that docstring's own words:
+      "renders it as a confidently-wrong 'very strong' correlation".
+    - Non-binary integers produced numbers far outside κ's ``[-1, 1]`` range
+      while looking like an ordinary result. Brute-forcing ``{-1,0,1,2,3}`` at
+      n=2 and n=3 finds 8088 such pairs; the extreme is
+      ``cohens_kappa([3, 3, 0], [1, 0, 1]) == -9007199254740991.0``.
+    - A ``str`` or ``None`` element raised ``TypeError`` from inside ``sum``.
+      ``TypeError`` is not a ``ValueError``, so it walked straight through
+      ``cli``'s ``except ValueError`` translation and out as a raw traceback —
+      the same exit-code contract escape ``runner._require_int`` documents
+      for ``OverflowError``. Raising ``ValueError`` here keeps it inside.
+
+    ``bool`` is excluded explicitly, and this is the one call that *narrows*
+    behaviour: ``cohens_kappa([True, False], [1, 0])`` returned a perfectly
+    correct ``1.0``. It is rejected anyway so this module holds ONE opinion
+    about ``True`` rather than three — ``binarize`` (#45) and
+    ``_require_finite_numbers`` (#102) both already reject it, and ``calibrate``
+    feeds all three from the same source. The message names the fix.
+    """
+    for i, v in enumerate(values):
+        if isinstance(v, bool):
+            raise ValueError(
+                f"{label}[{i}] must be an int 0 or 1, not a bool; got {v!r} (pass {int(v)} instead)"
+            )
+        if not isinstance(v, (int, float)):
+            raise ValueError(f"{label}[{i}] must be a number; got {v!r}")
+        if not math.isfinite(v):
+            raise ValueError(f"{label}[{i}] must be finite; got {v!r}")
+        if v not in (0, 1):
+            raise ValueError(
+                f"{label}[{i}] must be 0 or 1 — κ is defined on a binary scale; got {v!r}"
+            )
+
+
 def cohens_kappa(rater_a: list[int], rater_b: list[int]) -> float:
     """Cohen's κ for two raters on a binary scale.
 
@@ -286,11 +338,20 @@ def cohens_kappa(rater_a: list[int], rater_b: list[int]) -> float:
 
     Returns 0.0 in the degenerate case where pe == 1 (both raters
     constant and equal — undefined kappa, conventionally reported as 0).
+
+    "Binary scale" is enforced, not assumed (#204): every element of both
+    lists must be an integral ``0`` or ``1``. See ``_require_binary_labels``
+    for what each rejected shape used to return.
     """
     if len(rater_a) != len(rater_b):
         raise ValueError("rater lists must have the same length")
     if not rater_a:
         raise ValueError("cannot compute kappa on empty input")
+    # After the length/empty guards, before any arithmetic — same ordering as
+    # `pearson_r` below, so the two siblings report the same class of problem
+    # in the same order for the same input.
+    _require_binary_labels(rater_a, "rater_a")
+    _require_binary_labels(rater_b, "rater_b")
 
     n = len(rater_a)
     po = sum(1 for a, b in zip(rater_a, rater_b, strict=True) if a == b) / n
@@ -376,6 +437,24 @@ def calibrate(judge: Judge, rows: Iterable[CalibrationRow]) -> CalibrationResult
     )
 
 
+def _require_correlation_range(value: float, label: str) -> None:
+    """Reject a κ / r that is outside the `[-1, 1]` both metrics are defined on (#204).
+
+    Same shape and same rationale as the `threshold_kappa` guard below — this
+    is the other operand of the identical comparison. Kept as a helper rather
+    than inlined twice because `pearson_r` needs it on exactly the same terms.
+    """
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        raise ValueError(f"{label} must be a number; got {value!r}")
+    if not math.isfinite(value):
+        raise ValueError(
+            f"{label} must be finite; got {value!r} — a non-finite value falls through "
+            "every branch of the interpretation ladder and is labelled 'almost perfect'"
+        )
+    if not -1.0 <= value <= 1.0:
+        raise ValueError(f"{label} must be in [-1, 1]; got {value!r}")
+
+
 def render_report(
     result: CalibrationResult, *, judge_model: str, threshold_kappa: float = 0.6
 ) -> str:
@@ -388,6 +467,18 @@ def render_report(
     similarly silent. Reject all of those at the boundary so a CI
     misconfig surfaces as a clear ValueError instead of a misleading
     PASS/FAIL line in the markdown.
+
+    Every word of that paragraph is equally true of the LEFT operand of the
+    same comparison, and `result.cohens_kappa` was unvalidated (#204). It is
+    checked here too, along with `result.pearson_r`, which shares the `[-1, 1]`
+    range and feeds `_interpret_pearson`. `CalibrationResult` is a public
+    export, so a caller can hand this function a value `calibrate` would never
+    produce; the measured result was a report reading
+
+        | Cohen's κ (binarized at 0.5) | nan | almost perfect |
+
+    because `_interpret_kappa` falls through its whole `<` ladder on `NaN`.
+    Guarding only the threshold left the gate half-checked.
     """
     if (
         not isinstance(threshold_kappa, (int, float))
@@ -398,6 +489,8 @@ def render_report(
         raise ValueError(f"threshold_kappa must be a finite number; got {threshold_kappa!r}")
     if not -1.0 <= threshold_kappa <= 1.0:
         raise ValueError(f"threshold_kappa must be in [-1, 1]; got {threshold_kappa!r}")
+    _require_correlation_range(result.cohens_kappa, "result.cohens_kappa")
+    _require_correlation_range(result.pearson_r, "result.pearson_r")
     pass_fail = "PASS" if result.cohens_kappa >= threshold_kappa else "FAIL"
     lines = [
         "# Judge calibration report",
