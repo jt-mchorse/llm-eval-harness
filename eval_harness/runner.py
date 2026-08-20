@@ -667,6 +667,23 @@ def load_baseline(
     `exclude_run_id` is the just-inserted current run — passed in to prevent
     picking the current run as its own baseline when two runs share a
     1-second-resolution `started_at`.
+
+    That reason was only ever half the story (#206). It correctly identified
+    the collision — `utc_now_iso()` returned one distinct value across 2000
+    back-to-back calls — but `exclude_run_id` only covers the case where the
+    *current* run is the collider. Two *prior* runs sharing a timestamp still
+    tied, and `latest_run_id_for_suite` resolved the tie in insertion order, so
+    the baseline was arbitrary. Measured on two prior runs at one second
+    scoring 0.90 and 0.30 against a current run of 0.60:
+
+        good written first -> baseline 0.30, mean_delta +0.30, nothing flagged
+        bad  written first -> baseline 0.90, mean_delta -0.30, every row flagged
+
+    A clean pass or a regression, for the same three runs, decided by write
+    order — and that is the artifact the CI Action posts on a PR.
+    `latest_run_id_for_suite` now breaks ties on `run_id`, so both halves are
+    closed: `exclude_run_id` keeps the current run out, and the tiebreak makes
+    the choice among the remainder a pure function of the stored data.
     """
     if baseline_run_id is not None:
         return read_run(conn, baseline_run_id)
