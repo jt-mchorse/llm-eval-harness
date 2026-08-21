@@ -1775,3 +1775,75 @@ the maintainer's intended per-group breakdown.
 **Next session:** sub-second `started_at` with a migration story is the natural
 follow-up, but it is a stored-format change and wants JT's call on the
 compatibility question.
+
+---
+
+## 2026-08-21 — drift reports that changed their mind when you reordered the file (#208)
+
+`compute_drift` is the function that decides whether production traffic has
+moved far enough from the golden set to fail CI. It turned out not to be a
+function of the corpora at all — it was a function of the corpora *and the order
+the lines happened to be in*.
+
+The tell was in a docstring. `_kmeans` said "stride-init for determinism," and
+that claim is true only if the input order is fixed. It isn't: the drift CLI
+reads its corpora from JSONL files, and shuffling lines in a JSONL file is a
+semantically null edit. So I shuffled one. Forty times, against one fixed
+candidate set: ten different embedding scores from 0.0088 to 0.1414, a sixteen-
+fold spread, and both verdicts — seventeen shuffles said `ok`, twenty-three said
+`drifted`, for byte-identical corpora.
+
+What made this more than a one-line fix is that three separate things in that
+function read the input order. The stride init picked its seeds by position.
+The assignment loop settled a cosine tie by taking whichever centroid it met
+first. And the centroid update accumulated with `+=` — float addition isn't
+associative, so summing the same numbers in a different order gives a different
+answer in the last bits. That third one is the reason "just sort the seeds"
+would have looked like a fix and not been one: a last-bit wobble in a centroid
+carries into the next assignment round, and can push an input across a cluster
+boundary, which is a whole-bucket change in the histogram the divergence is
+computed over. So rather than tiebreak three sites, the fix canonicalizes the
+processing order once at the top of the function and maps the assignments back
+to the caller's indexing on the way out. That map-back got its own test, because
+`compute_drift` throws the assignments away and would never have caught a
+regression in it.
+
+There was a second, sharper defect alongside it. The "representative examples" —
+the inputs that look least like anything in the golden set — were sorted on
+distance alone and then truncated to five. Sorting is stable, so tied inputs
+were ranked by where they sat in the file, and the truncation turned that into a
+difference in *membership*: six tied candidates contesting five slots produced
+six different five-element sets over sixty shuffles. This is the same shape as
+the run-history bug fixed last session one module over, and the lesson repeats:
+at a truncation boundary, an untiebroken sort doesn't reorder the output, it
+changes what's in it.
+
+Ties here aren't a corner case. `hash_embed` sums per-token vectors, so it's a
+bag of tokens: duplicate inputs embed identically, and duplicates are the normal
+condition of a production traffic sample. The argument for reachability comes
+straight out of the embedder's own algebra.
+
+One published number moved. The README quotes the drift example's output, and
+the repo's doc-lock test went red on `embedding=0.156`. The deterministic result
+on the same committed fixtures is `0.147`. Nothing was regenerated to make the
+build pass — the lock caught a real number changing, which is exactly what it's
+for, and its failure message says so itself: source is the truth.
+
+I left one thing alone deliberately, and filed it as #210. A text with no
+alphanumeric tokens — an empty string, punctuation, an emoji — embeds to the
+zero vector, and the zero vector's cosine with every centroid is exactly zero.
+So it scores a distance of 1.000: maximal novelty. A genuinely novel request
+measured 0.647. Put five emoji and one real novel request in a candidate set and
+the real one is surfaced zero times out of forty; the punctuation takes every
+slot. That's the same class as two other fixes this month — a value standing in
+for "not measurable" that happens to sit at an end of the scale doesn't abstain,
+it ranks — but the remedy here is a genuine design choice between excluding
+these inputs, rejecting them, or reporting them as their own category, and there
+is a knock-on question about them all piling into cluster zero and skewing the
+histogram. That deserves a deliberate call, not a drive-by.
+
+Cluster seeding quality is also untouched, and worth naming: a stride over a
+sorted list is still weak k-means initialization, and when `k` is more than half
+of `n` the stride collapses to 1 and it's simply the first `k` vectors.
+Determinism was the defect. Better seeding is a different argument that would
+move already-published numbers on its own merits.
