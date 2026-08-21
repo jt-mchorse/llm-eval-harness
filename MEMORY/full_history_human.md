@@ -1716,3 +1716,62 @@ guards merged in #203, and the same reason applies — the names are in
 27 tests, every assertion anchored to a value measured on the pre-fix tree
 rather than to an exception type. Reverting only the four behavioural lines —
 keeping the new symbols so collection still works — turns 22 of them red.
+
+## 2026-08-20 — the diff baseline followed insertion order (#206)
+
+All four `ORDER BY` sites in `eval_harness/runs.py` sorted on `started_at`
+alone. `utc_now_iso()` has one-second resolution, so the tie is not a corner
+case — it is what consecutive runs normally produce. Measured: one distinct
+value across 2000 back-to-back calls, and six consecutive real `run_suite()`
+calls all landing on a single second. Among tied rows SQLite's order is
+implementation-defined, and it tracked insertion order.
+
+What led me there was `load_baseline`'s own docstring. It already names the
+hazard — it cites the "1-second-resolution `started_at`" as the reason
+`exclude_run_id` exists. That guard closes the half where the *current* run is
+the collider. Two *prior* runs sharing a timestamp still tied. A stated reason
+is a test case, and the question to ask is which half of it is actually covered.
+
+The consequence is the artifact CI posts on a PR. Two prior runs at one second
+scoring 0.90 and 0.30, against a current run of 0.60:
+
+    good written first -> baseline 0.30, mean_delta +0.30, nothing flagged
+    bad  written first -> baseline 0.90, mean_delta -0.30, every row flagged
+
+A clean pass or a regression, same three runs, decided by write order.
+
+`list_runs` was the sharper half. `--limit` did not merely reorder the output,
+it changed which runs appeared: over all six insertion permutations of three
+tied runs, `limit=2` returned three different *sets*. A run silently vanished
+from the operator's history. Reordering output is cosmetic; dropping a row is
+not — so the test asserts on membership at the limit boundary, not just order.
+
+The tiebreak is `run_id`, the primary key: unique, total, and *content* rather
+than a position. A `rowid` tiebreak would make the result independent of the
+query plan but not of the insertion order, which is the actual defect — the
+same distinction that came out of agent-orchestration-platform#120 earlier in
+this run. The repo already does this job properly one module over: `dataset.py`
+sorts its tag inventory on `(-count, name)`.
+
+I left `utc_now_iso()` alone, and measured why. Sub-second and whole-second
+stamps do not lexicographically interleave — `"...T07:17:08.123456Z" <
+"...T07:17:08Z"` is `True`, because `.` sorts before `Z` — so switching the
+format would make a newer run sort *before* an older one already on disk. That
+needs its own issue and a migration story, and it is not a prerequisite for a
+total order.
+
+One honest limitation, stated in the docstring rather than left for the reader
+to infer: a `run_id` tiebreak makes the order a pure function of the stored
+data. It does not recover which tied run truly ran last, since `run_id` is a
+random UUID. Determinism is the property being fixed.
+
+**Why this work, this session:** the static `priority:high` queue was globally
+empty again, so the issue came out of a firsthand probe of the read/write and
+ordering seams in this repo.
+
+**Open questions / blockers:** none. `#177` (calibration doc table) still needs
+the maintainer's intended per-group breakdown.
+
+**Next session:** sub-second `started_at` with a migration story is the natural
+follow-up, but it is a stored-format change and wants JT's call on the
+compatibility question.

@@ -199,19 +199,44 @@ def latest_run_id_for_suite(
     """Return the most-recent `run_id` for `suite`, or None if there are none.
 
     Sorted by `started_at` descending — the ISO-8601 format is lexicographically
-    sortable so a string compare suffices. `exclude_run_id` lets the runner ask
-    for "latest other than the run I just inserted," which matters because two
-    consecutive runs can share a 1-second-resolution `started_at`.
+    sortable so a string compare suffices — then by `run_id` descending to break
+    ties (#206). `exclude_run_id` lets the runner ask for "latest other than the
+    run I just inserted," which matters because two consecutive runs can share a
+    1-second-resolution `started_at`.
+
+    The tie is the ordinary case, not a corner: `utc_now_iso()` returned **one**
+    distinct value across 2000 back-to-back calls, and six consecutive real
+    `run_suite()` calls all landed on a single second. Without the second key,
+    SQLite's order among tied rows is implementation-defined and tracked
+    insertion order, so this function returned any of three tied runs depending
+    on the order they happened to be written — and `load_baseline` below turned
+    that into a `+0.30` improvement or a `-0.30` regression for the same three
+    runs.
+
+    The tiebreak is on `run_id` — the PRIMARY KEY, so unique and total, and
+    *content* rather than a position. A `rowid` tiebreak would make the result
+    independent of the query plan but NOT of the insertion order, which is the
+    actual defect (agent-orchestration-platform#120). Same shape as the tag
+    inventory in `dataset.py`, which already sorts on `(-count, name)`.
+
+    What this does not do: recover which tied run truly ran last. `run_id` is a
+    random UUID, so among same-second runs the winner is arbitrary-but-fixed.
+    Determinism is the property being fixed. Chronological precision inside one
+    second is a `started_at` *resolution* question, deliberately left alone —
+    sub-second stamps do not lexicographically interleave with the whole-second
+    ones already on disk (`"...T07:17:08.123456Z" < "...T07:17:08Z"` is `True`),
+    so switching the format would sort a newer run *before* an older one.
     """
     if exclude_run_id is None:
         cur = conn.execute(
-            "SELECT run_id FROM runs WHERE suite = ? ORDER BY started_at DESC LIMIT 1;",
+            "SELECT run_id FROM runs WHERE suite = ? "
+            "ORDER BY started_at DESC, run_id DESC LIMIT 1;",
             (suite,),
         )
     else:
         cur = conn.execute(
             "SELECT run_id FROM runs WHERE suite = ? AND run_id != ? "
-            "ORDER BY started_at DESC LIMIT 1;",
+            "ORDER BY started_at DESC, run_id DESC LIMIT 1;",
             (suite, exclude_run_id),
         )
     row = cur.fetchone()
@@ -241,10 +266,20 @@ def list_runs(
 ) -> list[RunSummary]:
     """Return up to `limit` most-recent runs, optionally filtered by suite.
 
-    Sorted by `started_at` descending. Used by the `eval-harness list`
-    CLI subcommand (#7). Rows are loaded into a list (not yielded) because
-    consumers always print or serialize the full set; streaming buys
-    nothing at typical history sizes (<= a few thousand runs per DB).
+    Sorted by `started_at` descending, then `run_id` descending (#206). Used by
+    the `eval-harness list` CLI subcommand (#7). Rows are loaded into a list
+    (not yielded) because consumers always print or serialize the full set;
+    streaming buys nothing at typical history sizes (<= a few thousand runs
+    per DB).
+
+    The `run_id` key is not cosmetic. Because `started_at` has one-second
+    resolution, tied rows came back in insertion order, so `--limit` did not
+    merely reorder the output — it changed *which runs appeared at all*.
+    Measured on three runs sharing one timestamp, over all six insertion
+    permutations, `limit=2` returned three different two-run sets:
+    `{aaa,bbb}`, `{aaa,ccc}`, `{bbb,ccc}`. A run was silently dropped from the
+    operator's history depending on write order. See
+    `latest_run_id_for_suite` for why the key is `run_id` and not `rowid`.
     """
     # Pre-#42 the sign-only `limit <= 0` accepted NaN (NaN <= 0 is false) and
     # floats (`0.5` silently truncates to `0` in SQLite's LIMIT integer
@@ -259,10 +294,10 @@ def list_runs(
     )
     params: tuple[Any, ...]
     if suite is None:
-        query += " ORDER BY started_at DESC LIMIT ?;"
+        query += " ORDER BY started_at DESC, run_id DESC LIMIT ?;"
         params = (limit,)
     else:
-        query += " WHERE suite = ? ORDER BY started_at DESC LIMIT ?;"
+        query += " WHERE suite = ? ORDER BY started_at DESC, run_id DESC LIMIT ?;"
         params = (suite, limit)
     cur = conn.execute(query, params)
     return [
