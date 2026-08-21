@@ -287,18 +287,74 @@ def _kmeans(
     *,
     max_iter: int = 25,
 ) -> tuple[list[list[float]], list[int]]:
-    """Tiny k-means on L2-normalized vectors. Stride-init for determinism."""
+    """Tiny k-means on L2-normalized vectors. Stride-init over a canonical order.
+
+    The init used to be a stride over ``vectors`` *as supplied*, and the
+    docstring called that "stride-init for determinism". It is deterministic
+    only for a fixed input order, which is not a property this module's callers
+    have: ``_load_inputs_jsonl`` returns file order, and reordering lines in a
+    JSONL corpus changes nothing about the corpus (#207).
+
+    Measured before this change — one golden set of 6 billing + 6 shipping
+    utterances against one fixed candidate set, ``cluster_k=4``, over 40 random
+    shuffles of the golden list alone::
+
+        0.008788 ok  x1     0.112800 drifted x10
+        0.016265 ok  x1     0.116423 drifted x5
+        0.095437 ok  x4     0.118704 drifted x1
+        0.098026 ok  x6     0.129976 drifted x5
+                            0.134137 drifted x6
+                            0.141412 drifted x1
+
+    Ten distinct scores across a 16x range and *both* statuses — 17/40 shuffles
+    said ``ok`` and 23/40 said ``drifted``, for byte-identical corpora. That is
+    the gate a drift detector exists to provide.
+
+    The fix is to canonicalize the processing order *inside* the function rather
+    than to patch the init alone. Three separate things here read the input
+    order, and a partial fix leaves the others:
+
+    1. the stride init selects ``vectors[i * step]`` by position;
+    2. the assignment scan breaks a cosine tie by taking the first centroid it
+       encounters at that similarity;
+    3. the centroid update accumulates with ``+=``, and float addition is not
+       associative, so a permuted sum differs in the last bits.
+
+    (3) is why "just sort the seeds" is not enough: a last-bit difference in a
+    centroid propagates through the next assignment round and can flip an input
+    across a cluster boundary, which is a whole-bucket change in the histogram
+    the JSD is computed over.
+
+    Sorting by the vector's own components is arbitrary-but-fixed, which is
+    exactly the property needed — it is *content*, not position. Vectors that
+    compare equal are interchangeable for every step below (same seed value,
+    same assignment, same contribution to a sum), so the stable sort's fallback
+    to original index among them is not a residual position dependence.
+
+    ``assigns`` is mapped back to the caller's indices before returning, so the
+    published contract — one cluster id per input, positionally aligned with
+    ``vectors`` — is unchanged.
+
+    What this does *not* do: improve the seeding. A stride over a
+    component-sorted list is still weak k-means initialization. Determinism is
+    the defect being fixed; seeding quality is a separate question that would
+    move already-published numbers.
+    """
     n = len(vectors)
     if n == 0 or k <= 0:
         return [], []
     k = min(k, n)
+    # Canonical processing order: by the vector's own components. Everything
+    # below runs over `ordered`, never over `vectors`.
+    order = sorted(range(n), key=lambda i: tuple(vectors[i]))
+    ordered = [vectors[i] for i in order]
     step = max(n // k, 1)
-    centroids = [list(vectors[i * step]) for i in range(k)]
+    centroids = [list(ordered[i * step]) for i in range(k)]
     dim = len(centroids[0]) if centroids and centroids[0] else 0
     assigns = [0] * n
     for _ in range(max_iter):
         changed = False
-        for i, v in enumerate(vectors):
+        for i, v in enumerate(ordered):
             best = 0
             best_sim = -2.0
             for ci, centroid in enumerate(centroids):
@@ -311,7 +367,7 @@ def _kmeans(
                 changed = True
         new_centroids = [[0.0] * dim for _ in range(k)]
         counts = [0] * k
-        for i, v in enumerate(vectors):
+        for i, v in enumerate(ordered):
             c = assigns[i]
             counts[c] += 1
             for d, vv in enumerate(v):
@@ -326,7 +382,12 @@ def _kmeans(
         centroids = new_centroids
         if not changed:
             break
-    return centroids, assigns
+    # Map back to the caller's indexing: `assigns[i]` is the cluster of
+    # `ordered[i]`, i.e. of `vectors[order[i]]`.
+    caller_assigns = [0] * n
+    for pos, orig_i in enumerate(order):
+        caller_assigns[orig_i] = assigns[pos]
+    return centroids, caller_assigns
 
 
 # ----------------------------------------------------------------------
@@ -533,7 +594,25 @@ def compute_drift(
                     text=text, distance_to_nearest_golden_cluster=1.0 - nearest_sim
                 )
             )
-        examples.sort(key=lambda r: r.distance_to_nearest_golden_cluster, reverse=True)
+        # Sort on (distance desc, text asc). The distance key alone left ties
+        # to Python's stable sort, i.e. to the order the inputs happened to sit
+        # in the file -- and because the list is then *truncated*, position
+        # decided not merely the ordering but which examples appeared at all.
+        # Same shape as `list_runs` + `--limit` (#206), one module over.
+        #
+        # Ties are the ordinary case here, not a corner. `hash_embed` sums
+        # per-token vectors, so it is a bag of tokens: duplicate inputs embed
+        # identically, and so do token permutations of each other. Duplicates
+        # are the norm in the production traffic sample this module ingests.
+        # Measured on 6 tied candidates contesting 5 slots, 60 shuffles gave
+        # six different five-element sets (#207).
+        #
+        # The tiebreak is on the text -- content, not position -- so any two
+        # callers holding the same candidate *set* agree. `reverse=True` cannot
+        # express "descending, then ascending", so negate the distance instead
+        # of reversing; this is why the key is written as a tuple rather than
+        # passed with `reverse`.
+        examples.sort(key=lambda r: (-r.distance_to_nearest_golden_cluster, r.text))
         examples = examples[:n_representative_examples]
 
     return DriftReport(
