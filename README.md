@@ -389,7 +389,7 @@ eval-harness drift \
     --candidate fixtures/drift/shifted.jsonl \
     --output    /tmp/drift.html \
     --judge-stub
-# stdout: length=0.729 (drifted), embedding=0.156 (drifted), judge=0.896 (drifted)
+# stdout: length=0.729 (drifted), embedding=0.147 (drifted), judge=0.896 (drifted)
 ```
 
 Three axes are scored:
