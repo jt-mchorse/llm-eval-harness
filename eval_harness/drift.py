@@ -106,6 +106,17 @@ class DriftReport:
     judge_stats: tuple[JudgeStats, JudgeStats] | None
     representative_examples: tuple[RepresentativeExample, ...]
     cluster_k: int
+    #: ``(golden, candidate)`` counts of inputs with no embeddable content, i.e.
+    #: the ones `has_embeddable_content` rejects. They take part in the length
+    #: axis (their char count is truthful) and in the judge axis (a judge can
+    #: legitimately score them), and are excluded from everything cosine-derived
+    #: -- the cluster histograms and `representative_examples` -- because the
+    #: zero vector has no angle to any centroid (D-017, #210).
+    #:
+    #: Reported rather than silently dropped: "4,120 of 10,000 candidate inputs
+    #: had no comparable content" is itself a drift finding, and often a more
+    #: actionable one than the JSD on the axis it was corrupting.
+    n_uncomparable: tuple[int, int]
 
 
 # ----------------------------------------------------------------------
@@ -253,6 +264,24 @@ _HASH_TOKEN_RE = re.compile(r"[^\W_]+")
 
 def _tokens(text: str) -> list[str]:
     return _HASH_TOKEN_RE.findall(text.lower())
+
+
+def has_embeddable_content(text: str) -> bool:
+    """True when ``hash_embed(text)`` is a real unit vector, not the zero vector.
+
+    ``hash_embed`` sums one signed unit contribution per token, so a string with
+    no tokens -- ``""``, ``"!!!"``, ``"\U0001f389\U0001f389"``, ``"   \n\t "``
+    -- produces the all-zero vector. That vector is not a point on the unit
+    sphere at some particular angle from a centroid; it is the *absence* of a
+    point, and every cosine-derived quantity for it is **undefined**, not zero
+    (D-017).
+
+    Deliberately defined as ``bool(_tokens(text))`` rather than by re-deriving
+    the rule, so it cannot drift out of lockstep with the embedder it describes.
+    ``tests/test_drift_uncomparable_inputs.py`` pins the parity directly against
+    ``hash_embed``.
+    """
+    return bool(_tokens(text))
 
 
 def hash_embed(text: str, dim: int = 64) -> list[float]:
@@ -475,6 +504,14 @@ def compute_drift(
     ``representative_examples`` is the list of candidate inputs whose
     nearest-golden-centroid cosine distance is largest — the inputs
     that look least like anything in the golden set.
+
+    Inputs with no embeddable content (``has_embeddable_content`` is
+    ``False``) take part in the length and judge axes but not in
+    anything cosine-derived; they are counted in ``n_uncomparable`` and
+    excluded from the cluster histograms and from
+    ``representative_examples`` (D-017, #210). A golden set in which
+    *nothing* is comparable is rejected outright, because such a
+    baseline can only report a fabricated ``"ok"``.
     """
     if not golden_inputs:
         raise ValueError("golden_inputs must be non-empty")
@@ -506,6 +543,50 @@ def compute_drift(
     if n_representative_examples < 0:
         raise ValueError(f"n_representative_examples must be >= 0; got {n_representative_examples}")
 
+    # --- Comparability partition (D-017, #210) --------------------------
+    # `hash_embed` returns the all-zero vector for an input with no tokens, and
+    # `_cosine` of the zero vector with anything is exactly 0.0. Nothing here
+    # treated that as "undefined"; it flowed through as a genuine cosine of 0.0,
+    # i.e. as the *maximum* distance 1.0 and as a real tie at the top of
+    # `_assign`'s scan. Both sides of the comparison were corrupted:
+    #
+    #   representative_examples, golden = 6 billing + 6 shipping, cluster_k=4,
+    #   candidates = 4 real + 6 token-less, n_representative_examples=5:
+    #       ['', ' \n\t ', '!!!', '---', '???']   <- 0 of the 4 real inputs
+    #
+    #   embedding JSD, same golden set:
+    #       4 real candidates              0.1909   histogram (1, 3, 0, 0)
+    #       the same 4 + 6 token-less      0.3122   histogram (7, 3, 0, 0)
+    #
+    # Cluster 0 goes 1 -> 7 because `_assign` starts at `best_sim = -2.0` and
+    # every centroid ties at 0.0, so the first one always wins. Six inputs with
+    # no content moved a published drift score by 0.12.
+    #
+    # The remedy is split by side, because the two sides have different
+    # economics. A golden set is *authored* -- small, reviewed, fixable -- so a
+    # golden set with nothing to embed is a broken baseline and fails loud. A
+    # candidate set is a *sampled traffic slice* -- large, unreviewed -- so a
+    # single emoji must not abort a 10k-line drift run; those are counted in
+    # `n_uncomparable` and excluded from the cosine-derived outputs.
+    g_comparable = [has_embeddable_content(s) for s in golden_inputs]
+    c_comparable = [has_embeddable_content(s) for s in candidate_inputs]
+
+    # Not a cosmetic guard. Measured before this check, `compute_drift(['!!!',
+    # '???'], [4 real inputs], cluster_k=2)` was ACCEPTED and reported
+    # `embedding drift_score=0.000, status="ok"`: every centroid is the zero
+    # vector, every candidate assigns to cluster 0, and the two histograms come
+    # out identical, which is this module's encoding of "no drift". A maximal
+    # false negative on the gate, from a baseline that can measure nothing --
+    # the same shape as #91 (one-empty JSD) and #93 (length-histogram open
+    # bucket), reached through the embedder instead.
+    if not any(g_comparable):
+        raise ValueError(
+            f"golden_inputs must contain at least one input with embeddable content "
+            f"(alphanumeric tokens); all {len(golden_inputs)} are token-less, so every "
+            f"hash_embed vector is the zero vector and the embedding axis can only "
+            f"report a fabricated 'ok'"
+        )
+
     # --- Length axis ----------------------------------------------------
     g_len_hist = _length_histogram(golden_inputs)
     c_len_hist = _length_histogram(candidate_inputs)
@@ -521,7 +602,14 @@ def compute_drift(
     # --- Embedding axis -------------------------------------------------
     g_vecs = [hash_embed(s, dim=embedding_dim) for s in golden_inputs]
     c_vecs = [hash_embed(s, dim=embedding_dim) for s in candidate_inputs]
-    centroids, _ = _kmeans(g_vecs, cluster_k)
+    # Seed k-means from comparable golden vectors only. A zero vector is not a
+    # seed -- it drags a centroid toward the origin, and a centroid that stays
+    # at the origin then ties with every input at cosine 0.0. Measured: one
+    # `'!!!'` row added to the 12-utterance golden set above moved the golden
+    # histogram to (6, 5, 0, 2) and the embedding JSD from 0.1909 to 0.1432,
+    # for a row carrying no information.
+    g_seed_vecs = [v for v, ok in zip(g_vecs, g_comparable, strict=True) if ok]
+    centroids, _ = _kmeans(g_seed_vecs, cluster_k)
     if centroids:
 
         def _assign(v: Sequence[float]) -> int:
@@ -534,16 +622,36 @@ def compute_drift(
                     best = ci
             return best
 
-        g_clusters = [_assign(v) for v in g_vecs]
-        c_clusters = [_assign(v) for v in c_vecs]
+        # Comparable inputs only, on both sides. An uncomparable input is not
+        # in cluster 0; it is in no cluster. `sum(cluster_counts)` therefore
+        # equals the number of *clustered* inputs, which is what `ClusterStats.n`
+        # is set to below -- the invariant `sum(counts) == n` is preserved, and
+        # `n_golden - n` (resp. `n_candidate`) is the uncomparable count.
+        g_clusters = [_assign(v) for v, ok in zip(g_vecs, g_comparable, strict=True) if ok]
+        c_clusters = [_assign(v) for v, ok in zip(c_vecs, c_comparable, strict=True) if ok]
         k_eff = len(centroids)
         g_cluster_counts = tuple(sum(1 for x in g_clusters if x == i) for i in range(k_eff))
         c_cluster_counts = tuple(sum(1 for x in c_clusters if x == i) for i in range(k_eff))
+        # A candidate sample in which *nothing* is comparable leaves the
+        # candidate side at zero mass against a populated golden side, which
+        # `jensen_shannon` reports as 1.0 -- maximal drift -- per its documented
+        # one-empty contract (#91). That is the right answer, and it is loud:
+        # 100% content-free traffic is the most drifted a sample can be.
         emb_drift = jensen_shannon(g_cluster_counts, c_cluster_counts)
     else:  # pragma: no cover - degenerate empty-vector case caught above
         g_cluster_counts = ()
         c_cluster_counts = ()
         emb_drift = 0.0
+    n_uncomparable = (g_comparable.count(False), c_comparable.count(False))
+    uncomparable_note = (
+        ""
+        if n_uncomparable == (0, 0)
+        else (
+            f"; {n_uncomparable[0]}/{len(golden_inputs)} golden and "
+            f"{n_uncomparable[1]}/{len(candidate_inputs)} candidate inputs had no "
+            f"embeddable content and are excluded from this axis"
+        )
+    )
     embedding_report = AxisReport(
         name="embedding",
         drift_score=emb_drift,
@@ -551,7 +659,7 @@ def compute_drift(
         threshold=embedding_threshold,
         detail=(
             f"JSD over k={len(centroids)} cluster-id histogram from "
-            f"{embedding_dim}-dim hash-embedded inputs"
+            f"{embedding_dim}-dim hash-embedded inputs{uncomparable_note}"
         ),
     )
 
@@ -587,7 +695,21 @@ def compute_drift(
     # --- Representative examples ---------------------------------------
     examples: list[RepresentativeExample] = []
     if centroids:
-        for v, text in zip(c_vecs, candidate_inputs, strict=True):
+        for v, text, ok in zip(c_vecs, candidate_inputs, c_comparable, strict=True):
+            # Skip uncomparable candidates. This list is documented as "the
+            # inputs that look least like anything in the golden set", and a
+            # content-free input does not look unlike the golden set -- it has
+            # nothing to look like anything with. It scored 1.0 (the ceiling)
+            # and, because the list is *truncated*, it did not merely rank
+            # wrongly, it evicted the inputs the operator needs to see: 5 of 5
+            # slots went to punctuation in the measurement above (#210). Same
+            # class as the extreme-default findings in
+            # embedding-model-shootout#123 and chunking-strategies-lab#160 -- a
+            # value standing in for "not measurable" that sits at an end of the
+            # scale, so it does not abstain, it ranks. The count survives in
+            # `n_uncomparable`.
+            if not ok:
+                continue
             nearest_sim = max(_cosine(v, c) for c in centroids)
             examples.append(
                 RepresentativeExample(
@@ -624,12 +746,18 @@ def compute_drift(
         length_stats=(_length_stats(golden_inputs), _length_stats(candidate_inputs)),
         length_histograms=(g_len_hist, c_len_hist),
         cluster_stats=(
-            ClusterStats(n=len(golden_inputs), cluster_counts=g_cluster_counts),
-            ClusterStats(n=len(candidate_inputs), cluster_counts=c_cluster_counts),
+            # `n` is the number of *clustered* inputs, not the input count, so
+            # `sum(cluster_counts) == n` holds. It was `len(golden_inputs)`
+            # while every input was assigned a cluster; excluding uncomparable
+            # inputs without moving `n` would have made the two disagree
+            # silently, which is the shape of defect this change exists to fix.
+            ClusterStats(n=sum(g_cluster_counts), cluster_counts=g_cluster_counts),
+            ClusterStats(n=sum(c_cluster_counts), cluster_counts=c_cluster_counts),
         ),
         judge_stats=judge_stats,
         representative_examples=tuple(examples),
         cluster_k=len(centroids),
+        n_uncomparable=n_uncomparable,
     )
 
 
@@ -771,6 +899,25 @@ def render_html(report: DriftReport) -> str:
     empty_examples_row = (
         '<tr><td colspan="2" style="text-align:center;color:#999">no examples</td></tr>'
     )
+    # Surfaced in the document, not merely available on the dataclass. "4,120 of
+    # 10,000 candidate inputs had no comparable content" is itself a drift
+    # finding, and the operator reading this report is the person who can act on
+    # it. Rendered only when non-zero so the ordinary report is unchanged
+    # (D-017, #210).
+    g_uncomparable, c_uncomparable = report.n_uncomparable
+    uncomparable_block = (
+        ""
+        if (g_uncomparable, c_uncomparable) == (0, 0)
+        else (
+            '<p style="color:#b04127;font-size:12px;margin-top:8px">'
+            f"<strong>{g_uncomparable} of {report.n_golden}</strong> golden and "
+            f"<strong>{c_uncomparable} of {report.n_candidate}</strong> candidate inputs "
+            "have no embeddable content (no alphanumeric tokens). They are counted in the "
+            "length and judge axes and excluded from the embedding cluster axis and from "
+            "the representative-example list, because the zero embedding vector has no "
+            "angle to any centroid.</p>"
+        )
+    )
     return (
         '<!doctype html><html lang="en"><head><meta charset="utf-8">'
         "<title>eval-harness drift report</title>"
@@ -799,6 +946,7 @@ def render_html(report: DriftReport) -> str:
         "</tbody></table>"
         f"<h2>Length axis</h2>{length_svg}"
         f"<h2>Embedding cluster axis</h2>{cluster_svg}"
+        f"{uncomparable_block}"
         f"{judge_block}"
         "<h2>Most distant candidate inputs from any golden cluster centroid</h2>"
         "<table><thead><tr><th>Distance</th><th>Text</th></tr></thead><tbody>"
@@ -945,6 +1093,7 @@ __all__ = [
     "RepresentativeExample",
     "cli",
     "compute_drift",
+    "has_embeddable_content",
     "hash_embed",
     "jensen_shannon",
     "percentile",
