@@ -13,7 +13,8 @@ eval_harness/
 ├── calibration.py      ← #2: Cohen's κ + Pearson r against human labels (D-005)
 ├── runner.py           ← #3: regression runner, threshold gate, exit codes
 ├── runs.py             ← #3: SQLite-backed run history (D-008)
-├── drift.py            ← #4: three-axis Jensen-Shannon drift (D-014)
+├── drift.py            ← #4: three-axis Jensen-Shannon drift (D-014),
+│                          uncomparable-input handling (D-017)
 ├── pytest_plugin.py    ← #5: @pytest.mark.eval(...) parametrization (D-013)
 ├── comment.py          ← #6: sticky-comment renderer + marker-based upsert (D-009)
 ├── cli.py              ← #7: argparse entry point binding every layer
@@ -102,6 +103,18 @@ D-014 — each axis is a separate JSD value so a regression on one
 axis doesn't mask stability on the others. `eval-harness drift`
 renders a single-file HTML report (no JS, no external CSS) so
 operators can attach it to a ticket.
+
+The embedding axis has a domain the other two don't: `hash_embed`
+returns the all-zero vector for an input with no alphanumeric tokens,
+and the zero vector has no angle to any centroid. Per D-017 such an
+input is *uncomparable*, not maximally distant — it is counted in
+`DriftReport.n_uncomparable` and excluded from the cluster histograms
+and from `representative_examples`, while still taking part in the
+length and judge axes. The two sides are treated differently on
+purpose: an authored golden set with nothing embeddable is rejected
+(it can only report a fabricated `ok`), while a sampled candidate
+slice is counted, so one emoji in a 10k-line traffic file does not
+abort the run (#210).
 
 ## Layer 5 — Pytest plugin (#5)
 

@@ -1847,3 +1847,86 @@ sorted list is still weak k-means initialization, and when `k` is more than half
 of `n` the stride collapses to 1 and it's simply the first `k` vectors.
 Determinism was the defect. Better seeding is a different argument that would
 move already-published numbers on its own merits.
+
+---
+
+## 2026-08-24 — Issue #210: a token-less input is uncomparable, not maximally distant (D-017)
+
+**What got done.** `hash_embed` returns the all-zero vector for any input with
+no alphanumeric tokens — an empty string, punctuation, an emoji run, whitespace
+— and `_cosine` of the zero vector with any centroid is exactly `0.0`. Nothing
+in `drift.py` distinguished that from a *genuine* cosine of `0.0`, so a
+content-free input scored a distance of `1.000`, the ceiling of the range, and
+outranked every input with real content. Because `representative_examples` is
+sorted and then *truncated*, that did not merely rank wrongly, it evicted:
+
+```
+golden = 6 billing + 6 shipping utterances, cluster_k=4
+candidates = 4 real + 6 token-less, n_representative_examples=5
+  -> ['', ' \n\t ', '!!!', '---', '???']     0 of the 4 real inputs surfaced
+```
+
+The same tie corrupted the histogram the embedding JSD is computed over.
+`_assign` starts at `best_sim = -2.0` and every centroid ties at `0.0`, so the
+first one always wins and every token-less input piles into cluster 0:
+
+```
+4 real candidates              emb JSD 0.1909   histogram (1, 3, 0, 0)
+the same 4 + 6 token-less      emb JSD 0.3122   histogram (7, 3, 0, 0)
+```
+
+Six inputs carrying no information moved a published drift score by 0.12. One
+`'!!!'` row on the *golden* side did the mirror thing — it seeded k-means from
+the origin, moving the golden histogram to `(6, 5, 0, 2)` and the score from
+0.1909 to 0.1432.
+
+**The finding that wasn't in the issue.** A golden set in which *nothing* is
+embeddable was accepted and reported `embedding drift_score=0.000, status="ok"`.
+Every centroid is the zero vector, every candidate assigns to cluster 0, and the
+two histograms come out identical — which is this module's encoding of "no
+drift". A maximal false negative on the regression gate, produced by a baseline
+that can measure nothing. That is the third instance of the class already fixed
+in #91 (one-empty JSD) and #93 (the length-histogram open bucket), reached this
+time through the embedder.
+
+**The decision (D-017).** The remedy splits by side, because the two sides have
+different economics. A golden set is *authored* — small, reviewed, fixable — so
+one with nothing embeddable now raises. A candidate set is a *sampled production
+traffic slice*, so a single emoji must not abort a 10,000-line drift run: those
+inputs are counted in a new `DriftReport.n_uncomparable` field and excluded from
+the cluster histograms and the example list. That split is what let the issue's
+two competing remedies both be right, on the side each was right for. The length
+and judge axes deliberately still see these inputs — a char count is truthful
+and a judge can legitimately score them — and a test asserts it rather than
+assuming it, because dropping them from every axis would trade one wrong number
+for three.
+
+Counting rather than silently dropping is the point of the field: "6 of 10
+candidate inputs have no embeddable content" is itself a drift finding, and it
+is rendered in the HTML report and named in the embedding axis's `detail`
+string, not just left on the dataclass.
+
+**Two things worth carrying forward.** First, `sum(cluster_counts) ==
+ClusterStats.n` is now an invariant with a test — `n` is the *clustered* count,
+not the input count, so `n_golden - n` is exactly the uncomparable count.
+Excluding inputs without moving `n` would have made the two disagree silently,
+which is the shape of defect this change exists to fix. Second, the tie-break
+fixture added by #207 was built out of the very inputs this issue removes
+(`["", "!!!", "...", "???", "———", "🎉🎉🎉"]` tie precisely *because* they all
+embed to the zero vector). It has been rebuilt from the six permutations of one
+three-token bag, which is the reachability argument `compute_drift`'s own
+tie-break comment makes. A fixture that exercises a property via a degenerate
+input stops exercising it the moment the degenerate input is fixed.
+
+**Why this was prioritized.** Filed but not worked by the 2026-08-21 run, in the
+priority-tier repo that sits first in the §8 build sequence, with a concrete
+acceptance-criteria list and a measured reproduction already attached.
+
+**Open questions.** Whether `hash_embed` itself should get a character n-gram
+backoff so an emoji run embeds to *something* rather than to nothing. Deferred
+deliberately: it would move every already-published number on every axis, and it
+answers a different question than what the zero vector *means*.
+
+**Tests.** 38 new (`tests/test_drift_uncomparable_inputs.py`), of which 14 fail
+against a narrowed revert of the four behavioural hunks. Suite 872 → 910 green,
+ruff clean, mypy clean.

@@ -49,6 +49,7 @@ def _report_fingerprint(report):
         report.cluster_k,
         report.cluster_stats[0].cluster_counts,
         report.cluster_stats[1].cluster_counts,
+        report.n_uncomparable,
         tuple(
             (e.text, round(e.distance_to_nearest_golden_cluster, 12))
             for e in report.representative_examples
@@ -108,9 +109,30 @@ def test_both_sides_shuffled_together():
 # ----------------------------------------------------------------------
 
 
-# Six inputs that all embed to the zero vector (no alphanumeric tokens), so all
-# six tie at distance 1.0 — contesting five slots.
-TIED_SIX = ["", "!!!", "...", "???", "———", "🎉🎉🎉"]
+# Six inputs that embed to the *same* vector, so all six tie at the same
+# distance — contesting five slots.
+#
+# These are the six permutations of one three-token bag. `hash_embed` sums a
+# per-token contribution, so a permutation is a byte-for-byte identical vector
+# — which is the reachability argument `compute_drift`'s own tiebreak comment
+# makes ("duplicate inputs embed identically, and so do token permutations of
+# each other").
+#
+# This fixture used to be `["", "!!!", "...", "???", "———", "🎉🎉🎉"]` — six
+# inputs that tie because they all embed to the *zero* vector. That tie was
+# real, but those inputs are no longer in `representative_examples` at all:
+# #210 / D-017 excludes content-free inputs from every cosine-derived output,
+# because a zero vector has no angle to a centroid and its 1.0 "distance" was
+# evicting inputs with real content. The tie-break property under test is
+# unchanged and now exercised by inputs that actually reach the sort.
+TIED_SIX = [
+    "zqxv wkjm pbtr",
+    "zqxv pbtr wkjm",
+    "wkjm zqxv pbtr",
+    "wkjm pbtr zqxv",
+    "pbtr zqxv wkjm",
+    "pbtr wkjm zqxv",
+]
 
 
 def test_tied_examples_are_selected_by_content_not_file_position():

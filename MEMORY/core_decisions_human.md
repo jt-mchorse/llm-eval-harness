@@ -222,3 +222,69 @@ Strategic decisions for this repo, with reasoning. Append-only — superseded de
 **Reversibility:** Cheap. The strictness bar is a few config lines; tighten or swap the checker in a follow-up (a mypy-strict or pyright migration would be its own decision).
 
 **Related issues:** #146, #148
+
+---
+
+## D-017 — The all-zero `hash_embed` vector means *uncomparable*, not *maximally distant*
+
+**Date:** 2026-08-24
+
+**Decision.** An input with no alphanumeric tokens embeds to the all-zero
+vector, and every cosine-derived quantity for it is **undefined**, not zero.
+The remedy splits by side: a *golden* set with nothing embeddable is rejected
+outright; *candidate* inputs that are uncomparable are counted in a new
+`DriftReport.n_uncomparable` field and excluded from the cluster histograms and
+from `representative_examples`. The length and judge axes still see them.
+
+**Why.** `_cosine` of the zero vector with any centroid is exactly `0.0`, and
+nothing in the module distinguished that from a genuine cosine of `0.0`. So a
+content-free input scored a distance of `1.000` — the ceiling of the range in
+practice — and outranked every input with real content. Because
+`representative_examples` is *truncated*, that did not merely rank wrongly, it
+evicted: with a golden set of 6 billing + 6 shipping utterances and a candidate
+set of 4 real inputs plus 6 token-less ones, all five example slots went to
+punctuation and none of the four real inputs surfaced. The same tie also made
+`_assign` (which starts at `best_sim = -2.0` and takes the first centroid that
+beats it) pile every token-less input into cluster 0, moving the published
+embedding JSD from `0.1909` to `0.3122` — a 0.12 shift caused by six inputs
+carrying no information at all.
+
+The split by side is the substance of the decision, and it comes from the two
+sides having different economics. A golden set is *authored* — small, reviewed,
+and fixable — so the strictest possible response is affordable there, and it is
+warranted: measured before this change, `compute_drift(['!!!', '???'], ...)` was
+accepted and reported `embedding drift_score=0.000, status="ok"`. Every centroid
+is the zero vector, every candidate lands in cluster 0, and the two histograms
+come out identical, which is this module's encoding of "no drift". That is a
+maximal false negative produced by a baseline that can measure nothing — the
+same class as #91 (one-empty JSD) and #93 (the length-histogram open bucket),
+reached through the embedder instead. A candidate set, by contrast, is a
+*sampled production traffic slice*: large, unreviewed, and full of whatever real
+users typed. Aborting a 10,000-line drift run because one row is an emoji would
+be the wrong trade, so those are counted and set aside.
+
+Counting rather than silently dropping matters on its own terms. "4,120 of
+10,000 candidate inputs had no comparable content" is itself a drift finding,
+and often a more actionable one than the JSD it was corrupting. It is rendered
+in the HTML report and named in the embedding axis's `detail` string, not merely
+left available on the dataclass.
+
+**Alternatives considered.**
+- *Exclude silently, report no count* — rejected; loses the junk-traffic signal
+  entirely, which is arguably the more useful finding.
+- *Reject uncomparable candidate inputs at ingest, the way the empty golden set
+  and out-of-range thresholds are rejected* — rejected; a single emoji in a
+  10k-line traffic sample would abort the run.
+- *Keep them and give them a dedicated histogram bucket* — rejected; it changes
+  the length of `cluster_counts` and the meaning of a cluster id for every
+  consumer, to encode a category that is not a cluster.
+- *Leave it, and document the skew as accepted* — rejected; the eviction of real
+  examples is not a rounding error, it is total at the default `n=5`.
+- *Change `hash_embed` itself (character n-gram backoff, so an emoji run embeds
+  to something)* — rejected **for this issue**; it would move every
+  already-published number on every axis, and it answers a different question
+  than "what does the zero vector mean". A legitimate separate decision.
+
+**Reversibility:** Cheap. One dataclass field, one guard, and two filters.
+
+**Related issues:** #210, #208

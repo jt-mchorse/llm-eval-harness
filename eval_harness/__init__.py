@@ -41,6 +41,7 @@ from eval_harness.drift import (
     LengthStats,
     RepresentativeExample,
     compute_drift,
+    has_embeddable_content,
     hash_embed,
     jensen_shannon,
 )
@@ -105,6 +106,7 @@ __all__ = [
     "LengthStats",
     "RepresentativeExample",
     "compute_drift",
+    "has_embeddable_content",
     "hash_embed",
     "jensen_shannon",
     "render_drift_html",

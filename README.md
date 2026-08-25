@@ -75,7 +75,7 @@ pretending to be a multi-rater gold standard.
 ## Architecture
 
 See [`docs/architecture.md`](docs/architecture.md) for the integrated flow,
-per-layer detail, and the design decisions behind each one (D-002…D-016).
+per-layer detail, and the design decisions behind each one (D-002…D-017).
 The shape:
 
 ```mermaid
@@ -399,6 +399,12 @@ Three axes are scored:
   pattern, deterministic, no API key) builds k=8 cluster centroids
   from the golden set; each candidate input is assigned to its
   nearest centroid by cosine; cluster-id histograms are compared.
+  Inputs with no alphanumeric tokens (`""`, `"!!!"`, an emoji run)
+  embed to the zero vector, which has no angle to any centroid, so
+  they are *excluded* from this axis and from the example list and
+  counted in `DriftReport.n_uncomparable` instead — see D-017. They
+  used to score the ceiling distance of `1.000` and evict every input
+  with real content (#210).
 - **Judge** — operator-supplied `judge_score_fn(input) -> float`. The
   axis is *skipped* (not scored) when no function is provided so the
   rest of the report still renders. `--judge-stub` is a deterministic
@@ -413,7 +419,18 @@ threshold per axis.
 
 The output HTML report is single-file (inline SVG, no external CDN)
 and lists the most-distant candidate inputs from any golden centroid
-so the operator can eyeball what the drift looks like.
+so the operator can eyeball what the drift looks like. When either
+side contains inputs with nothing embeddable, the report names the
+counts ("6 of 10 candidate inputs have no embeddable content") — that
+is a drift finding in its own right, and often a more actionable one
+than the JSD on the axis it was corrupting.
+
+A golden set in which *nothing* is embeddable is rejected outright
+rather than scored: every centroid would be the zero vector, every
+candidate would land in cluster 0, and the axis could only report a
+fabricated `0.000 / ok`. A golden set is authored and fixable; a
+candidate sample is production traffic, so one emoji there is counted,
+not fatal (D-017).
 
 Library API (when wiring into a custom workflow):
 
