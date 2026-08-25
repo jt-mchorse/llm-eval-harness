@@ -84,3 +84,26 @@ load → dump → re-load
 
 is byte-stable for any well-formed input. The test suite enforces this so
 that the format itself can't drift between releases without us noticing.
+
+### What "well-formed" excludes (#213)
+
+The guarantee above is only meaningful if the loader refuses input the writer
+cannot faithfully emit. Two classes are rejected at load, at any depth,
+including inside the free-form `provenance` object:
+
+| rejected | why |
+|---|---|
+| a non-finite number (`NaN`, `Infinity`, `-Infinity`) | `json.loads` parses these bare tokens natively and `json.dumps` re-emits them, so the "canonical" line would not be JSON. Browser `JSON.parse` rejects it; `jq` accepts it *silently*, turning `Infinity` into `1.7976931348623157e+308` and `NaN` into `null`. |
+| a string with no UTF-8 encoding (a lone surrogate such as `"a\ud800b"`) | legal JSON escape syntax that Python decodes, but `dump_jsonl` then raises `UnicodeEncodeError` on it. RFC 8259 §8.2 names unpaired surrogates as non-interoperable. |
+
+Both used to load clean and report `findings=0` from `eval-harness validate`;
+both are now `schema` findings pointing at the offending JSON path, e.g.
+
+```
+$ eval-harness validate bad.jsonl
+line 1 [schema]: field 'provenance.cost_usd' is inf; dataset values must be finite. ...
+fail: bad.jsonl rows=1 valid=0 findings=1 version=(no valid rows)   # exit 1
+```
+
+This mirrors the finiteness contract `runner.py` already enforces on every
+numeric field of a run artifact.
