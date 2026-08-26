@@ -154,3 +154,12 @@
   related_issues: [#210, #208]
   superseded_by: null
 
+
+- id: D-018
+  date: 2026-08-26
+  decision: unrepresentable_input_rejected_on_both_drift_sides_d017_asymmetry_does_not_extend
+  rationale: a_lone_surrogate_has_no_utf8_encoding_so_the_html_report_cannot_be_written_at_all_d017_lets_token_less_candidate_rows_through_because_they_are_representable_but_unembeddable_and_one_emoji_must_not_abort_a_10k_line_traffic_slice_but_that_argument_is_about_embeddability_not_representability_dropping_the_row_instead_would_deflate_n_candidate_and_both_histograms_with_no_diagnostic_which_is_the_same_false_negative_class_as_91_and_93
+  alternatives_rejected: [extend_d017_split_and_exclude_unencodable_candidate_rows_from_the_report, sanitize_with_errors_surrogatepass_or_replacement_char, catch_unicodeencodeerror_at_the_write_seam_only]
+  reversibility: cheap
+  related_issues: [#215, #213, #210]
+  superseded_by: null
