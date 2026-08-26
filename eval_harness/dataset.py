@@ -24,6 +24,12 @@ Required fields: `id` (str, unique across the file), `input` (str),
 `expected_outputs` (non-empty list), `dataset_version` (str), `provenance` (dict).
 Optional: `tags` (list[str], defaults to []).
 
+Every value on a record must be *representable in canonical JSONL*: numbers
+must be finite (no `NaN`/`Infinity`, which `json.dumps` emits as bare tokens
+that are not JSON) and strings must be encodable as UTF-8 (no lone surrogates).
+The rule applies at any depth, including inside the free-form `provenance`
+object. See `_find_unrepresentable` (#213).
+
 Acceptable `expected_outputs[i].kind` values are listed in
 `ExpectedOutput.VALID_KINDS`. New kinds may be added in a minor version of the
 harness; readers must reject unknown kinds with a clear error rather than
@@ -33,6 +39,7 @@ silently accepting them, because eval semantics depend on the kind.
 from __future__ import annotations
 
 import json
+import math
 from collections import Counter
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
@@ -144,6 +151,15 @@ class Dataset:
         whitespace, single trailing newline. Together with `load_jsonl` this
         guarantees load → dump → re-load is byte-stable for any well-formed
         input, which is what makes round-trip identity testable.
+
+        That guarantee is enforced, not merely asserted: `_validate_record`
+        rejects the two classes of value this writer cannot faithfully emit —
+        non-finite numbers, which `json.dumps` renders as bare `NaN`/`Infinity`
+        tokens that are not JSON, and strings with no UTF-8 encoding, which
+        raise `UnicodeEncodeError` here (#213). Before that check both loaded
+        clean and `eval-harness validate` reported `findings=0`.
+        `tests/test_dataset_representability.py` runs the property over a
+        variant table rather than restating it in prose.
         """
         path = Path(path)
         # Compact separators (no spaces) plus sorted keys give us a stable,
@@ -167,6 +183,115 @@ _REQUIRED_FIELDS: tuple[str, ...] = (
 )
 
 
+# --- representability (#213) ------------------------------------------------
+#
+# `load_jsonl` is this format's definition of "well-formed", and `dump_jsonl` is
+# its canonical writer. The two disagreed on two classes of value, so
+# `dump_jsonl`'s round-trip guarantee did not hold for them and
+# `eval-harness validate` reported `findings=0` on both:
+#
+#   provenance: {"cost_usd": Infinity}
+#       `json.loads` parses the bare `NaN` / `Infinity` / `-Infinity` tokens
+#       natively, and `json.dumps` re-emits them. The resulting line is not
+#       JSON. Measured on the emitted bytes: `JSON.parse` raises
+#       `SyntaxError: Unexpected token 'I'`; `jq` 1.7.1 parses it *silently*,
+#       turning `Infinity` into 1.7976931348623157e+308 and `NaN` into `null`
+#       with no error and no exit code. The loud consumer is survivable; the
+#       quiet one hands a pipeline a plausible wrong number.
+#
+#   input: "a\ud800b"
+#       A lone surrogate is legal JSON escape syntax and Python decodes it, but
+#       it is not encodable as UTF-8, so `dump_jsonl` died with
+#       `UnicodeEncodeError` *after* the file had already validated clean.
+#       Reproduced in `id`, `input` and `expected_outputs[].value` alike -- it
+#       is a property of any string on the record, not of one field. RFC 8259
+#       section 8.2 names unpaired surrogates as non-interoperable; they reach
+#       traffic samples from broken UTF-16 handling upstream.
+#
+# Rejecting at load is the correct side of the seam. `dump_jsonl` could write
+# with `errors="surrogatepass"`, but that puts invalid UTF-8 on disk, which is
+# strictly worse than refusing the input; and there is no faithful JSON
+# spelling of `NaN` to write at all.
+#
+# The finiteness half is not a new policy -- it is the contract `runner.py`
+# already enforces on every numeric field it loads (#42, #185, #204), whose
+# comment states this exact rationale ("egresses as an invalid bare `NaN`
+# token ... which strict JSON parsers (the dashboard, `jq`, browser
+# `JSON.parse`) reject"). `calibration.py` gets it for free because
+# `human_score` is range-checked and `0.0 <= nan <= 1.0` is False. Of the sites
+# this rule applies to, `dataset.py`'s free-form `provenance` was the one
+# spelling that disagreed, and the only one behind a canonical writer.
+
+
+def _safe_path_segment(key: str) -> str:
+    """Render a dict key for an error message without ever emitting a raw
+    unencodable character.
+
+    The offending key is itself a candidate for the surrogate failure this
+    check exists to catch, so interpolating it verbatim would make the *error
+    path* crash when the message is written to stderr. `ascii()` escapes it.
+    """
+    try:
+        key.encode("utf-8")
+    except UnicodeEncodeError:
+        return ascii(key)
+    return key if key.isprintable() else ascii(key)
+
+
+def _find_unrepresentable(record: dict[str, Any]) -> tuple[str, str] | None:
+    """Return ``(json_path, reason)`` for the first value the canonical writer
+    cannot faithfully emit, or ``None`` when the whole record is representable.
+
+    Walked with an explicit stack rather than recursion on purpose. A record
+    that `json.loads` accepted can be nested to the parser's own depth limit,
+    and a recursive walk would add frames on top of that and could raise
+    `RecursionError` -- which is not a `ValueError`, so it would escape
+    `validate_dataset`'s `except DatasetLoadError` and abort the collecting
+    pass instead of becoming one finding. Same failure shape the `kind`
+    `isinstance` guard in `ExpectedOutput.__post_init__` was added to close.
+    """
+    stack: list[tuple[str, Any]] = [("", record)]
+    while stack:
+        path, node = stack.pop()
+        # `bool` first: it is an `int` subclass, and `math.isfinite(True)` is
+        # True anyway, but branching on it explicitly keeps the numeric arm
+        # about numbers.
+        if isinstance(node, bool):
+            continue
+        if isinstance(node, str):
+            try:
+                node.encode("utf-8")
+            except UnicodeEncodeError as e:
+                bad = e.object[e.start : e.end]
+                return path, (
+                    f"is not encodable as UTF-8 ({bad!r} at position {e.start}); "
+                    "a lone surrogate is legal JSON escape syntax but has no UTF-8 "
+                    "encoding, so `dump_jsonl` raises UnicodeEncodeError on a file "
+                    "that otherwise validates clean"
+                )
+        elif isinstance(node, float):
+            if not math.isfinite(node):
+                return path, (
+                    f"is {node!r}; dataset values must be finite. `dump_jsonl` emits a "
+                    "bare `NaN`/`Infinity` token, which is not JSON: `JSON.parse` "
+                    "rejects the line outright and `jq` silently coerces it to "
+                    "`null`/1.8e308"
+                )
+        elif isinstance(node, dict):
+            for k, v in node.items():
+                seg = _safe_path_segment(k)
+                child = f"{path}.{seg}" if path else seg
+                # A key is a string on the record too, and is subject to the
+                # same UTF-8 rule as a value. Push it under its own path so the
+                # message points at the key rather than at whatever it maps to.
+                stack.append((f"{child} (object key)", k))
+                stack.append((child, v))
+        elif isinstance(node, list):
+            for i, v in enumerate(node):
+                stack.append((f"{path}[{i}]", v))
+    return None
+
+
 def _validate_record(raw: Any, line_no: int) -> Example:
     """Validate one parsed JSON object and return an `Example`.
 
@@ -174,6 +299,11 @@ def _validate_record(raw: Any, line_no: int) -> Example:
     reason. We don't pull in jsonschema — the format is small enough that
     hand-rolled checks keep the package dependency-free and the error
     messages tailored.
+
+    Beyond the per-field shape checks, the record is walked once for values the
+    canonical writer cannot faithfully emit — non-finite numbers and strings
+    with no UTF-8 encoding, at any depth including inside `provenance` (#213).
+    See `_find_unrepresentable`.
     """
     if not isinstance(raw, dict):
         raise DatasetLoadError(
@@ -218,6 +348,16 @@ def _validate_record(raw: Any, line_no: int) -> Example:
     unknown = sorted(set(raw) - allowed)
     if unknown:
         raise DatasetLoadError(line_no, f"unknown top-level field(s): {unknown}")
+
+    # Last, because shape errors are the more fundamental diagnosis and should
+    # win the message when a record has both. This is the one choke point
+    # `load_jsonl` and `validate_dataset` both route through, so the strict
+    # loader and the collecting validator stay in lockstep by construction
+    # rather than by two mirrored edits (#213).
+    unrepresentable = _find_unrepresentable(raw)
+    if unrepresentable is not None:
+        path, reason = unrepresentable
+        raise DatasetLoadError(line_no, f"field {path!r} {reason}")
 
     return Example(
         id=raw["id"],
@@ -398,8 +538,11 @@ def validate_dataset(path: str | Path) -> ValidationReport:
     - ``parse``         — JSON decode failure or blank line.
     - ``schema``        — record-level validation failure (missing fields,
                           bad types, unknown ``expected_outputs.kind``,
-                          unknown top-level fields). Mirrors ``load_jsonl``'s
-                          ``_validate_record`` checks.
+                          unknown top-level fields, and values that are not
+                          representable in canonical JSONL — non-finite numbers
+                          or non-UTF-8-encodable strings at any depth, #213).
+                          Mirrors ``load_jsonl``'s ``_validate_record`` checks;
+                          both call it, so the two cannot drift apart.
     - ``duplicate_id``  — a row's ``id`` collides with a prior row's.
     - ``version_drift`` — a row's ``dataset_version`` doesn't match the
                           first valid row's. (Datasets are atomic units;

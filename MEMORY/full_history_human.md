@@ -1930,3 +1930,46 @@ answers a different question than what the zero vector *means*.
 **Tests.** 38 new (`tests/test_drift_uncomparable_inputs.py`), of which 14 fail
 against a narrowed revert of the four behavioural hunks. Suite 872 → 910 green,
 ruff clean, mypy clean.
+
+## 2026-08-25 — `dataset.py` no longer accepts records it cannot write back (#213)
+
+**What got done.** `Dataset.dump_jsonl`'s docstring promised that `load → dump →
+re-load` is byte-stable "for any well-formed input, which is what makes round-trip
+identity testable." That was prose, and the repo had never actually tested it over
+a table — only over two hand-built happy rows. Running a 19-row variant table
+through it broke the claim twice. A non-finite number anywhere on a record (most
+plausibly inside the free-form `provenance` object) came back out as a bare
+`NaN`/`Infinity` token, which is not JSON; and a lone surrogate — legal JSON escape
+syntax that Python decodes — loaded clean and then killed the writer with
+`UnicodeEncodeError`. Both files passed `eval-harness validate` with `findings=0`.
+One iterative record walk in `_validate_record`, the single choke point `load_jsonl`
+and `validate_dataset` both route through, closes both.
+
+**Why this was prioritized.** No `priority:high` issue existed anywhere in the
+portfolio, so the target was found firsthand in the priority-tier repo that sits
+first in the §8 build sequence. `dataset.py` owns the repo's primary artifact — the
+golden-dataset format every other subcommand, the pytest plugin, and downstream
+repos read.
+
+**The detail that makes it a real finding.** It is not enough that the emitted line
+is invalid JSON; what matters is what consumers *do* with it. Browser `JSON.parse`
+rejects it outright, which is survivable. `jq` 1.7.1 parses it **silently**, turning
+`Infinity` into `1.7976931348623157e+308` and `NaN` into `null`, with no error and
+no exit code — so a pipeline step that shells out to `jq` gets a plausible wrong
+number instead of a failure.
+
+**Not a new policy.** `runner.py` already enforces this exact finiteness contract on
+every numeric field it loads (#42, #185, #204), and its comment states the rationale
+verbatim. `calibration.py` gets it for free, because `human_score` is range-checked
+and `0.0 <= nan <= 1.0` is False. Of the sites the rule applies to, `dataset.py`'s
+`provenance` was the one that disagreed — and the only one behind a canonical writer.
+
+**Open questions.** None for this issue. `calibration.py`'s `provenance` is
+unguarded too, but that module has no canonical writer, so the egress this fix is
+about does not exist there.
+
+**Tests.** 35 new (`tests/test_dataset_representability.py`) — a 15-row ACCEPT table
+and an 8-row REJECT table. Disabling the guard turns every REJECT row red and leaves
+every ACCEPT row green; the ACCEPT half is the anti-vacuous control, since a check
+written too broadly would turn the REJECT rows green while quietly breaking real
+datasets. Suite 865 → 900 green, ruff clean, mypy clean.
