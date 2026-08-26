@@ -46,7 +46,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, ClassVar
 
-from eval_harness.io_utils import atomic_write_text
+from eval_harness.io_utils import atomic_write_text, find_unencodable
 
 
 class DatasetLoadError(ValueError):
@@ -231,9 +231,7 @@ def _safe_path_segment(key: str) -> str:
     check exists to catch, so interpolating it verbatim would make the *error
     path* crash when the message is written to stderr. `ascii()` escapes it.
     """
-    try:
-        key.encode("utf-8")
-    except UnicodeEncodeError:
+    if find_unencodable(key) is not None:
         return ascii(key)
     return key if key.isprintable() else ascii(key)
 
@@ -259,12 +257,14 @@ def _find_unrepresentable(record: dict[str, Any]) -> tuple[str, str] | None:
         if isinstance(node, bool):
             continue
         if isinstance(node, str):
-            try:
-                node.encode("utf-8")
-            except UnicodeEncodeError as e:
-                bad = e.object[e.start : e.end]
+            # Detection is shared with `drift.compute_drift` (#215) so the two
+            # enforcement sites cannot answer differently for the same string;
+            # the consequence clause below is this seam's own.
+            unencodable = find_unencodable(node)
+            if unencodable is not None:
+                bad, pos = unencodable
                 return path, (
-                    f"is not encodable as UTF-8 ({bad!r} at position {e.start}); "
+                    f"is not encodable as UTF-8 ({bad!r} at position {pos}); "
                     "a lone surrogate is legal JSON escape syntax but has no UTF-8 "
                     "encoding, so `dump_jsonl` raises UnicodeEncodeError on a file "
                     "that otherwise validates clean"
