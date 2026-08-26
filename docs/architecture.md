@@ -116,6 +116,19 @@ purpose: an authored golden set with nothing embeddable is rejected
 slice is counted, so one emoji in a 10k-line traffic file does not
 abort the run (#210).
 
+That asymmetry is about *embeddability*, and D-018 marks where it stops.
+An input with no UTF-8 encoding — a lone surrogate, legal JSON escape
+syntax with no encoding at all — is not merely unembeddable: the HTML
+report cannot be written if one reaches it, because `render_html` puts
+raw input text in the representative-example list and `atomic_write_text`
+encodes to UTF-8. Both sides reject, at `compute_drift`, which is the one
+choke point the CLI road and the README's library road share. Excluding
+the row instead would deflate `n_candidate` and both histograms with no
+diagnostic — the same false-negative class as #91 and #93. Detection is
+shared with `dataset.py`'s representability check (#213) via
+`io_utils.find_unencodable`, so the two enforcement sites cannot answer
+differently for the same string (#215).
+
 ## Layer 5 — Pytest plugin (#5)
 
 `pytest_plugin.py` registers `@pytest.mark.eval(dataset=..., judge=...,
