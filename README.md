@@ -75,7 +75,7 @@ pretending to be a multi-rater gold standard.
 ## Architecture
 
 See [`docs/architecture.md`](docs/architecture.md) for the integrated flow,
-per-layer detail, and the design decisions behind each one (D-002…D-017).
+per-layer detail, and the design decisions behind each one (D-002…D-018).
 The shape:
 
 ```mermaid
@@ -431,6 +431,21 @@ candidate would land in cluster 0, and the axis could only report a
 fabricated `0.000 / ok`. A golden set is authored and fixable; a
 candidate sample is production traffic, so one emoji there is counted,
 not fatal (D-017).
+
+That leniency does not extend to an input with **no UTF-8 encoding** —
+a lone surrogate such as `"\ud800"`, which is legal JSON escape syntax
+but has no encoding at all, and reaches traffic samples from broken
+UTF-16 handling upstream. Those are rejected on *both* sides, because
+the HTML report cannot be written if one reaches it (D-018, #215). A
+token-less input is representable and merely unembeddable; this one
+cannot be written down. Before the check, the same byte either aborted
+the run with a raw traceback at exit 1 or vanished with no diagnostic,
+decided by where it happened to rank. `eval-harness drift` now exits
+**2** with an `::error::` line naming the side, the index and the
+offending codepoint, and leaves `--output` untouched. Emoji written as
+a valid surrogate *pair* escape are unaffected — the rule is "does this
+string encode as UTF-8", not "does the source contain an escape above
+U+FFFF".
 
 Library API (when wiring into a custom workflow):
 

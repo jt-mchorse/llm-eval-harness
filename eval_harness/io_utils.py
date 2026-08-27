@@ -45,6 +45,44 @@ from pathlib import Path
 _MAX_TEMP_BASE_BYTES = 200
 
 
+# --- representability (#213, #215) ------------------------------------------
+#
+# Every writer listed in this module's docstring encodes to UTF-8, so a string
+# with no UTF-8 encoding is unwritable by all of them. In practice that means a
+# *lone* surrogate: `"\ud800"` is legal JSON escape syntax, `json.loads` decodes
+# it happily, and it then dies at the write with `UnicodeEncodeError`, long after
+# whatever validated the input reported clean. RFC 8259 section 8.2 names
+# unpaired surrogates as non-interoperable; they reach production traffic
+# samples from broken UTF-16 handling upstream.
+#
+# A *valid* surrogate pair is not this. `json.loads('"\ud83c\udf89"')` combines
+# the two escapes into a single U+1F389 codepoint, which encodes fine — so the
+# rule is "does `.encode("utf-8")` succeed", never "does the source contain an
+# escape above U+FFFF".
+#
+# One definition, here rather than in either caller, because the rule now has
+# two enforcement sites with different consequences to describe:
+#   `dataset._find_unrepresentable` (#213)  -- `dump_jsonl` cannot emit it
+#   `drift.compute_drift`           (#215)  -- `render_html` cannot be written
+# Each phrases its own consequence; both share the detection so they cannot
+# answer differently for the same string.
+
+
+def find_unencodable(text: str) -> tuple[str, int] | None:
+    """Return ``(offending_text, position)`` for the first run of characters in
+    *text* that has no UTF-8 encoding, or ``None`` when the whole string is
+    encodable.
+
+    ``position`` is a character index into *text*, not a byte offset -- there is
+    no byte offset to report, precisely because the string cannot be encoded.
+    """
+    try:
+        text.encode("utf-8")
+    except UnicodeEncodeError as e:
+        return text[e.start : e.end], e.start
+    return None
+
+
 def _cap_base_for_temp(base: str) -> str:
     if len(base.encode("utf-8")) <= _MAX_TEMP_BASE_BYTES:
         return base

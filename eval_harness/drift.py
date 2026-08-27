@@ -42,7 +42,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from eval_harness.io_utils import atomic_write_text
+from eval_harness.io_utils import atomic_write_text, find_unencodable
 from eval_harness.judge import clamp_judge_score
 
 # ----------------------------------------------------------------------
@@ -512,11 +512,76 @@ def compute_drift(
     ``representative_examples`` (D-017, #210). A golden set in which
     *nothing* is comparable is rejected outright, because such a
     baseline can only report a fabricated ``"ok"``.
+
+    An input with **no UTF-8 encoding** -- in practice a lone surrogate --
+    is rejected on *both* sides (#215, D-018), because the HTML report
+    cannot be written at all if one reaches it. That is deliberately not
+    D-017's split: a token-less input is representable and merely
+    unembeddable, whereas this one cannot be written down.
     """
     if not golden_inputs:
         raise ValueError("golden_inputs must be non-empty")
     if not candidate_inputs:
         raise ValueError("candidate_inputs must be non-empty")
+
+    # --- representability (#215) ----------------------------------------
+    # Every string that reaches the report has to survive a UTF-8 encode, and a
+    # lone surrogate does not. `"\ud800"` is legal JSON escape syntax, so
+    # `_load_inputs_jsonl` reads it without complaint from a file whose bytes are
+    # themselves valid UTF-8 -- and it then killed the run at the very last step,
+    # inside `atomic_write_text`, with a raw `UnicodeEncodeError` traceback at
+    # exit 1. Exit 1 is this CLI's code for *findings*, so a gate that treats 1 as
+    # "drift detected" and 2 as "infrastructure error" was told there was drift
+    # when no report had been produced at all.
+    #
+    # Checked here rather than in `_load_inputs_jsonl` because there are two roads
+    # into `render_html` and only one of them has a loader. The other is the
+    # library snippet the README ships:
+    #
+    #     report = compute_drift(golden_inputs=[...], candidate_inputs=[...])
+    #     Path("drift.html").write_text(render_drift_html(report))
+    #
+    # `compute_drift` is the one function both roads pass through, and it is
+    # already this module's input-contract choke point (emptiness, the three
+    # thresholds, `cluster_k`, `n_representative_examples`, golden
+    # comparability). A `ValueError` from here lands in `drift.cli`'s existing
+    # `except ValueError`, so the exit-2 contract holds with no new catch --
+    # which the old `except OSError` around the write could never have given,
+    # since `UnicodeEncodeError` subclasses `ValueError`, not `OSError`.
+    #
+    # Measured before this check, with the surrogate on a *candidate* row and
+    # everything else identical, the outcome was decided by data position rather
+    # than by the data being bad -- `render_html` puts raw input text in exactly
+    # one place, `html.escape(r.text)[:200]` over `representative_examples`:
+    #
+    #   surrogate on a highly-distant candidate row   -> UnicodeEncodeError, exit 1
+    #   surrogate on a near-duplicate of a golden row -> ranked out of the top-N,
+    #                                                    report written, row absent
+    #   surrogate at char 240 of a distant row        -> `[:200]` drops it, report
+    #                                                    written
+    #   surrogate in the golden set only              -> golden text is never
+    #                                                    rendered, report written
+    #
+    # Both sides reject, and that is deliberately *not* D-017's split (D-018).
+    # D-017 lets token-less candidate rows through because a single emoji must
+    # not abort a 10k-line traffic slice -- but a token-less row is representable
+    # and merely unembeddable, whereas this one cannot be written down at all.
+    # Dropping it instead would deflate `n_candidate` and both histograms with no
+    # diagnostic, which is the same false-negative class as #91 and #93.
+    for _side, _inputs in (
+        ("golden_inputs", golden_inputs),
+        ("candidate_inputs", candidate_inputs),
+    ):
+        for _i, _text in enumerate(_inputs):
+            _bad = find_unencodable(_text)
+            if _bad is not None:
+                _chars, _pos = _bad
+                raise ValueError(
+                    f"{_side}[{_i}] is not encodable as UTF-8 ({_chars!r} at position "
+                    f"{_pos}); a lone surrogate is legal JSON escape syntax but has no "
+                    f"UTF-8 encoding, so the HTML report cannot be written. Same rule "
+                    f"`load_jsonl` enforces on a golden dataset (#213)"
+                )
 
     # JSD is base-2 and bounded [0, 1] per D-014. A threshold outside that
     # range silently disables (threshold > 1.0) or always-fires (threshold < 0)

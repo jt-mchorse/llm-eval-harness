@@ -1973,3 +1973,69 @@ and an 8-row REJECT table. Disabling the guard turns every REJECT row red and le
 every ACCEPT row green; the ACCEPT half is the anti-vacuous control, since a check
 written too broadly would turn the REJECT rows green while quietly breaking real
 datasets. Suite 865 → 900 green, ruff clean, mypy clean.
+
+## 2026-08-26 — the same byte either killed the run or vanished (#215)
+
+**What got done.** `#213`, shipped hours earlier, taught the *dataset* seam that
+a string with no UTF-8 encoding is not well-formed, because `dump_jsonl` cannot
+emit it. `drift` reads through a different loader and writes through a different
+writer, and got neither half. `compute_drift` now rejects an unencodable input
+on both sides, and the detection lives once in `io_utils.find_unencodable`,
+shared with the dataset check.
+
+**The lens was the previous fix's own rationale.** `#213` argued for itself by
+naming where the bad input comes from — "they reach traffic samples from broken
+UTF-16 handling upstream". Drift detection *is* the traffic-sample consumer. It
+was the one place the rule was argued for and not applied. When a fix justifies
+itself by naming a producer, go read that producer.
+
+**Four outcomes for one byte, decided by position rather than by badness.**
+`render_html` puts raw input text in exactly one place — `html.escape(r.text)`
+truncated to 200 characters, over `representative_examples`. So a lone surrogate
+crashed the run only if the JSD ranking picked its row *and* it sat below
+character 200. On a highly-distant candidate row it died at exit 1 with a raw
+traceback. On a near-duplicate of a golden row it was ranked out of the top-N and
+the report was written with that row simply absent. At character 240 the `[:200]`
+slice dropped it. In the golden set it was never rendered at all. When a crash
+depends on a ranking or a truncation, the absence of a crash proves nothing.
+
+**The exit code is what makes it a contract bug.** `UnicodeEncodeError`
+subclasses `ValueError`, not `OSError`, so the write seam's `except OSError`
+could never have caught it, and it escaped at exit **1** — which in this CLI
+means *findings*. A gate treating 1 as "drift detected, alert the team" and 2 as
+"infrastructure error, retry" was told there was drift when no report existed.
+
+**Choosing the choke point meant counting the roads.** The obvious fix was the
+loader, but the README ships a library snippet — `compute_drift(...)` then
+`write_text(render_drift_html(report))` — that has no loader. `compute_drift` is
+the one function both roads pass through, it was already this module's
+input-contract choke point, and putting the check there landed it inside
+`drift.cli`'s existing `except ValueError`, so exit 2 came for free with no new
+catch.
+
+**Why this needed a decision (D-018).** D-017 deliberately lets token-less
+candidate rows through — one emoji must not abort a 10k-line traffic slice — and
+it would have been easy to extend that here. It doesn't transfer: D-017 is about
+*embeddability*, and a token-less row can still be written to the report. This
+one cannot be written down at all. Dropping it instead would deflate
+`n_candidate` and both histograms with no diagnostic, the same false-negative
+class as #91 and #93.
+
+**A plan correction.** The plan said "README impact: none expected". Wrong — the
+paragraph immediately above the new rule ends "a candidate sample is production
+traffic, so one emoji there is counted, not fatal (D-017)", which now reads as a
+blanket promise. A new exception to a documented leniency has to land next to the
+leniency.
+
+**Measured and deliberately not filed.** `load_calibration` admits surrogates,
+but every CLI writer it feeds uses `json.dumps` at the default
+`ensure_ascii=True`, which escapes them back to ASCII. `dump_jsonl` is the only
+writer in the package using `ensure_ascii=False`, and #213 already guards it. The
+`runs.py` SQLite `INSERT` does raise on a surrogate, but its only text source is
+judge output from the API rather than an operator-supplied file, so reachability
+needs its own measurement — noted, not filed as padding.
+
+**Tests.** 55 new. Neutering the drift guard turns 25 red with no control row
+affected; neutering the shared helper turns 42 red across *both* this file and
+`test_dataset_representability.py` — that second number is the one that proves
+the definition is really single. Suite 945 → 1000 green, ruff and mypy clean.

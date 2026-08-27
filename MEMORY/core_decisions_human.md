@@ -288,3 +288,40 @@ left available on the dataclass.
 **Reversibility:** Cheap. One dataclass field, one guard, and two filters.
 
 **Related issues:** #210, #208
+
+## D-018 — an unrepresentable input is rejected on both drift sides (2026-08-26)
+
+**Decision.** `compute_drift` rejects a golden *or* candidate input that has no
+UTF-8 encoding — in practice a lone surrogate — rather than excluding it from
+the report the way D-017 excludes token-less inputs on the candidate side.
+
+**Why.** D-017's asymmetry is deliberate and still right for what it covers: a
+golden set is authored, small and fixable, so one with nothing embeddable is a
+broken baseline and fails loud, while a candidate set is a sampled traffic slice
+and a single emoji must not abort a 10k-line run. But that argument is about
+*embeddability*. A token-less input is perfectly representable — it can be
+written to the report, it just has no angle to any centroid. A lone surrogate
+cannot be written down at all: `render_html` produces a string that
+`atomic_write_text` cannot encode, so there is no version of "keep going" that
+still produces the artifact the command exists to produce.
+
+Excluding the row instead would silently deflate `n_candidate` and both
+histograms with no diagnostic — the same false-negative class this repo has
+already fixed twice, in #91 (one-empty JSD) and #93 (the length-histogram open
+bucket). And it is the same call #213 made one seam over, for the same reason:
+there is no faithful spelling of the value to write, so the input is refused
+rather than repaired.
+
+**Alternatives considered.** (1) Extend D-017's split and drop unencodable
+candidate rows — rejected for the deflation above. (2) Sanitise on write with
+`errors="surrogatepass"` or a replacement character — the first puts invalid
+UTF-8 on disk, which is strictly worse than refusing; the second silently
+alters the operator's data in the one place the operator is meant to eyeball
+it. (3) Catch `UnicodeEncodeError` at the write seam and return exit 2 — this
+turns the crash into a clean failure but still spends the whole run to discover
+a problem visible in the input, and does nothing for the library road the README
+documents.
+
+**Reversibility.** Cheap. One check at one choke point, and the "before"
+behaviour is a documented, measured variant table in
+`tests/test_drift_unencodable_inputs.py`.
