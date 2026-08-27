@@ -2039,3 +2039,46 @@ needs its own measurement — noted, not filed as padding.
 affected; neutering the shared helper turns 42 red across *both* this file and
 `test_dataset_representability.py` — that second number is the one that proves
 the definition is really single. Suite 945 → 1000 green, ruff and mypy clean.
+
+## 2026-08-27 — #217: a calibration row that cannot be written down
+
+`#213` taught the golden-dataset loader to reject a record the canonical writer
+cannot emit; `#215` taught `drift.compute_drift` the same. The grid for "who
+else" was sitting in `io_utils`' own module docstring, which enumerates four
+writer families. Two had the guard. The calibration loader and the CLI write
+seam did not.
+
+The sharp part is not the crash, it is the pre-flight. `validate_calibration`
+exists, in its own words, so an operator "can fix every issue before
+`eval-harness calibrate` spends judge tokens". On a three-row file that is pure
+ASCII on disk — the surrogate is the six-character escape `\ud800` — it reported
+`ok: rows=3 valid=3 findings=0`. Then the whole set was judged, and the report
+write died with a raw `UnicodeEncodeError` at exit 1. Exit 1 on `calibrate` is
+the "Cohen's κ below threshold" outcome, so the crash and the legitimate finding
+were the same signal, and the money was already spent. `calibrate` now exits 2 at
+the load seam, before the backend is even constructed.
+
+The write seam was the other half. `_write_output` was added precisely so no
+`--out` site calls `atomic_write_text` bare. `atomic_write_text` raises exactly
+two things and it caught one: `UnicodeEncodeError` is a `ValueError`, not an
+`OSError`. `_run_validate` already carries the matching arm on the *read* side,
+with a comment spelling out the same reasoning. Reachable with no judge and no
+API key at all, through the run-JSON artifact the Action uploads and downloads.
+
+The record walk moved to `io_utils.find_unrepresentable`, so the two record-level
+sites share one detector while each still phrases its own consequence. Its
+`kinds` parameter is load-bearing rather than decorative: `dataset` enforces the
+non-finite axis because `dump_jsonl` re-emits the record, and calibration does
+not, because nothing writes a calibration record back out. A rejection with no
+consequence to name is how a guard drifts away from the harm it was written for,
+so the absence is pinned by its own test instead of left to a comment.
+
+And a lesson that cost real time: writing *about* a lone surrogate is how you
+ship one. A bare escape inside a non-raw docstring is not six characters after
+compilation, it is a real unpaired surrogate. Where it lands decides how it
+fails — `compile()` refuses a docstring outright, but compiles an assignment, a
+`return` literal, a dict value or an f-string piece and silently carries the
+surrogate into the module. The bytes on disk catch neither half; the file is
+valid UTF-8 either way. So the new lock walks the compiled constants of every
+package module and every test module, and the package now satisfies in its own
+source the rule it enforces on its inputs.
