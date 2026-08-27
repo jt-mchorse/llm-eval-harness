@@ -7,34 +7,42 @@ so the constant holds a real unpaired surrogate. That happened twice while writi
 #217 -- once in `calibration.load_calibration`'s docstring, once in the test module
 beside this one -- and both times the symptom appeared a long way from the cause.
 
-Where it lands depends on the literal's *position*, and the two halves fail very
-differently. Measured on this interpreter, feeding `compile()` source that is
-pure ASCII and spells the surrogate as an escape:
+**Whether that is loud or silent is a property of the interpreter, not of the
+code.** Measured, feeding `compile()` source that is pure ASCII and spells the
+surrogate as an escape:
 
-    position                     compile()   constant carries surrogate
-    ---------------------------- ----------- --------------------------
-    module docstring             RAISES      -
-    function/class docstring     RAISES      -
-    return / assignment literal  ok          YES
-    dict value                   ok          YES
-    f-string literal piece       ok          YES
-    raw string (r"...")          ok          no
-    `#` comment                  ok          no
+    position                     3.11 / 3.12          3.14
+    ---------------------------- -------------------- --------------------
+    module docstring             ok, carries it       compile() RAISES
+    function/class docstring     ok, carries it       compile() RAISES
+    return / assignment literal  ok, carries it       ok, carries it
+    dict value                   ok, carries it       ok, carries it
+    f-string literal piece       ok, carries it       ok, carries it
+    raw string (r"...")          ok, clean            ok, clean
+    `#` comment                  ok, clean            ok, clean
 
-The docstring half is loud -- `UnicodeEncodeError` out of `compile()`, so the
-module cannot be imported at all, and under pytest it surfaces from the assertion
--rewrite cache rather than from the file that caused it:
+On 3.14 a docstring is the loud half: `UnicodeEncodeError` straight out of
+`compile()`, so the module cannot be imported at all -- and under pytest it
+surfaces from the assertion-rewrite cache rather than from the file that caused
+it, which is a long way from the cause:
 
     .venv/.../_pytest/assertion/rewrite.py:359: in _rewrite_test
         co = compile(tree, strfn, "exec", dont_inherit=True)
     E   UnicodeEncodeError: 'utf-8' codec can't encode character '\ud800'
         in position 575: surrogates not allowed
 
-The other half is **silent**. A surrogate in an ordinary literal compiles, runs,
-and sits in the module until something encodes it -- which is precisely the class
-this package spent #213, #215 and #217 learning to reject in its *inputs*.
+On 3.11 and 3.12 -- which is what CI runs -- there is **no loud half at all**.
+Every position compiles, runs, and carries a real unpaired surrogate until
+something tries to encode it. So the two slips that produced this file would have
+sailed through CI silently rather than crashing at import, which is the argument
+for the check rather than against it.
 
-The bytes on disk cannot catch either half: the file is valid UTF-8 both ways. The
+That is also why nothing below asserts *which* road catches a file. `_check`
+handles both and the outcome is the contract; the road is an interpreter detail,
+and pinning it would make this a host-environment assertion that passes on the
+author's machine and fails on CI. It did exactly that once (#217).
+
+The bytes on disk cannot catch either road: the file is valid UTF-8 both ways. The
 check has to run against the compiled objects, so that is what this does. A `#`
 comment and a raw string are both safe, and this docstring is raw for that reason.
 """
@@ -126,25 +134,57 @@ def test_test_suite_source_carries_no_unencodable_literal(test_file: str) -> Non
 ESCAPE = "\\ud800"  # the six ASCII characters, as they appear in a file on disk
 
 
-def test_the_docstring_half_is_caught(tmp_path: Path) -> None:
-    """Anti-vacuous, loud half: `compile` refuses and `_check` names the file."""
-    p = tmp_path / "mod_doc.py"
-    p.write_text(f"def outer():\n    def inner():\n        'doc {ESCAPE} doc'\n", encoding="utf-8")
-    assert p.read_bytes().isascii()
-    with pytest.raises(BaseException, match="cannot be compiled at all"):
+#: Every literal position that ends up carrying a real surrogate on at least one
+#: supported interpreter. Deliberately not split into "loud" and "silent" groups:
+#: which road catches a file is an interpreter detail (see the table above), and
+#: the outcome is the contract.
+BAD_SOURCES = {
+    "module docstring": f"'mod {ESCAPE} doc'\n",
+    "nested function docstring": f"def outer():\n    def inner():\n        'doc {ESCAPE} doc'\n",
+    "nested return literal": (
+        f"def outer():\n    def inner():\n        return {{'k': 'a{ESCAPE}b'}}\n"
+    ),
+    "module assignment": f"X = 'a{ESCAPE}b'\n",
+}
+
+
+@pytest.mark.parametrize("label", sorted(BAD_SOURCES), ids=lambda s: s.replace(" ", "-"))
+def test_a_surrogate_bearing_literal_is_caught_wherever_it_sits(tmp_path: Path, label: str) -> None:
+    """Anti-vacuous, and interpreter-independent by construction.
+
+    On 3.14 a docstring makes `compile()` raise and `_check` fails with "cannot be
+    compiled at all"; on 3.11/3.12 the same file compiles and the constant walk
+    catches it with "no UTF-8 encoding". Both are a failure, which is the whole
+    contract -- so this asserts a failure, not a *particular* failure. Asserting
+    the road is what turned this file red on CI while it was green locally (#217),
+    and it is the same host-environment-assertion trap that rule names.
+
+    The nested cases are two levels deep on purpose, to prove the walk descends
+    into nested code objects rather than only scanning module scope.
+    """
+    p = tmp_path / "probe_mod.py"
+    p.write_text(BAD_SOURCES[label], encoding="utf-8")
+    assert p.read_bytes().isascii(), "the file itself must be plain ASCII on disk"
+    # `BaseException` with an explicit alternation, not two narrower blocks: the
+    # compile road raises `Failed` (pytest's own, not an `Exception` subclass in
+    # every version) and the walk road raises `AssertionError`, and which one
+    # fires is the interpreter detail this test refuses to pin.
+    with pytest.raises(BaseException, match="cannot be compiled at all|no UTF-8 encoding") as exc:
         _check(p, "probe")
+    assert "probe" in str(exc.value)
 
 
-def test_the_silent_half_is_caught(tmp_path: Path) -> None:
-    """Anti-vacuous, silent half: this one compiles, so only the constant walk
-    finds it. Nested two levels deep to prove the walk descends."""
-    p = tmp_path / "mod_const.py"
-    p.write_text(
-        f"def outer():\n    def inner():\n        return {{'k': 'a{ESCAPE}b'}}\n",
-        encoding="utf-8",
-    )
-    assert p.read_bytes().isascii()
-    compile(p.read_text(encoding="utf-8"), "<probe>", "exec")  # compiles clean
+def test_the_silent_road_exists_on_this_interpreter(tmp_path: Path) -> None:
+    """A non-docstring literal compiles on *every* supported interpreter, so the
+    constant walk is never dead code -- it is the only road on 3.11/3.12 and the
+    road for non-docstring positions everywhere.
+
+    Pinned separately from the parametrized test above because it asserts the
+    *premise* (this file really does compile) rather than the outcome.
+    """
+    p = tmp_path / "probe_const.py"
+    p.write_text(BAD_SOURCES["nested return literal"], encoding="utf-8")
+    compile(p.read_text(encoding="utf-8"), "<probe>", "exec")  # must not raise
     with pytest.raises(AssertionError, match="no UTF-8 encoding"):
         _check(p, "probe")
 
