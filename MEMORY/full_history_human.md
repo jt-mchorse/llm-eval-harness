@@ -2082,3 +2082,38 @@ surrogate into the module. The bytes on disk catch neither half; the file is
 valid UTF-8 either way. So the new lock walks the compiled constants of every
 package module and every test module, and the package now satisfies in its own
 source the rule it enforces on its inputs.
+
+
+## 2026-08-27 (correction) - #217: I pinned an interpreter property as if it were a code property
+
+The PR said "1099 passed". That was true on Python 3.14, which is what my local
+venv runs, and CI runs 3.11 and 3.12. Four of seven jobs went red.
+
+The cause was worth the trip. `test_the_docstring_half_is_caught` asserted that
+`compile()` refuses a docstring containing a lone surrogate. That is not a
+property of the code being tested; it is a property of the interpreter. On 3.14,
+`compile()` raises for module, function and class docstrings. On 3.11 and 3.12 it
+raises for nothing at all - every literal position compiles cleanly and silently
+carries a real unpaired surrogate into the module.
+
+Which means the "loud half / silent half" matrix in the PR body was measured on
+one interpreter and stated unconditionally, and on the versions CI actually runs
+there is no loud half. Both of the slips that motivated writing the lock in the
+first place would have shipped straight through CI rather than crashing at
+import. The lock is worth more than the PR claimed, not less.
+
+The fix is to assert the outcome rather than the road: a surrogate-bearing
+literal is caught, and which arm catches it - the compile refusal or the constant
+walk - is an interpreter detail. Whenever a test names a mechanism, the question
+is whether the mechanism or the result is the contract.
+
+Two things I should have done. My own notes carry a rule about host-environment
+assertions, and interpreter version belongs on that list next to clock, CPU and
+filesystem. And I had merged a PR this same morning whose design comment says, in
+so many words, that a guarantee cannot be conditional on which Python is running
+it - then wrote a test that was. Checking the CI matrix before probing language
+behaviour would have cost thirty seconds.
+
+I also nearly mis-blamed my own diff: my local 3.11 fails a different test file,
+and stashing and re-running on `main` showed it fails there too - a stale pytest
+in that interpreter, nothing to do with the change.
