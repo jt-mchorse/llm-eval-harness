@@ -2117,3 +2117,52 @@ behaviour would have cost thirty seconds.
 I also nearly mis-blamed my own diff: my local 3.11 fails a different test file,
 and stashing and re-running on `main` showed it fails there too - a stale pytest
 in that interpreter, nothing to do with the change.
+
+## 2026-08-28 - issue #218: the judge seam translated exactly one of its exceptions
+
+The issue reported that `JudgeParseError` escapes `calibrate` as a raw traceback at
+exit 1 - the code that means "Cohen's kappa below threshold" - so a judge that
+answered in the wrong format was reported to CI as a calibration failure. It also
+asked for the answer as a grid rather than a list: which judge-layer exceptions can
+reach each subcommand's top frame, and which of those each subcommand translates.
+
+Building that grid before planning is what made the fix bigger than the issue.
+`run` has the identical gap, and the parse error is not the only escapee. Only two
+subcommands ever construct a judge, and across nine failure modes exactly one -
+`JudgeAuthError`, which got an explicit arm in #194 - was translated. Everything
+else, including an `ImportError` from an install without the optional `judge`
+extra, exited 1 with a stack trace. On these two paths that is not merely untidy:
+exit 1 already means "a row regressed" or "the judge is no longer calibrated", so
+an operational failure was being answered as a quality result.
+
+Two comments in the repo had already reasoned about the exception they then let
+escape. One calls the minimal-install `ImportError` a break of the exit-code
+contract and handles it only on the path where the backend is never built. The
+other validates the dataset first precisely so that `ImportError` cannot mask a
+dataset error - it ordered the code around the exception and never translated it.
+That pattern, where a fix's own wording points at the site it missed, is the third
+run in a row it has paid.
+
+The sharper find was a green test asserting the fix in prose. It says subclassing
+`ValueError` is "the property keeping the CLI's exit-2 translation working without
+a new arm", and neither judge seam has ever caught the broad `ValueError`. The test
+passes because it only checks the class relationship; the CLI behaviour it narrates
+was never true. The same claim had spread by citation to two more places, each
+naming the broken case as its precedent. All three now describe the mechanism that
+actually holds, which is an explicit `except` arm and nothing else.
+
+Shipped: parse errors and the construction `ImportError` translated to exit 2 at
+both seams, the two judge loops re-raising with the failing row's id so the message
+names the site and not just the symptom, and the grid pinned as a test - including
+the clean baseline, so the table cannot pass vacuously, and the rows I deliberately
+did not change. Those are remote backend failures and bugs in a caller's own
+`Backend`; catching them would need `except Exception`, which turns someone else's
+real bug into a usage error. That is issue #220, and pinning the current behaviour
+means it has to edit the test on purpose.
+
+Two process notes worth keeping. My anti-vacuous probe grepped pytest's tail for
+"N failed" and read a collection error as zero failures - reverting the arm also
+removed the import - which is a trap my own notes already warn about; grep the
+summary line. And a stash-plus-restore loop nearly lost one file's edit, because I
+had backed up three of the four files I touched. Diffing the stash against the
+working tree before dropping it is what caught it.
