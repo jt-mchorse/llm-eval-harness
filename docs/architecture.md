@@ -205,6 +205,23 @@ alias was visible in `--help`, locked by
 
 ## Cross-cutting surfaces
 
+- **Judge-seam exit-code contract (#194, #218).** `_run_run` and
+  `_run_calibrate` are the only two frames that construct a judge
+  backend — pinned as the whole population by
+  `tests/test_cli_judge_seam_exit_codes.py`, which fails when a third
+  appears. On both, exit 1 is already spoken for (`--threshold-drop`
+  findings; κ below threshold), so an *operational* judge failure has
+  to be exit 2 or it is read as a quality result. Three classes are
+  translated by explicit `except` arms — `JudgeAuthError` (#194),
+  `JudgeParseError`, and the `ImportError` from a no-`judge`-extra
+  install (both #218) — and the two judge loops re-raise a parse error
+  carrying the failing `example`/`row` id, which `parse_judge_output`
+  cannot supply. `JudgeAuthError` and `JudgeParseError` both subclass
+  `ValueError`, but that relationship routes nothing: neither seam
+  catches the broad `ValueError`, so a parse error escaped as a raw
+  traceback at exit 1 until an arm of its own was added. Remote backend
+  failures and bugs in a caller's own `Backend` still propagate, by
+  decision — see #220.
 - **`--tags` row-level subset filter (#15).** Set-union match over a
   row's `tags`; `eval-harness run --tags faithfulness` runs only the
   rows tagged with that label, exit code 2 with the dataset's tag
