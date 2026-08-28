@@ -185,9 +185,16 @@ def test_complete_retags_auth_failures_and_does_not_retry(exc: BaseException) ->
 
 
 def test_judge_auth_error_is_a_valueerror() -> None:
-    """So it lands on the same side of the CLI's exit-code contract as every
-    other bad-input failure — `JudgeParseError` subclasses `ValueError` for
-    exactly this reason."""
+    """Kept for library callers, but it is *not* why `calibrate`/`run` exit 2.
+
+    The original wording here — "so it lands on the same side of the CLI's
+    exit-code contract ... `JudgeParseError` subclasses `ValueError` for
+    exactly this reason" — had the mechanism backwards, and cited as
+    precedent the one case that was broken. `JudgeAuthError` reaches exit 2
+    because #194 added an explicit `except JudgeAuthError` arm at both seams;
+    `JudgeParseError`, with no arm of its own, exited 1 with a traceback for
+    exactly as long (#218). Subclassing routes nothing on its own.
+    """
     assert issubclass(JudgeAuthError, ValueError)
 
 

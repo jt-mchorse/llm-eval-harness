@@ -34,7 +34,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from eval_harness.dataset import Dataset, Example, filter_examples_by_tags, load_jsonl
-from eval_harness.judge import FAITHFULNESS_RUBRIC, Judge, JudgeScore
+from eval_harness.judge import FAITHFULNESS_RUBRIC, Judge, JudgeParseError, JudgeScore
 from eval_harness.runs import (
     StoredRun,
     connect,
@@ -538,7 +538,15 @@ def run_suite(
     scored: list[RowScore] = []
     for ex in examples:
         response = spec.answer_source.answer(ex)
-        verdict: JudgeScore = spec.judge.score(ex.input, response, spec.rubric)
+        try:
+            verdict: JudgeScore = spec.judge.score(ex.input, response, spec.rubric)
+        except JudgeParseError as e:
+            # Which row failed is the operator's first question, and this loop
+            # is the only frame that knows. `parse_judge_output` quotes the raw
+            # judge output but has no id in scope, so on a 200-row dataset the
+            # error named the symptom and not the site (#218). Re-raised as the
+            # same class so `cli`'s exit-2 arm is unaffected.
+            raise JudgeParseError(f"example {ex.id!r}: {e}") from e
         scored.append(RowScore(example_id=ex.id, score=verdict.score, reasoning=verdict.reasoning))
 
     mean = sum(r.score for r in scored) / len(scored)
