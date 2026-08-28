@@ -63,6 +63,28 @@ code. Eleven closed issues map to eleven pieces of surface:
     uniformly. Pre-flight gate for `eval-harness calibrate` (D-005),
     closing the same lint-without-tokens loop on the κ-gating set.
 
+    That gate only holds if it catches everything `calibrate` will
+    choke on, and for a while it missed one shape (#217). A string with
+    **no UTF-8 encoding** — a lone surrogate, legal JSON escape syntax
+    that `json.loads` decodes happily — passed as a valid row: the file
+    reported `ok … findings=0`, the whole set was judged, and
+    `calibrate --report` then died with a raw `UnicodeEncodeError` at
+    exit 1, the code reserved for "κ below threshold". Both calibration
+    roads now reject it under the existing `schema` code, at the one
+    choke point they share, using the same detector the golden-dataset
+    loader uses (#213) so the two validators cannot answer differently
+    for the same string. A valid surrogate *pair* (`"🎉"`) is
+    unaffected — the rule is "does this encode as UTF-8", not "does the
+    source contain an escape above U+FFFF".
+
+    The `--out` write seam is the backstop. `atomic_write_text` raises
+    exactly two things, and `UnicodeEncodeError` is a `ValueError`, not
+    an `OSError`, so unrepresentable *rendered output* used to escape
+    the exit-2 translation and surface as a traceback at exit 1 — on
+    `run` / `diff` / `diff-json` / `list` / `validate` alike. It is now
+    one `::error::` line and exit 2, matching the read side's existing
+    `UnicodeDecodeError` arm.
+
 The framework is opinionated about two things. **No fabricated
 benchmarks** — the calibration κ number lands in
 `docs/calibration_report.md` only when the operator runs the real CLI

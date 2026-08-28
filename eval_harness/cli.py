@@ -85,11 +85,49 @@ def _write_output(path: str, rendered: str) -> int | None:
     (a directory, a read-only path, an unwritable parent) escaped as a raw
     ``OSError`` traceback at exit 1 — a poor operator experience that breaks the
     documented ``2 = I/O or usage error`` contract exactly as #104 describes.
+
+    ``atomic_write_text`` raises exactly two things, and for a while this
+    translated one of them (#217). ``UnicodeEncodeError`` is a ``ValueError``,
+    *not* an ``OSError``, so content the target encoding cannot represent — a
+    lone surrogate reaching a renderer — still escaped as a raw traceback at
+    exit 1. That is the same asymmetry ``_run_validate`` already names on the
+    **read** side ("a ``ValueError`` subclass, NOT an ``OSError``, which the
+    narrow catches above miss"); the write side never got the matching arm.
+
+    Reachable with no judge and no API key: ``load_run_result_from_json`` reads
+    the run-JSON artifact the Action uploads and downloads, and nothing on that
+    path checks representability. Measured on two pure-ASCII run files whose
+    ``example_id`` carries ``\\ud800``::
+
+        diff-json --format markdown --out o.md   -> exit 1, UnicodeEncodeError
+        diff-json --format ascii    --out o.txt  -> exit 1, UnicodeEncodeError
+        diff-json --format json     --out o.json -> exit 1, clean (json.dumps
+                                                    escapes it) — the *legitimate*
+                                                    regression exit
+
+    Two of three formats crashed, and the third exited 1 for the real reason, so
+    from CI the crash and the regression were the same signal.
+
+    This is the backstop, not the fix: the loaders (``dataset``, ``calibration``,
+    ``drift``) reject unrepresentable input at the door, and this arm catches
+    whatever reaches a writer by a road no loader guards.
     """
     try:
         atomic_write_text(path, rendered)
     except OSError as e:
         return _fail(f"failed to write {path}: {e}")
+    except UnicodeEncodeError as e:
+        # `e.object[e.start:e.end]` is itself unencodable, so it is reported via
+        # `ascii()` — interpolating it verbatim would make this error path die
+        # the same way the write just did, on the way to stderr. Same reasoning
+        # as `io_utils._safe_path_segment`.
+        offender = ascii(e.object[e.start : e.end])
+        return _fail(
+            f"failed to write {path}: rendered output is not encodable as UTF-8 "
+            f"({offender} at position {e.start}); a lone surrogate is legal JSON "
+            "escape syntax but has no UTF-8 encoding, so it survives every load "
+            "and fails at the write"
+        )
     return None
 
 

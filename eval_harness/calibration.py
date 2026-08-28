@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from eval_harness.dataset import ValidationFinding, ValidationReport
+from eval_harness.io_utils import UNENCODABLE, find_unrepresentable
 from eval_harness.judge import Judge, JudgeScore
 from eval_harness.markdown import md_code_cell, md_code_span, md_table_cell
 
@@ -58,7 +59,17 @@ class CalibrationLoadError(ValueError):
 
 
 def load_calibration(path: str | Path) -> list[CalibrationRow]:
-    """Load a JSONL calibration file. One row per line; required fields validated."""
+    """Load a JSONL calibration file. One row per line; required fields validated.
+
+    A row that cannot be *written down* is rejected here alongside the shape
+    checks (#217): a lone surrogate such as ``"\\ud800"`` is legal JSON escape
+    syntax that ``json.loads`` decodes happily, so before this the row loaded
+    clean, ``validate --calibration`` reported ``ok … findings=0``, the whole
+    file was judged, and ``calibrate --report`` then died with a raw
+    ``UnicodeEncodeError`` at exit 1 — the code reserved for "Cohen's κ below
+    threshold". The pre-flight that exists so an operator does not spend judge
+    tokens on a bad file said the file was fine. See ``_row_from_dict``.
+    """
     rows: list[CalibrationRow] = []
     seen_ids: set[str] = set()
     with Path(path).open("r", encoding="utf-8") as fh:
@@ -118,6 +129,38 @@ def _row_from_dict(line_no: int, obj: dict) -> CalibrationRow:
             code="score_range",
         )
 
+    # Representability, last — shape errors are the more fundamental diagnosis
+    # and should win the message when a row has both, matching the ordering
+    # `dataset._validate_record` settled on (#213).
+    #
+    # `_row_from_dict` is the one choke point `load_calibration` (strict) and
+    # `validate_calibration` (collecting) both route through, so the two close
+    # together by construction rather than by two mirrored edits.
+    #
+    # Scoped to the UNENCODABLE axis, deliberately (#217). `dataset` also
+    # enforces NON_FINITE because `dump_jsonl` re-emits the record and a bare
+    # `NaN` token is not JSON; nothing in this package writes a calibration
+    # record back out, and `human_score` — the only number with a consumer — is
+    # already range-checked above (`not (0.0 <= x <= 1.0)` rejects `nan` and
+    # both infinities). A non-finite inside `provenance` has no writer to break,
+    # and a rejection with no consequence to name is how a guard drifts away
+    # from the harm it was written for.
+    #
+    # The whole record is walked, not just the four declared string fields:
+    # `provenance` is a free-form object, and scoping the check to the fields
+    # that happen to have a writer *today* is precisely the shape that made this
+    # a four-site enumeration in the first place.
+    unrepresentable = find_unrepresentable(obj, kinds=frozenset({UNENCODABLE}))
+    if unrepresentable is not None:
+        path, _kind, detail = unrepresentable
+        raise CalibrationLoadError(
+            line_no,
+            f"field {path!r} is not encodable as UTF-8 ({detail}); a lone surrogate "
+            "is legal JSON escape syntax but has no UTF-8 encoding, so the row "
+            "loads clean and then `calibrate --report` dies at the write — after "
+            "the judge tokens for the whole file have been spent",
+        )
+
     return CalibrationRow(
         id=obj["id"],
         prompt=obj["prompt"],
@@ -145,7 +188,11 @@ def validate_calibration(path: str | Path) -> ValidationReport:
 
     - ``parse``         — blank line or JSON decode failure.
     - ``schema``        — missing/extra required fields, wrong types,
-                          or a row that isn't a JSON object.
+                          a row that isn't a JSON object, or a string
+                          anywhere in the record with no UTF-8 encoding
+                          (#217). Same code ``validate_dataset`` routes
+                          the representability shape to, so the two
+                          validators' JSON contracts stay uniform.
     - ``duplicate_id``  — a row's ``id`` collides with a prior row's.
     - ``score_range``   — ``human_score`` outside ``[0, 1]``.
     - ``empty``         — file contains zero valid rows (the loader

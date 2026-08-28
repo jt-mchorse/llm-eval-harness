@@ -2039,3 +2039,81 @@ needs its own measurement — noted, not filed as padding.
 affected; neutering the shared helper turns 42 red across *both* this file and
 `test_dataset_representability.py` — that second number is the one that proves
 the definition is really single. Suite 945 → 1000 green, ruff and mypy clean.
+
+## 2026-08-27 — #217: a calibration row that cannot be written down
+
+`#213` taught the golden-dataset loader to reject a record the canonical writer
+cannot emit; `#215` taught `drift.compute_drift` the same. The grid for "who
+else" was sitting in `io_utils`' own module docstring, which enumerates four
+writer families. Two had the guard. The calibration loader and the CLI write
+seam did not.
+
+The sharp part is not the crash, it is the pre-flight. `validate_calibration`
+exists, in its own words, so an operator "can fix every issue before
+`eval-harness calibrate` spends judge tokens". On a three-row file that is pure
+ASCII on disk — the surrogate is the six-character escape `\ud800` — it reported
+`ok: rows=3 valid=3 findings=0`. Then the whole set was judged, and the report
+write died with a raw `UnicodeEncodeError` at exit 1. Exit 1 on `calibrate` is
+the "Cohen's κ below threshold" outcome, so the crash and the legitimate finding
+were the same signal, and the money was already spent. `calibrate` now exits 2 at
+the load seam, before the backend is even constructed.
+
+The write seam was the other half. `_write_output` was added precisely so no
+`--out` site calls `atomic_write_text` bare. `atomic_write_text` raises exactly
+two things and it caught one: `UnicodeEncodeError` is a `ValueError`, not an
+`OSError`. `_run_validate` already carries the matching arm on the *read* side,
+with a comment spelling out the same reasoning. Reachable with no judge and no
+API key at all, through the run-JSON artifact the Action uploads and downloads.
+
+The record walk moved to `io_utils.find_unrepresentable`, so the two record-level
+sites share one detector while each still phrases its own consequence. Its
+`kinds` parameter is load-bearing rather than decorative: `dataset` enforces the
+non-finite axis because `dump_jsonl` re-emits the record, and calibration does
+not, because nothing writes a calibration record back out. A rejection with no
+consequence to name is how a guard drifts away from the harm it was written for,
+so the absence is pinned by its own test instead of left to a comment.
+
+And a lesson that cost real time: writing *about* a lone surrogate is how you
+ship one. A bare escape inside a non-raw docstring is not six characters after
+compilation, it is a real unpaired surrogate. Where it lands decides how it
+fails — `compile()` refuses a docstring outright, but compiles an assignment, a
+`return` literal, a dict value or an f-string piece and silently carries the
+surrogate into the module. The bytes on disk catch neither half; the file is
+valid UTF-8 either way. So the new lock walks the compiled constants of every
+package module and every test module, and the package now satisfies in its own
+source the rule it enforces on its inputs.
+
+
+## 2026-08-27 (correction) - #217: I pinned an interpreter property as if it were a code property
+
+The PR said "1099 passed". That was true on Python 3.14, which is what my local
+venv runs, and CI runs 3.11 and 3.12. Four of seven jobs went red.
+
+The cause was worth the trip. `test_the_docstring_half_is_caught` asserted that
+`compile()` refuses a docstring containing a lone surrogate. That is not a
+property of the code being tested; it is a property of the interpreter. On 3.14,
+`compile()` raises for module, function and class docstrings. On 3.11 and 3.12 it
+raises for nothing at all - every literal position compiles cleanly and silently
+carries a real unpaired surrogate into the module.
+
+Which means the "loud half / silent half" matrix in the PR body was measured on
+one interpreter and stated unconditionally, and on the versions CI actually runs
+there is no loud half. Both of the slips that motivated writing the lock in the
+first place would have shipped straight through CI rather than crashing at
+import. The lock is worth more than the PR claimed, not less.
+
+The fix is to assert the outcome rather than the road: a surrogate-bearing
+literal is caught, and which arm catches it - the compile refusal or the constant
+walk - is an interpreter detail. Whenever a test names a mechanism, the question
+is whether the mechanism or the result is the contract.
+
+Two things I should have done. My own notes carry a rule about host-environment
+assertions, and interpreter version belongs on that list next to clock, CPU and
+filesystem. And I had merged a PR this same morning whose design comment says, in
+so many words, that a guarantee cannot be conditional on which Python is running
+it - then wrote a test that was. Checking the CI matrix before probing language
+behaviour would have cost thirty seconds.
+
+I also nearly mis-blamed my own diff: my local 3.11 fails a different test file,
+and stashing and re-running on `main` showed it fails there too - a stale pytest
+in that interpreter, nothing to do with the change.

@@ -28,6 +28,7 @@ the guard.
 
 from __future__ import annotations
 
+import importlib
 import re
 from pathlib import Path
 
@@ -228,6 +229,7 @@ def test_doc_symbol_refs_resolve(doc_text: str) -> None:
     Propagates the embedding-model-shootout #71 / python-async #70 precedents,
     adapted to the two citation styles this doc actually uses.
     """
+    import builtins
     import importlib
 
     pkg = importlib.import_module("eval_harness")
@@ -249,6 +251,15 @@ def test_doc_symbol_refs_resolve(doc_text: str) -> None:
         if not hasattr(module, symbol):
             unresolved.append(token)
     for token in sorted(camel):
+        # A builtin resolves. `UnicodeEncodeError` / `ValueError` are real
+        # symbols the doc legitimately names when it describes which exception
+        # class a seam catches (#217); they are simply not *this package's*
+        # symbols. The guard exists to catch names that exist NOWHERE -- the
+        # `BatchAPIBackend` / `compute_frontier` class the docstring cites --
+        # and a builtin has never been that. Narrow on purpose: only the
+        # builtins namespace, so a misspelled `UnicodeEncodError` still fails.
+        if hasattr(builtins, token):
+            continue
         if not hasattr(pkg, token):
             unresolved.append(f"{token} (not in the eval_harness public surface)")
 
@@ -377,3 +388,18 @@ def test_package_module_completeness_flags_injected_gap(doc_text: str) -> None:
     names = [*_package_module_basenames(), "totally_unlisted_module.py"]
     missing = [n for n in names if n not in doc_text]
     assert missing == ["totally_unlisted_module.py"]
+
+
+def test_builtin_exemption_is_narrow() -> None:
+    """The builtins escape hatch must not become "any CamelCase word passes".
+
+    Pinned because the exemption was added to let the doc name the exception
+    classes a seam catches (#217), and an exemption that also swallows a typo
+    would quietly re-open the very drift this file locks.
+    """
+    import builtins
+
+    assert hasattr(builtins, "UnicodeEncodeError")
+    for typo in ("UnicodeEncodError", "BatchAPIBackend", "ComputeFrontier"):
+        assert not hasattr(builtins, typo), typo
+        assert not hasattr(importlib.import_module("eval_harness"), typo), typo

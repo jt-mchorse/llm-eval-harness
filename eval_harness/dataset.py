@@ -39,14 +39,17 @@ silently accepting them, because eval semantics depend on the kind.
 from __future__ import annotations
 
 import json
-import math
 from collections import Counter
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, ClassVar
 
-from eval_harness.io_utils import atomic_write_text, find_unencodable
+from eval_harness.io_utils import (
+    UNENCODABLE,
+    atomic_write_text,
+    find_unrepresentable,
+)
 
 
 class DatasetLoadError(ValueError):
@@ -223,73 +226,33 @@ _REQUIRED_FIELDS: tuple[str, ...] = (
 # spelling that disagreed, and the only one behind a canonical writer.
 
 
-def _safe_path_segment(key: str) -> str:
-    """Render a dict key for an error message without ever emitting a raw
-    unencodable character.
-
-    The offending key is itself a candidate for the surrogate failure this
-    check exists to catch, so interpolating it verbatim would make the *error
-    path* crash when the message is written to stderr. `ascii()` escapes it.
-    """
-    if find_unencodable(key) is not None:
-        return ascii(key)
-    return key if key.isprintable() else ascii(key)
-
-
 def _find_unrepresentable(record: dict[str, Any]) -> tuple[str, str] | None:
     """Return ``(json_path, reason)`` for the first value the canonical writer
     cannot faithfully emit, or ``None`` when the whole record is representable.
 
-    Walked with an explicit stack rather than recursion on purpose. A record
-    that `json.loads` accepted can be nested to the parser's own depth limit,
-    and a recursive walk would add frames on top of that and could raise
-    `RecursionError` -- which is not a `ValueError`, so it would escape
-    `validate_dataset`'s `except DatasetLoadError` and abort the collecting
-    pass instead of becoming one finding. Same failure shape the `kind`
-    `isinstance` guard in `ExpectedOutput.__post_init__` was added to close.
+    The *walk* lives in `io_utils.find_unrepresentable` (#217) so this seam and
+    `calibration._row_from_dict` cannot answer differently for the same record;
+    the *reasons* below are this seam's own, because they name what `dump_jsonl`
+    specifically does with the value. Same split as `find_unencodable` (#215),
+    one level up: shared detection, local consequence.
     """
-    stack: list[tuple[str, Any]] = [("", record)]
-    while stack:
-        path, node = stack.pop()
-        # `bool` first: it is an `int` subclass, and `math.isfinite(True)` is
-        # True anyway, but branching on it explicitly keeps the numeric arm
-        # about numbers.
-        if isinstance(node, bool):
-            continue
-        if isinstance(node, str):
-            # Detection is shared with `drift.compute_drift` (#215) so the two
-            # enforcement sites cannot answer differently for the same string;
-            # the consequence clause below is this seam's own.
-            unencodable = find_unencodable(node)
-            if unencodable is not None:
-                bad, pos = unencodable
-                return path, (
-                    f"is not encodable as UTF-8 ({bad!r} at position {pos}); "
-                    "a lone surrogate is legal JSON escape syntax but has no UTF-8 "
-                    "encoding, so `dump_jsonl` raises UnicodeEncodeError on a file "
-                    "that otherwise validates clean"
-                )
-        elif isinstance(node, float):
-            if not math.isfinite(node):
-                return path, (
-                    f"is {node!r}; dataset values must be finite. `dump_jsonl` emits a "
-                    "bare `NaN`/`Infinity` token, which is not JSON: `JSON.parse` "
-                    "rejects the line outright and `jq` silently coerces it to "
-                    "`null`/1.8e308"
-                )
-        elif isinstance(node, dict):
-            for k, v in node.items():
-                seg = _safe_path_segment(k)
-                child = f"{path}.{seg}" if path else seg
-                # A key is a string on the record too, and is subject to the
-                # same UTF-8 rule as a value. Push it under its own path so the
-                # message points at the key rather than at whatever it maps to.
-                stack.append((f"{child} (object key)", k))
-                stack.append((child, v))
-        elif isinstance(node, list):
-            for i, v in enumerate(node):
-                stack.append((f"{path}[{i}]", v))
-    return None
+    found = find_unrepresentable(record)
+    if found is None:
+        return None
+    path, kind, detail = found
+    if kind == UNENCODABLE:
+        return path, (
+            f"is not encodable as UTF-8 ({detail}); "
+            "a lone surrogate is legal JSON escape syntax but has no UTF-8 "
+            "encoding, so `dump_jsonl` raises UnicodeEncodeError on a file "
+            "that otherwise validates clean"
+        )
+    return path, (
+        f"is {detail}; dataset values must be finite. `dump_jsonl` emits a "
+        "bare `NaN`/`Infinity` token, which is not JSON: `JSON.parse` "
+        "rejects the line outright and `jq` silently coerces it to "
+        "`null`/1.8e308"
+    )
 
 
 def _validate_record(raw: Any, line_no: int) -> Example:

@@ -129,6 +129,28 @@ shared with `dataset.py`'s representability check (#213) via
 `io_utils.find_unencodable`, so the two enforcement sites cannot answer
 differently for the same string (#215).
 
+`#217` found the third and fourth sites. `io_utils`' own docstring names
+four writer families; two had the guard. `calibration.load_calibration`
+had none, so a lone surrogate in a calibration row passed
+`validate --calibration` clean (`ok … rows=3 valid=3 findings=0`), the
+whole set was judged, and `calibrate --report` died at the write with a
+raw `UnicodeEncodeError` at exit 1 — the code reserved for "κ below
+threshold", so the crash and the legitimate finding were the same
+signal, and the tokens were already spent. And `cli._write_output`,
+added so that no `--out` site calls `atomic_write_text` bare, caught
+`OSError` only; `UnicodeEncodeError` is a `ValueError`, so it still
+escaped — the write-side mirror of the `UnicodeDecodeError` arm
+`_run_validate` already carries on the read side.
+
+The *record walk* now lives once, in `io_utils.find_unrepresentable`,
+returning `(json_path, kind, detail)`; each caller phrases its own
+consequence, which is `find_unencodable`'s split (#215) applied one
+level up. Its `kinds` parameter is load-bearing, not decoration: the
+calibration loader enforces the unencodable axis only, because no
+calibration writer emits `provenance` and there is therefore no
+non-finite consequence to name there. A rejection with no consequence
+is how a guard drifts away from the harm it was written for.
+
 ## Layer 5 — Pytest plugin (#5)
 
 `pytest_plugin.py` registers `@pytest.mark.eval(dataset=..., judge=...,
