@@ -319,6 +319,34 @@ with a clean `::error::` line naming `ANTHROPIC_API_KEY` (#194) — no
 traceback. Everything else in this README, and the whole test suite, is
 hermetic.
 
+Because exit 1 on those two paths is *not* a spare code — it means "a row
+dropped past `--threshold-drop`" for `run` and "Cohen's κ below threshold"
+for `calibrate` — a judge that fails *operationally* must not land there.
+The seam's full contract (#218), pinned in
+`tests/test_cli_judge_seam_exit_codes.py`:
+
+| judge-layer failure | `run` | `calibrate` |
+| --- | --- | --- |
+| missing/invalid credential (`JudgeAuthError`) | 2 | 2 |
+| unparseable judge response (`JudgeParseError`) | 2 | 2 |
+| no `judge` extra installed (`ImportError`) | 2 | 2 |
+| remote backend failure (400, or 500 past the retry budget) | traceback | traceback |
+| a bug in a caller's own `Backend` | traceback | traceback |
+| judge answered cleanly | 0 / 1 by findings | 0 / 1 by κ |
+
+The first three are translated by explicit `except` arms. Being a
+`ValueError` subclass routes nothing on its own — neither seam catches the
+broad `ValueError`, which is why `JudgeParseError` exited 1 with a
+traceback for as long as it did. On a multi-row set the exit-2 line names
+the failing `example`/`row` id, which the parser itself cannot: it quotes
+the raw response but has no id in scope.
+
+The last two rows are deliberate, not pending cleanup. A remote failure is
+neither operator misconfiguration nor findings, and its exit code
+interacts with `retry_call`'s budget — that decision is issue #220. A bare
+exception from a caller's own `Backend` keeps its traceback on purpose:
+swallowing it into exit 2 would report a real bug as a usage error.
+
 Run history is stored in SQLite at `~/.eval-harness/runs.db` (override
 with `--db`); two tables, `runs` and `rows`, with a foreign key from
 `rows` to `runs`. `eval-harness diff --current <run_id> --baseline

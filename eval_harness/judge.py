@@ -134,9 +134,14 @@ _AUTH_TYPEERROR_MARKER = "could not resolve authentication method"
 class JudgeAuthError(ValueError):
     """The judge backend could not authenticate. Operator misconfiguration.
 
-    A ``ValueError`` subclass so it lands on the same side of the CLI's
-    exit-code contract as every other bad-input failure (``JudgeParseError``
-    is a ``ValueError`` for the same reason).
+    A ``ValueError`` subclass so a *library* caller can handle it alongside
+    the other bad-input failures with one arm. It does not route the CLI:
+    ``cli._run_run`` / ``cli._run_calibrate`` reach exit 2 via explicit
+    ``except JudgeAuthError`` / ``except JudgeParseError`` arms, because
+    neither judge seam has ever caught the broad ``ValueError``. This
+    docstring previously offered the subclassing as the reason, and cited
+    ``JudgeParseError`` as precedent — which was the one judge-layer
+    exception still escaping as a raw traceback at exit 1 (#218).
     """
 
 

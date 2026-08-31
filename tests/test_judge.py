@@ -462,12 +462,20 @@ def test_parse_rejects_non_finite_negative_score(n_digits: int):
 
 
 def test_non_finite_score_error_is_still_a_valueerror():
-    """`JudgeParseError` subclasses `ValueError`, so callers that catch
-    `ValueError` (the CLI's exit-2 translation) are unaffected by the new raise."""
+    """`JudgeParseError` subclasses `ValueError`, so a caller that catches the
+    broad `ValueError` is unaffected by the narrower raise.
+
+    This test used to claim that subclassing was "the property keeping the
+    CLI's exit-2 translation working without a new arm". It wasn't: neither
+    judge seam in `cli` has ever had an `except ValueError` arm, so nothing
+    was routed by this relationship and the parse error escaped as a raw
+    traceback at exit 1 (#218). The class relationship is still worth
+    asserting — it is what lets a *library* caller use one arm — but the CLI
+    contract is enforced by explicit `except JudgeParseError` arms and is
+    pinned in `tests/test_cli_judge_seam_exit_codes.py`, not here.
+    """
     assert issubclass(JudgeParseError, ValueError)
     raw = f"SCORE: {'9' * 400}\nREASONING: loop"
-    # Caught as the *broad* ValueError on purpose: that's the property keeping
-    # the CLI's exit-2 translation working without a new arm.
     with pytest.raises(ValueError, match="non-finite SCORE") as excinfo:
         parse_judge_output(raw)
     assert isinstance(excinfo.value, JudgeParseError)

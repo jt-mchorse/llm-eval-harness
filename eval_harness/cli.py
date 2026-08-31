@@ -37,7 +37,7 @@ from eval_harness.comment import (
 )
 from eval_harness.dataset import DatasetLoadError, load_jsonl, validate_dataset
 from eval_harness.io_utils import atomic_write_text
-from eval_harness.judge import AnthropicBackend, Judge, JudgeAuthError
+from eval_harness.judge import AnthropicBackend, Judge, JudgeAuthError, JudgeParseError
 from eval_harness.runner import (
     DEFAULT_THRESHOLD_DROP,
     DatasetEchoSource,
@@ -374,7 +374,17 @@ def _run_calibrate(args: argparse.Namespace) -> int:
     # extra / API key needed) and reports exit 2 with a clean ::error:: line.
     if not rows:
         return _fail(f"no rows to calibrate against in {args.calibration}")
-    backend = AnthropicBackend(model=args.model)
+    # `AnthropicBackend.__init__` imports `anthropic`, so in a minimal install
+    # (CI installs `.[dev]`, not `[judge]`) it raises `ImportError` right here.
+    # The zero-row guard above already argues that this "breaks the `2 = usage
+    # error` contract" — and then only sidestepped it for the one path where
+    # the backend is never built. With rows present the same `ImportError`
+    # escaped as a raw traceback at exit 1 (#218). A missing optional extra is
+    # the definition of a usage error; translate it at the construction site.
+    try:
+        backend = AnthropicBackend(model=args.model)
+    except ImportError as e:
+        return _fail(str(e))
     judge = Judge(backend=backend)
     try:
         result = calibrate(judge, rows)
@@ -385,6 +395,16 @@ def _run_calibrate(args: argparse.Namespace) -> int:
         # translation above as a raw traceback at exit 1 (#194). Same seam,
         # same treatment as `run` below.
         return _fail(str(e))
+    except JudgeParseError as e:
+        # A judge that answered in the wrong format took no measurement. Exit 1
+        # here means "Cohen's κ below threshold", so leaking this as a
+        # traceback reported a *format* failure to CI as a *calibration*
+        # failure — the one outcome an operator would act on by retraining the
+        # judge rather than fixing the response shape (#218). `JudgeAuthError`
+        # was the only judge-layer exception either seam translated; being a
+        # `ValueError` subclass never routed anything here, because neither
+        # seam has an `except ValueError` arm.
+        return _fail(f"judge did not return a usable verdict: {e}")
 
     report = render_report(result, judge_model=backend.model, threshold_kappa=args.threshold_kappa)
     if (rc := _write_output(args.report, report)) is not None:
@@ -452,7 +472,14 @@ def _run_run(args: argparse.Namespace) -> int:
     except DatasetLoadError as e:
         return _fail(str(e))
 
-    backend = AnthropicBackend(model=args.model)
+    # Same construction-time `ImportError` as `_run_calibrate`. The comment on
+    # the dataset-load seam above already reasons about this exception — it is
+    # why the dataset is validated *first* — and then let it escape once the
+    # dataset was valid (#218).
+    try:
+        backend = AnthropicBackend(model=args.model)
+    except ImportError as e:
+        return _fail(str(e))
     judge = Judge(backend=backend)
     spec = RunSpec(
         suite=args.suite,
@@ -473,6 +500,12 @@ def _run_run(args: argparse.Namespace) -> int:
         # frames deep on the first row as a bare `TypeError` — not a
         # `ValueError`, so past every catch here — at exit 1 (#194).
         return _fail(str(e))
+    except JudgeParseError as e:
+        # Sibling of the `calibrate` arm (#218). On this path exit 1 means "a
+        # row regressed past --threshold-drop", so an unparseable judge
+        # response was reported to CI as a quality regression. `run_suite`
+        # names the failing example id, which the parser cannot.
+        return _fail(f"judge did not return a usable verdict: {e}")
     except EmptyTagFilterError as e:
         # Silent-empty-run is the worst failure mode; surface the requested
         # tags and the dataset's tag inventory so the operator can self-correct.
