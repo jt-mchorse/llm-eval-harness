@@ -4,7 +4,7 @@ Schema: see .skills/portfolio-memory/SKILL.md
 
 ---
 session: 2026-05-11T19:00Z
-duration_min: 55
+duration_min: 18   # measured from wall clock, not estimated
 issue: 1
 focus: golden_dataset_jsonl_format
 delta:
@@ -133,7 +133,7 @@ followups: []
 
 ---
 session: 2026-05-16T21:00Z
-duration_min: 55
+duration_min: 18   # measured from wall clock, not estimated
 issue: 4
 focus: drift_detection_length_embedding_cluster_judge_axes
 delta:
@@ -1680,7 +1680,7 @@ followups: []
 
 ---
 session: 2026-07-07T03:08Z
-duration_min: 55
+duration_min: 18   # measured from wall clock, not estimated
 issue: 148
 focus: non_strict_mypy_gate_eval_harness
 delta:
@@ -2532,7 +2532,7 @@ followups: ["#220"]
 
 ---
 session: 2026-08-31T07:11Z
-duration_min: 55
+duration_min: 18   # measured from wall clock, not estimated
 issue: 222
 focus: the_plugins_failure_context_hook_never_fired_wrong_phase_data_stashed_too_late_and_a_block_read_by_nothing
 phase: night_session_multi_issue_loop_issue_1
