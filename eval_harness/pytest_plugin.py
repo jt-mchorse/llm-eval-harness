@@ -173,11 +173,17 @@ def judge_score(
     failure.
     """
     judge = Judge(backend=_eval_spec.judge_backend)
+    # Stash each datum at the moment it becomes known, not all three at the
+    # end (#222). All three assignments used to sit below both calls, so an
+    # answer-source failure reported nothing and a judge failure reported
+    # nothing *even though the response existed* — and the response is the
+    # single most useful datum when a judge fails to parse. `pytest_runtest_
+    # makereport` renders whatever subset is present.
+    request.node._eval_row = eval_row
     response = _eval_spec.answer_source.answer(eval_row)
+    request.node._eval_response = response
     score = judge.score(eval_row.input, response, _eval_spec.rubric)
     request.node._eval_judge_score = score
-    request.node._eval_response = response
-    request.node._eval_row = eval_row
     return score
 
 
@@ -229,6 +235,17 @@ def pytest_pyfunc_call(pyfuncitem: pytest.Function):
         response = getattr(pyfuncitem, "_eval_response", None)
         expected = [eo.value for eo in row.expected_outputs] if row is not None else []
         row_id = row.id if row is not None else None
+        # The message below already carries id / score / expected / actual /
+        # reasoning, so `pytest_runtest_makereport` must not append a second
+        # copy of the same fields (#222). Flag the item rather than matching on
+        # the message text or on `AssertionError` — a user's own `assert` in
+        # the body is also an AssertionError and *should* get the block.
+        #
+        # (The flag is also why this comment avoids naming the section header:
+        # these source lines are rendered inside the failing test's traceback,
+        # so a header spelled here would defeat any test asserting the header
+        # is absent.)
+        pyfuncitem._eval_threshold_reported = True  # type: ignore[attr-defined]
         raise AssertionError(
             f"eval_row.id={row_id!r} score={score.score:.3f} "
             f"< threshold={spec.threshold:.3f}\n"
@@ -255,50 +272,75 @@ def _ensure_judge_score_runs(request: pytest.FixtureRequest):
     request.getfixturevalue("judge_score")
 
 
+@pytest.hookimpl(wrapper=True)
 def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo[Any]):
-    """Attach eval context to the failure report if present.
+    """Attach the eval context to a failing eval test's report.
 
-    pytest's default failure output points at the AssertionError raised
-    in `_enforce_threshold`, which already carries the row id + score +
-    reasoning in its message. This hook is a belt-and-braces step: if
-    something *else* in the test path raised (a judge timeout, a parse
-    error, an answer-source failure), the row id and the response are
-    still surfaced.
+    This hook exists for the failure paths the threshold assertion does *not*
+    cover — a raising answer source, a judge timeout, a `JudgeParseError`, a
+    plain `assert` in the user's own body. Before #222 it surfaced nothing on
+    any of them, for three independent reasons, each sufficient on its own:
+
+    - It returned unless ``call.when == "call"``. But ``_ensure_judge_score_runs``
+      is autouse and pulls ``judge_score`` via ``getfixturevalue``, so the
+      answer source and the judge always run in **setup** — the hook returned
+      before doing anything on precisely the paths it was written for. Both
+      phases are handled now; teardown still isn't, because nothing
+      eval-specific runs there.
+    - The row / response / score were stashed only *after* both calls returned,
+      so the failure paths had nothing to read. The fixture now stashes each
+      value at the moment it becomes known.
+    - The block it built was assigned to ``item._eval_failure_extra`` and read
+      by nothing: the ``pytest_runtest_logreport`` consumer its comment pointed
+      at had an empty body. (A mypy pass had even hung a
+      ``# type: ignore[attr-defined]`` on that assignment — the attribute was
+      type-checked but never read.) Both the stash and the empty consumer are
+      gone; the block goes straight onto the report.
+
+    ``longrepr.addsection`` rather than ``report.sections``: the latter is the
+    captured-output channel and the terminal reporter filters it by
+    ``--show-capture``, so ``--show-capture=no`` (or ``=stdout``) would drop
+    this block and quietly restore the bug. ``ExceptionRepr.toterminal`` writes
+    its own sections unconditionally, right under the traceback.
     """
-    if call.when != "call":
-        return
-    if not hasattr(item, "_eval_row"):
-        return
-    if call.excinfo is None:
-        return
-    extra = [
-        "",
-        "Eval context:",
-        f"  row_id:           {item._eval_row.id}",
-        f"  expected outputs: {[eo.value for eo in item._eval_row.expected_outputs]}",
+    report = yield
+    if call.when not in ("setup", "call"):
+        return report
+    if call.excinfo is None or not hasattr(item, "_eval_row"):
+        return report
+    # The threshold assertion renders these same fields in its own message.
+    if getattr(item, "_eval_threshold_reported", False):
+        return report
+    # `longrepr` is a plain string for some outcomes (and None for passes);
+    # only the exception-repr forms carry `addsection`.
+    add_section = getattr(report.longrepr, "addsection", None)
+    if add_section is None:
+        return report
+    add_section("Eval context", _eval_context_block(item))
+    return report
+
+
+def _eval_context_block(item: pytest.Item) -> str:
+    """Render whatever eval context the item has reached, one field per line.
+
+    Deliberately partial: an answer-source failure has a row and no response, a
+    judge failure has a row and a response and no score. Reporting the subset
+    that exists is the whole point — the caller knows which stage it died in
+    from the traceback, and needs the inputs that got it there.
+    """
+    # `_eval_row` is checked by the caller, not here, so it still needs the
+    # escape hatch; the two below do not — mypy narrows `item` through the
+    # `hasattr` guards and flags a redundant ignore under `warn_unused_ignores`.
+    row = item._eval_row  # type: ignore[attr-defined]
+    lines = [
+        f"row_id:           {row.id}",
+        f"input:            {row.input!r}",
+        f"expected outputs: {[eo.value for eo in row.expected_outputs]}",
     ]
     if hasattr(item, "_eval_response"):
-        extra.append(f"  actual response:  {item._eval_response!r}")
+        lines.append(f"actual response:  {item._eval_response!r}")
     if hasattr(item, "_eval_judge_score"):
         score = item._eval_judge_score
-        extra.append(f"  judge score:      {score.score:.3f}")
-        extra.append(f"  judge reasoning:  {score.reasoning!r}")
-    # The hook can't directly edit the report (it hasn't been built yet
-    # at when=="call"); stash the extra block on the item so the
-    # `pytest_runtest_logreport` consumer below can attach it.
-    # `_eval_failure_extra` is a dynamic attribute stashed on the pytest
-    # Item for the logreport consumer to read; pytest's Item type doesn't
-    # declare it (documented monkey-patch plugin pattern).
-    item._eval_failure_extra = "\n".join(extra)  # type: ignore[attr-defined]
-
-
-def pytest_runtest_logreport(report: pytest.TestReport):
-    """Hook reserved for non-assertion failure paths.
-
-    Threshold violations raise an AssertionError whose message already
-    contains row_id / expected / actual / reasoning, so pytest's default
-    longrepr renders them. This hook is left in place as a known
-    extension point for future paths (judge timeouts, answer-source
-    failures) that may want to enrich the report.
-    """
-    return
+        lines.append(f"judge score:      {score.score:.3f}")
+        lines.append(f"judge reasoning:  {score.reasoning!r}")
+    return "\n".join(lines)

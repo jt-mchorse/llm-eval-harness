@@ -33,7 +33,7 @@ Chronological log of work sessions. Most recent first below the divider.
 
 ## 2026-05-11 — Issue #1: Golden dataset JSONL format
 
-**Duration:** ~55 min · **Branch:** `session/2026-05-11-issue-01` · **PR:** [#8](https://github.com/jt-mchorse/llm-eval-harness/pull/8) (draft)
+**Duration:** ~18 min · **Branch:** `session/2026-05-11-issue-01` · **PR:** [#8](https://github.com/jt-mchorse/llm-eval-harness/pull/8) (draft)
 
 - Stood up the `eval_harness` package skeleton with PEP 621 / hatchling and a deliberately dependency-free dataset layer so it can be imported in CI sandboxes and downstream repos without dragging in API SDKs.
 - Shipped `load_jsonl` + `Dataset.dump_jsonl` + `DatasetLoadError(line_no, reason)` plus a hand-rolled validator (no jsonschema dep). Canonical dump form (sorted keys, compact separators) gives byte-equal round trip on well-formed input.
@@ -124,7 +124,7 @@ Chronological log of work sessions. Most recent first below the divider.
 **Next session:** `priority:med` issues remain (#4 drift detection on production traffic samples). Or another repo per the multi-issue loop.
 
 ## 2026-05-16 — Issue #4: Drift detection on production traffic samples
-**Duration:** ~55 min · **Branch:** `session/2026-05-16-1937-issue-4`
+**Duration:** ~18 min · **Branch:** `session/2026-05-16-1937-issue-4`
 
 - Shipped `eval_harness/drift.py` — three drift axes scored independently and reported in one HTML page:
   1. **Length** — char-count histogram bucketed by `_LENGTH_BUCKETS`.
@@ -998,7 +998,7 @@ Fixed the README line to the real output (no fabricated numbers — copied from 
 **Next session:** the `py.typed` lens is now closed for the two repos that matter (lco, leh — the only two Python packages imported as libraries by siblings). Do NOT PR the marker for ems/vsas/prs/chunking — cosmetic there, not consumer-biting, would be sibling-churn.
 
 ## 2026-07-07 — Issue #148: Non-strict mypy gate for eval_harness
-**Duration:** ~55 min · **Branch:** `session/2026-07-07-0308-issue-148`
+**Duration:** ~18 min · **Branch:** `session/2026-07-07-0308-issue-148`
 
 - Added a non-strict `mypy` gate (`[tool.mypy]` in `pyproject.toml`, `mypy` in the `dev` extra, a step in the `ci.yml` lint job, and `tests/test_mypy_clean.py` locking it) so the annotations shipped via the #146 `py.typed` marker can't silently drift from the code.
 - Triaged all 7 pre-existing errors with real fixes: renamed a k-means loop variable in `drift.py` reused for both a centroid vector and a cluster index; annotated the optional `judge_score` as `JudgeScore | None` and guarded `row.id` against a `None` row (removing a latent `AttributeError`) in `pytest_plugin.py`; `# type: ignore`'d the genuinely-dynamic `_eval_failure_extra` monkey-patch; and dropped a now-redundant import ignore in `judge.py`.
@@ -2166,3 +2166,16 @@ removed the import - which is a trap my own notes already warn about; grep the
 summary line. And a stash-plus-restore loop nearly lost one file's edit, because I
 had backed up three of the four files I touched. Diffing the stash against the
 working tree before dropping it is what caught it.
+
+## 2026-08-31 — Issue #222: the plugin's failure-context hook never fired
+**Duration:** ~18 min · **Branch:** `session/2026-08-31-0711-issue-222`
+
+- `pytest_runtest_makereport`'s docstring promised that when something other than the threshold assertion raised — a judge timeout, a parse error, an answer-source failure — "the row id and the response are still surfaced". Ran it: it surfaced nothing, on all three. Three independent causes, each sufficient on its own. It returned unless the failure was in the `call` phase, but the autouse `_ensure_judge_score_runs` fixture pulls `judge_score` via `getfixturevalue`, so the answer source and the judge always run in **setup**. The row, response and score were stashed only after *both* calls returned, so the failure paths had nothing to read — a judge failure discarded a response it had already computed. And the block it built went to `item._eval_failure_extra`, whose named consumer `pytest_runtest_logreport` had an empty body.
+- Fixed all three: each value is stashed the moment it becomes known, the hook handles setup and call, and the block is attached with `longrepr.addsection` — not `report.sections`, which is the captured-output channel and gets filtered by `--show-capture=no`, a common CI flag that would have quietly restored the bug. There's a test pinning that. The threshold path is unchanged and suppressed from the new section, keyed off a flag set at the raise site rather than off `AssertionError`, because a user's own `assert` in the body is an `AssertionError` too and should get the block.
+- 7 new tests, 1128 → 1136 green. Each of the four reverts (phase widening, stash ordering, write-only stash, threshold suppression) turns a distinct subset red.
+
+**Why this work, this session:** all three pre-existing open issues in this repo are gated on a JT decision (#177 needs the maintainer's intended calibration breakdown; #212 and #220 each need a recorded contract decision before an arm can be written), so the session hunted instead. `pytest_plugin.py` is 304 lines with essentially no prior issue traffic while `drift`, `cli`, `judge` and `comment` each carry 50+ — the module nobody has filed against is the unread one, not the correct one.
+
+**Open questions / blockers:** none for this issue. A follow-up (#223) is filed and deferred: an eval-marked test with a no-arg body isn't parametrized at all and dies on `fixture 'eval_row' not found`. It needs a small contract decision (illegal, or supported) rather than a drive-by.
+
+**Next session:** #223 if a decision is taken; otherwise the repo's backlog stays JT-gated.
