@@ -2179,3 +2179,34 @@ working tree before dropping it is what caught it.
 **Open questions / blockers:** none for this issue. A follow-up (#223) is filed and deferred: an eval-marked test with a no-arg body isn't parametrized at all and dies on `fixture 'eval_row' not found`. It needs a small contract decision (illegal, or supported) rather than a drive-by.
 
 **Next session:** #223 if a decision is taken; otherwise the repo's backlog stays JT-gated.
+
+## 2026-09-01 — Issue #223: an eval body that doesn't name `eval_row`
+**Branch:** `session/2026-09-01-0710-issue-223`
+
+- The pytest plugin only parametrized `eval_row` when the test body already
+  named it, so the marker's own promise — one item per dataset row, "regardless
+  of body signature" — was false for anything else. The issue reported it as a
+  no-arg-body problem; a six-shape variant table run through `pytester` showed
+  the real rule is "`eval_row` never reached the fixture closure", which also
+  breaks `def test(tmp_path)` and `def test(**kwargs)`. All three collected one
+  unparametrized item and then died in setup with a message naming the plugin's
+  internals rather than anything the user wrote.
+- Fixed by widening the closure before parametrizing, so every shape now
+  collects one item per row, keyed by row id, and is scored by the judge.
+  Recorded as D-019 — the issue had leaned the other way (fail at collection),
+  on the grounds that always parametrizing "needs care"; measuring it showed it
+  works on both ends of the supported pytest range, so the contract got wider
+  instead of the API getting narrower.
+- The variant table ships with an arm that guards the table itself: if someone
+  trims it back to the shapes that always worked, that arm goes red rather than
+  the suite quietly covering nothing.
+
+**Why this work, this session:** #223 was split out of #222 last run and
+deferred rather than ridden along; it was the only unblocked, non-decision-
+revisit issue in the repo, and its `priority:low` label was a scoping judgement,
+not a severity one.
+
+**Open questions / blockers:** none.
+
+**Next session:** #220 (judge-seam remote-failure contract) still needs a
+written decision before it can be worked.

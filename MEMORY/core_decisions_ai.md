@@ -163,3 +163,14 @@
   reversibility: cheap
   related_issues: [#215, #213, #210]
   superseded_by: null
+
+- id: D-019
+  date: 2026-09-01
+  decision: eval_marker_always_parametrizes_eval_row_by_widening_the_fixture_closure_rather_than_rejecting_bodies_that_omit_it
+  rationale: the_markers_documented_contract_is_one_item_per_dataset_row_regardless_of_body_signature_and_the_in_fixturenames_guard_made_that_true_only_for_bodies_that_name_the_row_measured_population_is_wider_than_the_no_arg_body_the_issue_titled_def_t_and_def_t_tmp_path_and_def_t_kwargs_all_collect_ONE_unparametrized_item_and_die_in_setup_with_fixture_eval_row_not_found_while_def_t_judge_score_escapes_only_because_judge_score_DECLARES_eval_row_appending_the_name_to_metafunc_fixturenames_before_parametrize_makes_all_six_shapes_collect_two_items_and_pass_verified_on_pytest_8_4_2_AND_9_0_3_the_two_ends_of_the_pytest_gte_8_0_dev_floor
+  alternatives_rejected: [fail_at_collection_with_a_message_naming_eval_row_which_is_what_223_leaned_to_but_it_narrows_the_contract_and_makes_the_autouse_fixtures_regardless_of_body_signature_claim_permanently_false, define_a_real_eval_row_fixture_which_would_make_a_no_arg_body_run_ONCE_not_once_per_row_and_so_reintroduces_the_inert_marker_d013_exists_to_prevent, leave_it_and_document_that_bodies_must_name_eval_row]
+  measured: "six-shape variant table in tests/test_pytest_plugin_body_signatures.py: before, 3 of 6 shapes collect 1 item and error in setup; after, all 6 collect 2 items keyed by row id and pass, and all 6 fail loudly against a 0.0-scoring backend. Reverting the two-line change turns exactly those 6 assertions red."
+  reversibility: cheap
+  related_issues: ["#223", "#222"]
+  extends: D-012   # the pytest_generate_tests seam; this widens what it parametrizes, it does not move the seam
+  superseded_by: null
