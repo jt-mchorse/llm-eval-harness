@@ -162,6 +162,19 @@ collection phase, so failures count as test failures rather than
 test errors — which means the standard pytest output formats (xunit,
 junit) preserve the per-row signal that a CI dashboard will want.
 
+"Once per dataset row" holds for *any* body signature, including one that
+takes no arguments (D-019). The parametrize used to be conditional on
+`eval_row` already appearing in `metafunc.fixturenames`, which made the
+contract true only for bodies that named the row: `def t()`, `def t(tmp_path)`
+and `def t(**kw)` each collected **one** unparametrized item and then died in
+setup with `fixture 'eval_row' not found`, because the autouse fixture that
+guarantees the judge runs resolves `judge_score`, which declares `eval_row` —
+and nothing ever *defines* an `eval_row` fixture; it exists only as a
+parametrized value. `def t(judge_score)` worked only incidentally, off that
+declaration. The plugin now widens the item's fixture closure before
+parametrizing, so the closure — not the signature — is what the marker
+depends on, and pytest still passes a body only the arguments it names.
+
 ## Layer 6 — Sticky comment + GitHub Action (#6)
 
 ```mermaid

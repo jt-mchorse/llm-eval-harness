@@ -325,3 +325,47 @@ documents.
 **Reversibility.** Cheap. One check at one choke point, and the "before"
 behaviour is a documented, measured variant table in
 `tests/test_drift_unencodable_inputs.py`.
+
+## D-019 — A no-arg eval body is supported, not illegal (2026-09-01)
+**Decision:** `pytest_generate_tests` parametrizes `eval_row` for **every**
+eval-marked test, widening the item's fixture closure first when the body does
+not already pull the name in — rather than failing collection for bodies that
+omit it.
+
+**Why:** The marker's contract, written in three places, is "one item per
+dataset row… regardless of body signature". The old guard —
+`if "eval_row" in metafunc.fixturenames` — honoured that only for bodies that
+named the row. #223 reported it as a no-arg-body problem, but the real predicate
+was never "the body is empty", it was "`eval_row` never reached the closure":
+`def test_demo()`, `def test_demo(tmp_path)` and `def test_demo(**kwargs)` all
+collect **one** unparametrized item and then die in setup with
+`fixture 'eval_row' not found`, because the autouse `_ensure_judge_score_runs`
+resolves `judge_score`, which declares `eval_row`, and nothing ever *defines*
+an `eval_row` fixture — it exists only as a parametrized value.
+`def test_demo(judge_score)` escapes only incidentally, because that
+declaration is what drags the name into the closure.
+
+The issue leaned toward failing at collection, on the grounds that always
+parametrizing "needs care". That was worth measuring rather than assuming:
+appending the name to `metafunc.fixturenames` before `metafunc.parametrize`
+turns all six shapes into two passing items on **pytest 8.4.2 and 9.0.3** — the
+two ends of the `pytest>=8.0` dev floor — and pytest passes only the funcargs a
+body's signature names, so a body that ignores the row is unaffected at call
+time. Given that it works, supporting the shape beats outlawing it: failing
+collection would make the marker's own "regardless of body signature" claim
+permanently false and force boilerplate on a user who wants a row-scoped eval
+plus a `tmp_path` and nothing else.
+
+**Alternatives considered:**
+- *Fail at collection with a message naming `eval_row`* — rejected: cheap and
+  honest, but it narrows a documented contract to avoid a two-line change that
+  measurement showed is available.
+- *Define a real `eval_row` fixture* — rejected: a no-arg body would then run
+  **once**, not once per row, which is the inert-marker failure D-013's autouse
+  fixture exists to prevent.
+- *Document that bodies must name `eval_row`* — rejected: same narrowing,
+  without even a collection-time error to enforce it.
+
+**Reversibility:** Cheap. Two lines in `pytest_generate_tests`, and the
+before/after behaviour of all six shapes is a measured variant table in
+`tests/test_pytest_plugin_body_signatures.py`.

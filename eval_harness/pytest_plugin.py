@@ -21,7 +21,9 @@ Usage::
 
 The plugin parametrizes the marked test once per row in the dataset (so
 `pytest -v` shows one item per example, with row id as the parametrize
-label). For each row it:
+label). This holds for *any* body signature — including one that takes no
+arguments at all — because the plugin widens the item's fixture closure to
+include `eval_row` before parametrizing it (#223, D-019). For each row it:
 
 1. Calls the configured ``answer_source.answer(example)`` to get the
    candidate response.
@@ -144,13 +146,34 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
             f"@pytest.mark.eval points at an empty dataset: {spec.dataset_path}"
         )
 
-    if "eval_row" in metafunc.fixturenames:
-        metafunc.parametrize("eval_row", examples, ids=[ex.id for ex in examples], scope="function")
-    if "judge_score" in metafunc.fixturenames:
-        # `judge_score` is computed inside the test via the eval_row fixture;
-        # this parametrize is just to make pytest aware the fixture varies.
-        # The actual scoring happens in the autouse fixture below.
-        pass
+    # Parametrize unconditionally, widening the fixture closure first if the
+    # body does not already pull `eval_row` in (#223, D-019). The guard used to
+    # be `if "eval_row" in metafunc.fixturenames`, which made the marker's
+    # documented contract — one item per dataset row, "regardless of body
+    # signature" — hold only for bodies that happen to name the row. It is not
+    # just the empty body: `def t()`, `def t(tmp_path)` and `def t(**kw)` all
+    # collected ONE unparametrized item and then died in setup with
+    # `fixture 'eval_row' not found`, because `_ensure_judge_score_runs` is
+    # autouse and pulls `judge_score`, which declares `eval_row` — and nothing
+    # ever *defines* an `eval_row` fixture; it exists only as a parametrized
+    # value. `def t(judge_score)` escaped only because that declaration puts
+    # `eval_row` in the closure for it. So the real predicate was never "the
+    # body is empty", it was "`eval_row` reached the closure".
+    #
+    # `metafunc.parametrize` refuses an argname absent from `fixturenames`
+    # ("uses no argument 'eval_row'"), so the name is appended first.
+    # `fixturenames` *is* the item's closure list, so appending both satisfies
+    # that check and makes the value resolvable by the autouse fixture's
+    # `getfixturevalue("judge_score")`. Verified against pytest 8.4.2 and 9.0.3
+    # — the two ends of the `pytest>=8.0` dev floor — in
+    # tests/test_pytest_plugin_body_signatures.py, which drives every shape
+    # through `pytester` rather than reasoning about the closure.
+    #
+    # A body that does not accept the argument is unaffected at call time:
+    # pytest passes only the funcargs named in the function's signature.
+    if "eval_row" not in metafunc.fixturenames:
+        metafunc.fixturenames.append("eval_row")
+    metafunc.parametrize("eval_row", examples, ids=[ex.id for ex in examples], scope="function")
 
 
 @pytest.fixture
@@ -264,6 +287,16 @@ def _ensure_judge_score_runs(request: pytest.FixtureRequest):
     skip the judge entirely — the marker would be inert. Triggering the
     fixture via ``getfixturevalue`` makes the scoring run for every
     eval-marked test regardless of body signature.
+
+    "Regardless of body signature" was aspirational until #223: this fixture
+    resolves ``judge_score``, which declares ``eval_row``, and ``eval_row`` was
+    only ever *supplied* to bodies that named it (directly or through
+    ``judge_score``). Every other shape — no arguments, an unrelated fixture,
+    ``**kwargs`` — reached this line and raised ``fixture 'eval_row' not
+    found``, naming the plugin's internals rather than anything the user wrote.
+    ``pytest_generate_tests`` now widens the closure before parametrizing, so
+    the claim holds for every shape; see
+    tests/test_pytest_plugin_body_signatures.py.
     """
     marker = request.node.get_closest_marker("eval")
     if marker is None:

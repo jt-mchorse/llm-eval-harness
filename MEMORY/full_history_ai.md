@@ -2558,3 +2558,27 @@ context_for_next_session:
 decisions_made: []
 followups: ["#223"]
 ---
+
+---
+session: 2026-09-01T07:10Z
+issue: 223
+focus: the_eval_marker_parametrizes_every_body_signature_not_only_the_ones_that_name_eval_row
+phase: night_session_multi_issue_loop_issue_1
+delta:
+  files_changed: 6
+  tests_added: 13
+  suite: 1136_to_1150_green   # 13 new + 1 from test_source_representability's discovered file walk
+measured:
+  population: "six body shapes driven through pytester. BEFORE: def t(eval_row, judge_score), def t(eval_row), def t(judge_score) collect 2 items and pass; def t(), def t(tmp_path), def t(**kw) collect ONE unparametrized item and error in setup with fixture eval_row not found. AFTER: all six collect 2 items keyed by row id and pass."
+  cross_version: "bug reproduces and fix holds on pytest 8.4.2 (throwaway venv, pytest>=8,<9) AND 9.0.3 (repo venv) - the two ends of the pytest>=8.0 dev floor"
+  anti_vacuous: "reverting the two-line parametrize change turns exactly 6 assertions red - the 3 broken shapes x 2 tests - and nothing else"
+context_for_next_session:
+  - THE_ISSUE_TITLE_NAMED_ONE_MEMBER_OF_THE_CLASS_AND_THE_VARIANT_TABLE_FOUND_THE_REST_223_was_filed_as_a_NO_ARG_body_problem_and_the_real_predicate_is_eval_row_NEVER_REACHED_THE_FIXTURE_CLOSURE_which_also_covers_def_t_tmp_path_and_def_t_kwargs_BEFORE_FIXING_A_BUG_DESCRIBED_BY_ONE_INPUT_ENUMERATE_THE_INPUT_SPACE_the_table_took_ten_minutes_and_doubled_the_population
+  - AND_ONE_SHAPE_PASSED_FOR_THE_WRONG_REASON_def_t_judge_score_works_ONLY_because_the_judge_score_fixture_DECLARES_eval_row_Example_in_its_signature_which_drags_the_name_into_the_closure_A_GREEN_CASE_ADJACENT_TO_A_RED_ONE_IS_WORTH_EXPLAINING_because_the_explanation_IS_the_rule
+  - I_MEASURED_THE_OPTION_THE_ISSUE_TALKED_ITSELF_OUT_OF_223_leaned_to_FAIL_AT_COLLECTION_because_always_parametrize_NEEDS_CARE_and_needs_care_is_not_a_measurement_appending_to_metafunc_fixturenames_before_parametrize_works_on_BOTH_ends_of_the_supported_pytest_range_SO_THE_CONTRACT_GOT_WIDER_INSTEAD_OF_THE_API_GETTING_NARROWER_read_your_own_deferral_reasons_as_hypotheses_not_findings
+  - THE_ANTI_VACUOUS_ARM_THIS_TIME_GUARDS_THE_TABLE_NOT_THE_CODE_test_the_table_covers_the_shapes_that_used_to_break_asserts_no_arguments_unrelated_fixture_only_and_kwargs_only_are_STILL_IN_the_variant_list_and_still_omit_eval_row_because_a_table_trimmed_back_to_the_shapes_that_always_worked_KEEPS_PASSING_WHILE_COVERING_NOTHING
+  - THE_TEST_COUNT_DELTA_WAS_14_FOR_13_NEW_TESTS_AND_THE_EXTRA_ONE_IS_GOOD_NEWS_test_source_representability_py_went_67_to_68_because_it_WALKS_the_source_tree_rather_than_listing_it_DIFF_THE_PER_FILE_COLLECT_ONLY_COUNTS_when_a_delta_does_not_add_up_it_is_either_a_discovered_population_working_or_a_collection_error_hiding
+  - MEMORY_core_decisions_ai_md_STILL_FAILS_yaml_safe_load_ON_D_011s_related_issues_bracket_hash_7_unquoted_pre_existing_and_JT_GATED_per_D_010_scope_new_blocks_only_my_D_019_block_parses_in_isolation_DO_NOT_DRIVE_BY_FIX_THE_OLD_ONES
+decisions_made: [D-019]
+followups: []
+---
