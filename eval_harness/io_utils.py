@@ -47,6 +47,42 @@ from typing import Any
 _MAX_TEMP_BASE_BYTES = 200
 
 
+def _name_bytes(base: str) -> int:
+    """Length of *base* in the bytes the filesystem actually sees.
+
+    `os.fsencode`, not `base.encode("utf-8")` (#226). Both halves of the
+    comment above are true and the old implementation still counted the wrong
+    bytes: NAME_MAX limits the bytes handed to the kernel, which is
+    `os.fsencode` — `sys.getfilesystemencoding()` with
+    `sys.getfilesystemencodeerrors()`, i.e. `surrogateescape` on POSIX.
+
+    That handler is why the distinction bites rather than being pedantry. A
+    path byte that is not valid UTF-8 arrives in Python as a lone surrogate in
+    `U+DC80..U+DCFF`, and strict `str.encode("utf-8")` refuses to encode it —
+    so `_cap_base_for_temp` used to raise `UnicodeEncodeError` on a
+    destination the OS can perfectly well name, *before* reaching the length
+    question. `sys.argv` is decoded with the same handler, so
+    `--out $'report\\xff.html'` is enough to produce one; so is a name read
+    back off a filesystem that holds non-UTF-8 bytes.
+
+    The consequence was not a clean refusal. On a byte-transparent filesystem
+    (ext4 — the CI and Action runner) the write would have *succeeded*. On a
+    UTF-8-validating one (APFS) it fails either way, but the class changes:
+    `OSError: [Errno 92] Illegal byte sequence`, which is what a plain
+    `Path.write_text` of that target raises and what every write seam in this
+    package catches, became `UnicodeEncodeError`, a `ValueError` subclass that
+    `drift.cli` does not catch at all and that `cli._write_output` reports as
+    *content* that "is not encodable as UTF-8" — sending the operator to look
+    at their dataset over a byte in their filename.
+
+    `os.fsencode` never raises: it uses `surrogateescape` on POSIX and
+    `surrogatepass` on Windows, so every `str` a `Path` can hold round-trips.
+    For a name that is valid UTF-8 it returns exactly the old number, so the
+    budget is unchanged for every name that worked before.
+    """
+    return len(os.fsencode(base))
+
+
 # --- representability (#213, #215) ------------------------------------------
 #
 # Every writer listed in this module's docstring encodes to UTF-8, so a string
@@ -175,10 +211,10 @@ def find_unrepresentable(
 
 
 def _cap_base_for_temp(base: str) -> str:
-    if len(base.encode("utf-8")) <= _MAX_TEMP_BASE_BYTES:
+    if _name_bytes(base) <= _MAX_TEMP_BASE_BYTES:
         return base
     out = base
-    while out and len(out.encode("utf-8")) > _MAX_TEMP_BASE_BYTES:
+    while out and _name_bytes(out) > _MAX_TEMP_BASE_BYTES:
         out = out[:-1]
     return out
 
