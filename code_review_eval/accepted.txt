@@ -1,0 +1,26 @@
+# Verified defect rows - each diff read before acceptance.
+cr_defect_01   # filter(None, proxyOverride) removed -> empty strings match everything
+cr_defect_02   # utf-8-sig BOM handling removed -> BOM leaks into decoded text
+cr_defect_04   # prefix.lower() dropped -> adapter lookup becomes case-sensitive
+cr_defect_05   # empty-header guard removed -> parse_header_links mishandles ""
+cr_defect_06   # getattr guard removed -> AttributeError on Python 2.6 ssl
+cr_defect_09   # "if length is not None" -> "if length" -> length==0 mishandled
+cr_defect_10   # super_len early-returns -> partially read files report wrong length
+cr_defect_11   # proxy scheme+host selection collapsed to scheme only
+cr_defect_16   # self.pos = None reset removed -> stale file position reused
+cr_defect_24   # cookie merge reverts to copy()+set_cookie -> crash on plain dict
+cr_defect_33   # ">= max_redirects" -> "> max_redirects" -> off-by-one
+cr_defect_35   # sys.path hack reintroduced -> breaks chardet on Python 3
+# Clean rows - documentation-only, nothing to flag. False-positive probes.
+cr_clean_01
+cr_clean_02
+cr_clean_03
+cr_clean_04
+cr_clean_05
+cr_clean_06
+cr_clean_07
+cr_clean_08
+cr_clean_09
+cr_clean_10
+cr_clean_11
+cr_clean_12
