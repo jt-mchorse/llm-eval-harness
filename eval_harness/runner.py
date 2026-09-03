@@ -345,6 +345,15 @@ class DeltaReport:
         documented default. ``KeyError`` only surfaces per-row from
         ``RowDelta.from_json`` (``example_id`` / ``status``).
 
+        Permissive about *presence*, strict about *type*: the three
+        string-typed top-level fields (``current_run_id``,
+        ``baseline_run_id``, ``suite``) each default when the key is
+        missing and each raise ``ValueError`` when present-but-not-a-string,
+        because a ``None`` that reaches a renderer is a raw ``TypeError`` /
+        ``AttributeError`` at exit 1 rather than the exit-2 contract
+        ``cli._run_comment`` honors. ``suite`` was the last one without
+        that check (#228).
+
         ``threshold_drop`` and ``summary["mean_delta"]`` (when present
         and non-null) are rejected when non-finite, mirroring the
         run-data finiteness contract in ``load_run_result_from_json``
@@ -441,6 +450,26 @@ class DeltaReport:
                     f"{_label} must be a string when present; got {_val!r} — a null value "
                     f"crashes the delta renderer's {_label}[:8] slice with a raw TypeError"
                 )
+        # `suite` is the third top-level string read with a bare `.get` default, and
+        # until #228 it was the only field in this classmethod with no type check at
+        # all. `RowDelta.from_json`'s `status` guard below already states the
+        # mechanism exactly — "a free-form string that lands in two renderers ...
+        # would raise a raw AttributeError (`md_table_cell(...).replace`) ... at exit
+        # 1, breaking the exit-2 contract the comment path honors" — and every word
+        # of it is true one level up:
+        #   `comment.render_delta_markdown`  `md_code_span(report.suite)` -> AttributeError
+        #   `runner.render_delta_ascii`      f"(suite={report.suite}, ...)" -> renders
+        #                                    a header naming the suite `None`
+        # Two different failures, one cause, so the guard belongs here at the parse
+        # boundary rather than in either renderer. `_run_comment` translates this
+        # ValueError to the clean exit-2 line.
+        suite = payload.get("suite", "(unknown)")
+        if not isinstance(suite, str):
+            raise ValueError(
+                f"suite must be a string when present; got {suite!r} — a null/non-string "
+                "suite crashes the markdown renderer's code span with a raw AttributeError "
+                "and renders as a literal 'None' suite name in the ascii header"
+            )
         # A present-but-non-array `rows` (a JSON number/object/bool) reaches the
         # `for r in ...` and raises a raw `TypeError: not iterable` (exit 1) —
         # the same nested-container sibling as `summary` above. Reject it as a
@@ -454,7 +483,7 @@ class DeltaReport:
         return cls(
             current_run_id=current_run_id,
             baseline_run_id=baseline_run_id,
-            suite=payload.get("suite", "(unknown)"),
+            suite=suite,
             threshold_drop=threshold_drop,
             rows=tuple(RowDelta.from_json(r) for r in rows_raw),
             summary=summary,
