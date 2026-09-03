@@ -1,0 +1,115 @@
+{
+  "baseline_run_id": "tokensmith-control-run",
+  "current_run_id": "tokensmith-treatment-run",
+  "rows": [
+    {
+      "baseline_score": 0.1,
+      "current_score": 1.0,
+      "delta": 0.9,
+      "example_id": "ts_01",
+      "flagged": false,
+      "status": "improved"
+    },
+    {
+      "baseline_score": 0.1,
+      "current_score": 1.0,
+      "delta": 0.9,
+      "example_id": "ts_02",
+      "flagged": false,
+      "status": "improved"
+    },
+    {
+      "baseline_score": 0.1,
+      "current_score": 1.0,
+      "delta": 0.9,
+      "example_id": "ts_03",
+      "flagged": false,
+      "status": "improved"
+    },
+    {
+      "baseline_score": 0.1,
+      "current_score": 1.0,
+      "delta": 0.9,
+      "example_id": "ts_04",
+      "flagged": false,
+      "status": "improved"
+    },
+    {
+      "baseline_score": 0.1,
+      "current_score": 1.0,
+      "delta": 0.9,
+      "example_id": "ts_05",
+      "flagged": false,
+      "status": "improved"
+    },
+    {
+      "baseline_score": 0.1,
+      "current_score": 1.0,
+      "delta": 0.9,
+      "example_id": "ts_06",
+      "flagged": false,
+      "status": "improved"
+    },
+    {
+      "baseline_score": 1.0,
+      "current_score": 1.0,
+      "delta": 0.0,
+      "example_id": "ts_07",
+      "flagged": false,
+      "status": "unchanged"
+    },
+    {
+      "baseline_score": 0.1,
+      "current_score": 1.0,
+      "delta": 0.9,
+      "example_id": "ts_08",
+      "flagged": false,
+      "status": "improved"
+    },
+    {
+      "baseline_score": 0.15,
+      "current_score": 1.0,
+      "delta": 0.85,
+      "example_id": "ts_09",
+      "flagged": false,
+      "status": "improved"
+    },
+    {
+      "baseline_score": 0.1,
+      "current_score": 1.0,
+      "delta": 0.9,
+      "example_id": "ts_10",
+      "flagged": false,
+      "status": "improved"
+    },
+    {
+      "baseline_score": 0.0,
+      "current_score": 1.0,
+      "delta": 1.0,
+      "example_id": "ts_11",
+      "flagged": false,
+      "status": "improved"
+    },
+    {
+      "baseline_score": 1.0,
+      "current_score": 1.0,
+      "delta": 0.0,
+      "example_id": "ts_12",
+      "flagged": false,
+      "status": "unchanged"
+    }
+  ],
+  "suite": "tokensmith-control",
+  "summary": {
+    "mean_delta": 0.7541666666666667,
+    "mean_score_baseline": 0.24583333333333335,
+    "mean_score_current": 1.0,
+    "n_flagged": 0,
+    "n_improved": 10,
+    "n_new": 0,
+    "n_regressed": 0,
+    "n_removed": 0,
+    "n_unchanged": 2
+  },
+  "threshold_drop": 0.1
+}

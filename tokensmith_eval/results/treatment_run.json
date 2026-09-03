@@ -1,0 +1,73 @@
+{
+  "dataset_version": "tokensmith-onsystem-v1",
+  "git_sha": "a18f19b737b9ab6c80d31eeca572d35f1f03f304",
+  "judge_kappa": null,
+  "judge_model": "claude-opus-4-8 (this session, replayed)",
+  "mean_score": 1.0,
+  "n_rows": 12,
+  "rows": [
+    {
+      "example_id": "ts_01",
+      "reasoning": "Correct semantic token action.primary, exact value #2557c7.",
+      "score": 1.0
+    },
+    {
+      "example_id": "ts_02",
+      "reasoning": "Correct surface.raised #f7f8fa for a raised card.",
+      "score": 1.0
+    },
+    {
+      "example_id": "ts_03",
+      "reasoning": "Correct text.default #161a21.",
+      "score": 1.0
+    },
+    {
+      "example_id": "ts_04",
+      "reasoning": "Correct text.muted #5b6472.",
+      "score": 1.0
+    },
+    {
+      "example_id": "ts_05",
+      "reasoning": "Correct action.destructive #c92c3d.",
+      "score": 1.0
+    },
+    {
+      "example_id": "ts_06",
+      "reasoning": "Correct border.default #c6ccd4.",
+      "score": 1.0
+    },
+    {
+      "example_id": "ts_07",
+      "reasoning": "Resolved the on-button collision to text.on-action (not surface.default) - right semantic token, value #ffffff.",
+      "score": 1.0
+    },
+    {
+      "example_id": "ts_08",
+      "reasoning": "Resolved the focus-ring collision to border.focus (not action.primary) - right semantic token, value #2557c7.",
+      "score": 1.0
+    },
+    {
+      "example_id": "ts_09",
+      "reasoning": "Correct space.inset.control 8px.",
+      "score": 1.0
+    },
+    {
+      "example_id": "ts_10",
+      "reasoning": "Correct space.inset.card 16px.",
+      "score": 1.0
+    },
+    {
+      "example_id": "ts_11",
+      "reasoning": "Correct radius.interactive 8px.",
+      "score": 1.0
+    },
+    {
+      "example_id": "ts_12",
+      "reasoning": "Correct type.size.md 16px.",
+      "score": 1.0
+    }
+  ],
+  "run_id": "tokensmith-treatment-run",
+  "started_at": "2026-07-14T21:02:40Z",
+  "suite": "tokensmith-treatment"
+}

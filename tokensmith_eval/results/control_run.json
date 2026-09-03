@@ -1,0 +1,73 @@
+{
+  "dataset_version": "tokensmith-onsystem-v1",
+  "git_sha": "a18f19b737b9ab6c80d31eeca572d35f1f03f304",
+  "judge_kappa": null,
+  "judge_model": "claude-opus-4-8 (this session, replayed)",
+  "mean_score": 0.24583333333333335,
+  "n_rows": 12,
+  "rows": [
+    {
+      "example_id": "ts_01",
+      "reasoning": "#2563eb is a near-miss for brand token #2557c7 - visually identical, off-system drift that ships unnoticed.",
+      "score": 0.1
+    },
+    {
+      "example_id": "ts_02",
+      "reasoning": "Pure #ffffff is surface.default, not the raised card value #f7f8fa; off-system for a raised surface.",
+      "score": 0.1
+    },
+    {
+      "example_id": "ts_03",
+      "reasoning": "#1f2937 (Tailwind gray-800) near-misses text.default #161a21; off-system.",
+      "score": 0.1
+    },
+    {
+      "example_id": "ts_04",
+      "reasoning": "#6b7280 near-misses text.muted #5b6472; off-system.",
+      "score": 0.1
+    },
+    {
+      "example_id": "ts_05",
+      "reasoning": "#dc2626 (Tailwind red) near-misses action.destructive #c92c3d; off-system.",
+      "score": 0.1
+    },
+    {
+      "example_id": "ts_06",
+      "reasoning": "#d1d5db near-misses border.default #c6ccd4; off-system.",
+      "score": 0.1
+    },
+    {
+      "example_id": "ts_07",
+      "reasoning": "#ffffff exactly equals text.on-action - a universal value the guess lands on; on-system, tokensmith adds nothing here.",
+      "score": 1.0
+    },
+    {
+      "example_id": "ts_08",
+      "reasoning": "#2563eb near-misses border.focus #2557c7; off-system drift.",
+      "score": 0.1
+    },
+    {
+      "example_id": "ts_09",
+      "reasoning": "Shorthand puts 8px on the vertical axis; requested horizontal padding is 16px here, not inset.control 8px - wrong axis, partial.",
+      "score": 0.15
+    },
+    {
+      "example_id": "ts_10",
+      "reasoning": "24px matches space.6 but the card role wants inset.card 16px; wrong-role value, off-system.",
+      "score": 0.1
+    },
+    {
+      "example_id": "ts_11",
+      "reasoning": "6px is not a Meridian radius value; interactive radius is 8px - fully off-system.",
+      "score": 0.0
+    },
+    {
+      "example_id": "ts_12",
+      "reasoning": "16px exactly equals type.size.md - a universal body size the guess lands on; on-system.",
+      "score": 1.0
+    }
+  ],
+  "run_id": "tokensmith-control-run",
+  "started_at": "2026-07-14T21:02:40Z",
+  "suite": "tokensmith-control"
+}
