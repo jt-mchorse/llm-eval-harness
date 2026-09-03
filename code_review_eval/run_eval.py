@@ -30,11 +30,11 @@ import json
 import sys
 from pathlib import Path
 
-import anthropic
-
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from eval_harness import (  # noqa: E402
+from eval_harness import (
+    connect,  # noqa: E402
     Judge,
     RunSpec,
     diff_runs,
@@ -48,21 +48,7 @@ HERE = Path(__file__).resolve().parent
 DATASET = HERE.parent / "fixtures" / "code_review_v1.jsonl"
 DB = HERE / "runs.sqlite3"
 
-MODEL = "claude-opus-5"
-# Server-side refusal fallbacks: on a safety refusal the request is rerouted by
-# category instead of returning unusable content mid-suite. Recommended default
-# for Opus 5, but the parameter only exists on newer SDKs - detect rather than
-# require, so this repo runs against whatever anthropic version is installed.
-FALLBACK_BETA = "server-side-fallback-2026-07-01"
-_SUPPORTS_FALLBACKS = "fallbacks" in inspect.signature(
-    anthropic.Anthropic(api_key="probe").beta.messages.create
-).parameters
-
-
-def _extra_kwargs() -> dict:
-    if _SUPPORTS_FALLBACKS:
-        return {"betas": [FALLBACK_BETA], "fallbacks": "default"}
-    return {}
+from providers import PROVIDERS, make_judge_backend, make_source  # noqa: E402
 
 CONTROL_SYSTEM = "You are reviewing a pull request diff."
 
@@ -94,46 +80,31 @@ RUBRIC = (
 )
 
 
-class ClaudeBackend:
-    """Backend protocol for the harness Judge: complete(system, user) -> str."""
-
-    def __init__(self, client: anthropic.Anthropic, model: str = MODEL) -> None:
-        self._client = client
-        self._model = model
-
-    def complete(self, system: str, user: str) -> str:
-        msg = self._client.beta.messages.create(
-            model=self._model,
-            max_tokens=16000,
-            system=system,
-            messages=[{"role": "user", "content": user}],
-            **_extra_kwargs(),
-        )
-        if msg.stop_reason == "refusal":
-            # Surface rather than swallow - a refused judge call is not a 0.0.
-            raise RuntimeError(f"judge refused: {getattr(msg, 'stop_details', None)}")
-        return "".join(b.text for b in msg.content if getattr(b, "type", None) == "text")
 
 
-class ReviewerSource:
-    """AnswerSource protocol for the harness runner: answer(example) -> str."""
 
-    def __init__(self, client: anthropic.Anthropic, system: str, model: str = MODEL) -> None:
-        self._client = client
-        self._system = system
-        self._model = model
 
-    def answer(self, example: Example) -> str:
-        msg = self._client.beta.messages.create(
-            model=self._model,
-            max_tokens=16000,
-            system=self._system,
-            messages=[{"role": "user", "content": example.input}],
-            **_extra_kwargs(),
-        )
-        if msg.stop_reason == "refusal":
-            return "REFUSED"
-        return "".join(b.text for b in msg.content if getattr(b, "type", None) == "text")
+class CachedSource:
+    """Replays pre-generated answers so run_suite never touches the reviewer.
+
+    Ollama keeps one model resident and swaps on every call, so interleaving
+    reviewer and judge made it reload 17.7GB per row - 157 model loads in the
+    first 20 minutes, almost all of the wall-clock. Generating every answer
+    first, then judging them all, costs two model loads total.
+    """
+
+    def __init__(self, answers: dict):
+        self._answers = answers
+
+    def answer(self, example) -> str:
+        return self._answers[example.id]
+
+
+class _Ex:
+    __slots__ = ("id", "input")
+
+    def __init__(self, i, t):
+        self.id, self.input = i, t
 
 
 def load_rows(limit: int | None) -> list[dict]:
@@ -157,13 +128,24 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int, default=None, help="run only N rows (balanced)")
     ap.add_argument("--dry-run", action="store_true", help="print prompts, make no API calls")
-    ap.add_argument("--model", default=MODEL)
+    ap.add_argument("--provider", default="ollama", choices=sorted(PROVIDERS))
+    ap.add_argument("--model", default=None, help="reviewer model")
+    ap.add_argument("--judge-provider", default=None,
+                    help="defaults to --provider; set differently to avoid self-judging")
+    ap.add_argument("--judge-model", default=None)
     a = ap.parse_args()
 
     rows = load_rows(a.limit)
     n_def = sum(1 for r in rows if "defect" in r["tags"])
     n_cln = len(rows) - n_def
-    print(f"dataset: {len(rows)} rows ({n_def} defect / {n_cln} clean)  model={a.model}")
+    model = a.model or PROVIDERS[a.provider]["model"]
+    jprov = a.judge_provider or a.provider
+    jmodel = a.judge_model or PROVIDERS[jprov]["model"]
+    if (jprov, jmodel) == (a.provider, model):
+        print("  WARNING: judge == reviewer. Scores are directional only "
+              "(a model grading its own output). Pass --judge-model to fix.")
+    print(f"dataset: {len(rows)} rows ({n_def} defect / {n_cln} clean)  provider={a.provider}  model={model}")
+    print(f"judge:   {jprov} / {jmodel}")
 
     if a.dry_run:
         print(f"\n--- CONTROL SYSTEM ---\n{CONTROL_SYSTEM}")
@@ -176,26 +158,41 @@ def main() -> int:
     if a.limit:
         dataset_path = write_subset(rows, HERE / "_subset.jsonl")
 
-    client = anthropic.Anthropic()
-    judge = Judge(ClaudeBackend(client, a.model))
+    judge = Judge(make_judge_backend(jprov, jmodel))
 
+    arms = (("control", CONTROL_SYSTEM), ("treatment", TREATMENT_SYSTEM))
+
+    # --- phase 1: every review, reviewer model loaded once -------------------
+    cache_path = HERE / f"answers_{a.provider}_{model.replace(':','_')}.json"
+    answers = {}
+    for arm, system in arms:
+        src = make_source(a.provider, system, model)
+        answers[arm] = {}
+        for n, r in enumerate(rows, 1):
+            print(f"  [{arm}] review {n}/{len(rows)} {r['id']}", flush=True)
+            answers[arm][r["id"]] = src.answer(_Ex(r["id"], r["input"]))
+    cache_path.write_text(json.dumps(answers, indent=2), encoding="utf-8")
+    print(f"reviews cached -> {cache_path}")
+
+    # --- phase 2: judge them all, judge model loaded once ---------------------
     results = {}
-    for arm, system in (("control", CONTROL_SYSTEM), ("treatment", TREATMENT_SYSTEM)):
+    for arm, system in arms:
         spec = RunSpec(
-            suite=f"code-review-{arm}",
+            suite=f"code-review-{a.provider}-{arm}",
             dataset_path=dataset_path,
             judge=judge,
-            answer_source=ReviewerSource(client, system, a.model),
-            judge_model=a.model,
+            answer_source=CachedSource(answers[arm]),
+            judge_model=jmodel,
             rubric=RUBRIC,
         )
         print(f"\nrunning arm: {arm} ...")
         results[arm] = run_suite(spec, db_path=DB)
         print(f"  {arm}: {results[arm]}")
 
+    _conn = connect(DB)
     delta = diff_runs(
-        read_run(DB, results["control"].run_id),
-        read_run(DB, results["treatment"].run_id),
+        read_run(_conn, results["control"].run_id),
+        read_run(_conn, results["treatment"].run_id),
     )
     print("\n" + render_delta_ascii(delta))
     return 0

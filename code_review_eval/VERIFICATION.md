@@ -1,10 +1,21 @@
 # Verification record — `code-review-v1`
 
-Every row in `fixtures/code_review_v1.jsonl` was read as a diff before it entered
-the dataset. This file records what was accepted, what was rejected, and why.
+This file records what was accepted, what was rejected, and why.
 
-Single-labeler verification. That is a real limitation — see *Calibration* in the
-case study — and it is disclosed rather than papered over.
+**Correction (2026-09-03).** An earlier version of this document claimed *"every
+row was read as a diff before it entered the dataset."* That was true of the 12
+defect rows and false of the clean rows, which were accepted on the filter's word
+without being read. One bad row got through as a direct result — `cr_clean_04`
+was `requirements-dev.txt`, a pytest pin rather than documentation, while its
+expected output told the judge it was a "documentation-only change." It has been
+removed; the dataset is now 12 defect / 11 clean.
+
+The claim now matches what was actually done: **all 12 defect rows were read
+individually. The clean rows were spot-checked by filename and upstream subject
+after the fact, not read line by line.**
+
+Single-labeler verification throughout. That is a real limitation — see
+*Calibration* in the case study — and it is disclosed rather than papered over.
 
 ## Method
 
@@ -44,6 +55,7 @@ case study — and it is disclosed rather than papered over.
 | — | `fix` / `fix models.py` / `fix adapters.py` | no description of what broke, so nothing can ground the label |
 | — | Fix kennethreitz/requests#790, Fix for issue #1280 | issue reference only, no defect description |
 | — | Fix failing test ... / Fix test bug | the label would be "a test failed", not a runtime defect |
+| `cr_clean_04` | Move pytest pin to support 9.x series | **removed after the first run.** `requirements-dev.txt` matched the docs-suffix filter via `.txt`, but a dependency pin is not documentation and can change behavior. Its expected output asserted "documentation-only change", which is false |
 
 ## What this cost the design
 

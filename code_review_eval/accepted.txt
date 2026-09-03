@@ -15,7 +15,7 @@ cr_defect_35   # sys.path hack reintroduced -> breaks chardet on Python 3
 cr_clean_01
 cr_clean_02
 cr_clean_03
-cr_clean_04
+# cr_clean_04  REJECTED: requirements-dev.txt pytest pin is not docs-only; expected output claimed "documentation-only change" which is false
 cr_clean_05
 cr_clean_06
 cr_clean_07
