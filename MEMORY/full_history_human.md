@@ -2210,3 +2210,76 @@ not a severity one.
 
 **Next session:** #220 (judge-seam remote-failure contract) still needs a
 written decision before it can be worked.
+
+## 2026-09-02 — #226: the temp-name byte budget was counting the wrong bytes
+
+`io_utils._cap_base_for_temp` shortens a destination's basename before it goes
+into the temp filename `.<base>.<random>.tmp`, so a name already close to
+NAME_MAX doesn't push the temp name over the 255-byte limit. Its comment states
+the rule plainly — "Budget is in BYTES (NAME_MAX is a byte limit)" — and that
+sentence is true. The code underneath it counted `base.encode("utf-8")`, which
+is a *different* set of bytes from the ones NAME_MAX limits.
+
+The two counts agree for every name that is valid UTF-8, which is why this sat
+here unnoticed. They disagree for the rest by raising. On POSIX, Python decodes
+path bytes — and `sys.argv` — with the `surrogateescape` handler, so a byte
+that isn't valid UTF-8 arrives as a lone surrogate in the U+DC80–U+DCFF range,
+and strict UTF-8 encoding refuses to encode it. `--output $'report\xff.html'`
+was enough: the cap raised `UnicodeEncodeError` before it ever got as far as
+asking how long the name was.
+
+What made this worth fixing rather than shrugging at is the exception *class*.
+On the CI and Action runner (ext4, which accepts any non-NUL byte in a
+filename) the write would have gone through fine. On macOS it fails either way,
+but a plain `Path.write_text` of that target raises `OSError [Errno 92]
+Illegal byte sequence` — which is what every write seam in this package is
+written to catch. `drift --output` catches `OSError` only, so it turned into a
+raw traceback at exit 1 and broke the documented `0 = clean / 1 = findings /
+2 = I/O or usage error` contract. `cli._write_output` *did* catch it, through
+the `UnicodeEncodeError` arm added in #217 — and then told the operator their
+rendered output wasn't encodable as UTF-8, sending them to look at their
+dataset over a byte in the filename they had typed. A correct catch with the
+wrong diagnosis is worse than no catch.
+
+The fix is one line: measure with `os.fsencode`, the filesystem encoding
+together with its own error handler, which is exactly what the kernel receives
+and what NAME_MAX counts. It returns the identical number for every valid-UTF-8
+name, so no name that worked before changes budget, and it never raises —
+`surrogateescape` on POSIX, `surrogatepass` on Windows.
+
+`cli._write_output`'s docstring says "`atomic_write_text` raises exactly two
+things". That enumeration counts *causes*, and both of its arms are about
+content. The cap had quietly added a third cause wearing the second arm's
+class. Fixing the measurement makes the enumeration true again, which is better
+than adding a third arm — and I deliberately did not widen `drift.cli` to catch
+`UnicodeEncodeError`, because once the measurement is right I can't drive that
+path: `render_html` doesn't interpolate the input paths (checked), and
+`compute_drift` rejects unencodable content at the door (#215). An arm I can't
+make fire is an unfalsifiable guard.
+
+**Testing was harder than the fix, for one reason:** ext4 and APFS give
+different, both-correct answers. Asserting the write succeeds is a Linux-only
+test; asserting it fails is a macOS-only test. The property that holds on both
+is "if it fails, it fails as an `OSError`" — assert the class, not the outcome.
+The pure-function half of the coverage is a variant table over the real
+population: short and long, crossed with pure-ASCII, multibyte, surrogate-
+bearing and mixed. Each row asserts the capped name is a character-boundary
+prefix, within budget, and *maximal* — that last one exists because a cap
+returning the empty string for everything satisfies the first two.
+
+Reverting the single measurement line turns 9 of the 15 new assertions red and
+leaves the 6 encodable-name controls green.
+
+**Why this work, this session:** picked by counting open issues per module —
+`io_utils.py` had 4 mentions across the whole issue history against 40–60 for
+`cli`, `judge` and `drift`. The least-discussed module is the one nobody has
+read.
+
+**Open questions / blockers:** none.
+
+**Next session:** the identical `_cap_base_for_temp` body is in eight sibling
+repos (`llm-cost-optimizer`, `rag-production-kit`, `chunking-strategies-lab`,
+`prompt-regression-suite`, `embedding-model-shootout`, `vector-search-at-scale`,
+`python-async-llm-pipelines`, and `mcp-server-cookbook`'s `filesystem-sandbox-py`).
+Each needs its own issue: the fix is the same one line, but the write-seam
+callers and the exit-code consequence differ per repo.
