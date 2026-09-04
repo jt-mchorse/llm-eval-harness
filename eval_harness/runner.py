@@ -236,11 +236,18 @@ class RowDelta:
         ``baseline_score`` / ``current_score`` / ``delta`` default to
         ``None`` (the to_json side may emit explicit ``null`` for
         ``new`` / ``removed`` rows; older payloads may omit the keys
-        entirely). ``flagged`` defaults to ``False`` matching the
-        previous ``SimpleNamespace`` shim's defensive read in
-        ``cli._run_comment``. ``example_id`` and ``status`` are
-        required — missing them raises :class:`KeyError` naming the
-        field.
+        entirely). ``flagged`` defaults to ``False`` when the key is
+        *missing*, matching the previous ``SimpleNamespace`` shim's
+        defensive read in ``cli._run_comment``, and is rejected when
+        present-but-not-a-``bool`` (#230) — it is read by truthiness
+        everywhere, so a non-bool is not a crash but a wrong answer at
+        exit 0. ``example_id`` and ``status`` are required — missing
+        them raises :class:`KeyError` naming the field.
+
+        With ``flagged`` checked, every one of this row shape's six
+        fields is now validated at this boundary: three by type
+        (``example_id``, ``status``, ``flagged``) and three by
+        finiteness (``baseline_score``, ``current_score``, ``delta``).
 
         ``baseline_score`` / ``current_score`` / ``delta`` are rejected
         when present-but-non-finite (NaN / +/-Infinity), the same
@@ -282,6 +289,53 @@ class RowDelta:
                 f"status must be a string; got {type(status).__name__} for "
                 f"example_id {example_id!r}"
             )
+        # `flagged` was the last field on this row read with a bare `.get` and no
+        # type check at all — the row-level sibling of the `suite` gap #228 closed
+        # one level up. It is annotated `bool` and every consumer reads it by
+        # *truthiness*, never by value:
+        #   `comment._row_to_md`          `":warning:" if r.flagged else ""`
+        #   `runner.render_delta_ascii`   `"FLAG" if r.flagged else "    "`
+        #   `DeltaReport.regressed_ids`   `[... for r in self.rows if r.flagged]`
+        # so a non-bool does not crash a renderer the way a non-string
+        # `status`/`example_id` does — it is read successfully, as the wrong
+        # answer, at exit 0. Both directions are reachable and neither is louder
+        # than the other: a truthy non-bool (`"false"` — the shape a shell-
+        # templated CI step produces, since every JSON string is truthy — but also
+        # `1`, `[0]`, `{"x": 1}`) *invents* a flag, and a falsy non-bool (`0`,
+        # `""`, `[]`, and a present explicit `null`) *suppresses* a real one.
+        #
+        # Measured harm, on the surface a reviewer actually reads: a row carrying
+        # `"flagged": "false"` posts `| unchanged | qa_001 | 0.900 | 0.900 |
+        # +0.000 | :warning: |` under a summary line reading `flagged **0** ·
+        # regressed 0 · unchanged 1`. The summary counts come from
+        # `summary["n_flagged"]`, which `_require_int` (#116/#190) already
+        # validates, so the two halves of one comment contradict each other and
+        # the *unvalidated* half is the one that wins visually. `regressed_ids`
+        # (public, consumed by `examples/regression_run_and_diff.py`) gains the
+        # same phantom id. The CLI's non-zero exit is *not* affected — it gates on
+        # `summary["n_flagged"]` (cli.py) — so this is silently-wrong output
+        # rather than a wrong gate, which is why it is the quieter bug and not the
+        # smaller one.
+        #
+        # Require a real `bool` rather than coercing: `bool(payload.get(...))`
+        # looks like a fix and is not one, because `bool("false")` is `True` — it
+        # would launder the issue's own reproducer into a flag. Require it
+        # *exactly*: `isinstance(True, int)` is `True` in Python, so an
+        # `isinstance(v, int)` check reads as correct while still accepting a raw
+        # JSON `1`/`0`, which `to_json` can never emit. A present-but-null is
+        # rejected for the same reason the `current_run_id`/`baseline_run_id`
+        # guard below rejects one — `.get` defaults only fire on a MISSING key —
+        # while a genuinely missing key still defaults to `False` for the older
+        # payloads the docstring promises to keep reading.
+        flagged = payload.get("flagged", False)
+        if not isinstance(flagged, bool):
+            raise ValueError(
+                f"flagged must be a boolean when present; got {flagged!r} for example_id "
+                f"{example_id!r} — every consumer reads it by truthiness, so a non-bool "
+                "silently invents a regression flag (any truthy value, including the "
+                'JSON string "false") or suppresses a real one (0, "", [], null), '
+                "contradicting the n_flagged count rendered on the same comment"
+            )
         return cls(
             example_id=example_id,
             baseline_score=_finite_or_none(
@@ -292,7 +346,7 @@ class RowDelta:
             ),
             delta=_finite_or_none(payload.get("delta"), "delta", example_id),
             status=status,
-            flagged=payload.get("flagged", False),
+            flagged=flagged,
         )
 
 
