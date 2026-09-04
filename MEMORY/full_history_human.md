@@ -2283,3 +2283,66 @@ repos (`llm-cost-optimizer`, `rag-production-kit`, `chunking-strategies-lab`,
 `python-async-llm-pipelines`, and `mcp-server-cookbook`'s `filesystem-sandbox-py`).
 Each needs its own issue: the fix is the same one line, but the write-seam
 callers and the exit-code consequence differ per repo.
+
+## 2026-09-03 — #228: `suite` was the one field the delta parser never type-checked
+
+`DeltaReport.from_json` reads a delta-JSON artifact — the thing
+`diff-json --format json` writes and the CI Action feeds back to
+`eval-harness comment`. Its contract is deliberately two-sided: permissive
+about *presence* (its docstring says "no required fields at the top level —
+every field has a documented default") and strict about *type*, because the
+renderers downstream are not defensive and `cli._run_comment` calls them
+**outside** its exit-2 `try`.
+
+Every field it reads is validated. `threshold_drop` must be a finite number.
+`summary` must be an object; `mean_delta` finite; the six `n_*` counts
+int-coercible. `rows` must be an array; each row an object; each
+`example_id` a non-empty string; each `status` a string; each score finite.
+`current_run_id` and `baseline_run_id` must be strings. That is eleven checks
+accumulated over #42, #89, #116, #120, #150, #160 and #190 — and `suite`, the
+twelfth field, had none at all.
+
+So `{"suite": null}` in a delta artifact reached
+`md_code_span(report.suite)` and died with
+`AttributeError: 'NoneType' object has no attribute 'replace'` — not a
+`ValueError`, not a `KeyError`, so nothing in `_run_comment` caught it, and the
+CLI exited 1 with a traceback instead of the documented exit 2.
+
+**The guard that describes this bug already exists, one level down.** The
+`status` check inside `RowDelta.from_json` explains itself like this: `status`
+is "a free-form string that lands in two renderers", and a non-string "would
+raise a raw AttributeError (`md_table_cell(...).replace`) ... at exit 1,
+breaking the exit-2 contract the comment path honors". Every clause is true of
+`suite` one level up — it is free-form, operator-chosen, and it lands in
+`comment.render_delta_markdown` and in `runner.render_delta_ascii`.
+
+The two renderers fail *differently*, which is why the guard belongs at the
+parse boundary and not in either of them. `md_code_span` calls `.replace` on
+the value, so markdown crashes loudly. `render_delta_ascii` interpolates with a
+plain `{}`, so it does not crash at all — it prints
+`# delta aaaaaaaa vs bbbbbbbb (suite=None, threshold_drop=0.05)`, a header
+stating the suite is literally named `None`. Both are public API. A fix in
+`comment.py` would have closed the visible half and made the invisible half
+permanent.
+
+I built and ran the two plausible wrong fixes before settling. Coercing with
+`str(...)` stops the traceback and exits 0 with a heading reading `None` —
+it passes any test that only asserts "does not crash". Rejecting `None`
+specifically stops that one case and lets `3`, `1.5`, `True`, `["a"]` and
+`{"a": 1}` through. Asserting the exit *code*, over a variant table that
+includes those five, is what separates the real fix from both. `True` is in
+the table on purpose: `bool` is an `int` subclass and looks string-ish to a
+sloppy guard, but `isinstance(True, str)` is False and the renderers break on
+it exactly like `None` does.
+
+The last test in the new file discovers `DeltaReport`'s `str`-annotated fields
+from the dataclass instead of listing them, because hand-listing is precisely
+how `suite` was missed: the run-id guard enumerated two of the three
+`.get`-with-default string fields and read like a survey of all of them. It
+carries a floor assertion — at least three fields found, `suite` among them —
+because a discovery helper that matches nothing collects zero parametrized
+cases and passes silently.
+
+**Next session:** the remaining open issues here (#220, #212, #177) are a
+contract decision, a `priority:low` enhancement, and a doc question needing
+JT's intended breakdown.
