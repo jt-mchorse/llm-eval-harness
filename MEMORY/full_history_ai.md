@@ -2634,3 +2634,28 @@ context_for_next_session:
 decisions_made: []
 followups: []
 ---
+
+---
+session: 2026-09-04T07:20Z
+issue: 230
+focus: rowdelta_flagged_unvalidated_and_read_only_by_truthiness_so_a_non_bool_is_wrong_output_not_a_crash
+phase: night_session_multi_issue_loop_issue_1
+delta:
+  files_changed: 2
+  tests_added: 25
+  suite: green
+measured:
+  reproduced_before_writing_code: "a delta artifact whose row carries `\"flagged\": \"false\"` renders `| unchanged | qa_001 | 0.900 | 0.900 | +0.000 | :warning: |` under a summary line reading `flagged **0** · regressed 0 · unchanged 1`, at exit 0"
+  variant_table: "10 inputs through the pre-fix reader: true/false kept; \"false\"/1/[0] truthy -> invents a flag; \"\"/0/[]/null falsy -> suppresses one; MISSING -> False. every non-bool passed straight into a field annotated bool"
+  anti_vacuous: "FOUR reverts, each separated by the assertion written for it - bare .get 3 red; bool() coercion 3 red; isinstance(int) 3 red; reject-only-str 3 red"
+  portfolio_sweep: "grep for `get(\"...\", False|True)` across all 12 code repos returned exactly ONE hit, the line fixed here; the TS `?? false` hits are all typed opts objects, not JSON parse boundaries. CLEAN NEGATIVE, do not re-sweep"
+context_for_next_session:
+  - THE_LENS_THAT_FOUND_THE_SEVERITY_ASK_HOW_THE_FIELD_IS_CONSUMED_NOT_JUST_WHETHER_IT_IS_VALIDATED_every_other_field_at_this_boundary_lands_in_a_FORMAT_SPEC_or_a_STRING_METHOD_so_a_wrong_type_CRASHES_and_announces_itself_at_exit_1_flagged_is_read_by_TRUTHINESS_in_all_three_consumers_so_it_is_read_SUCCESSFULLY_AS_THE_WRONG_ANSWER_AT_EXIT_0_A_TRUTHINESS_CONSUMER_TURNS_A_TYPE_BUG_INTO_A_SILENT_OUTPUT_BUG_AND_THAT_IS_WHY_IT_WAS_THE_LAST_ONE_LEFT
+  - AND_THE_ISSUE_TITLE_NAMED_ONE_DIRECTION_OF_TWO_it_said_a_string_false_reads_as_flagged_and_INVENTS_a_regression_which_is_true_and_is_HALF_the_class_a_FALSY_non_bool_0_or_empty_string_or_empty_list_or_a_present_null_SUPPRESSES_a_real_flag_and_that_is_the_direction_a_ci_gate_would_care_about_more_WHEN_AN_ISSUE_NAMES_A_DIRECTION_ENUMERATE_THE_OTHER_ONE
+  - THREE_GREEN_NEIGHBOURS_HERE_NOT_ONE_AND_I_BUILT_AND_RAN_ALL_THREE_bool_of_the_get_MAKES_THE_TYPE_CORRECT_AND_FIXES_NOTHING_because_bool_of_the_string_false_is_True_so_it_launders_the_issues_OWN_REPRODUCER_into_a_flag_isinstance_int_READS_AS_CORRECT_because_isinstance_True_int_IS_True_in_python_so_it_passes_for_every_legitimate_value_while_accepting_a_raw_1_or_0_and_reject_only_str_CLOSES_THE_ISSUE_TITLE_EXACTLY_and_leaves_1_and_list_and_dict_open_THE_SEPARATING_ROWS_ARE_1_AND_0
+  - PROCESS_match_ON_pytest_raises_IS_NOT_LINT_DECORATION_ruff_PT011_forced_it_and_it_made_the_tests_STRICTER_without_it_ANY_ValueError_satisfies_them_so_an_unrelated_guard_firing_on_the_same_payload_would_pass_them_VACUOUSLY_take_the_PT011_fix_as_a_correctness_upgrade_not_a_chore
+  - THE_ROW_SHAPE_IS_NOW_CLOSED_AND_I_WROTE_THE_COUNT_INTO_THE_DOCSTRING_all_six_fields_validated_three_by_type_example_id_status_flagged_and_three_by_finiteness_baseline_score_current_score_delta_the_prior_docstring_claim_suite_was_the_last_one_without_that_check_228_was_TRUE_AND_SCOPED_to_TOP_LEVEL_STRING_fields_and_read_as_a_survey_A_FIXS_OWN_WORDING_POINTS_AT_THE_SITE_IT_MISSED_AGAIN
+  - HONEST_SEVERITY_THE_CLI_EXIT_CODE_IS_NOT_AFFECTED_cli_py_gates_on_summary_n_flagged_which_require_int_ALREADY_validates_so_this_is_WRONG_RENDERED_OUTPUT_plus_a_phantom_id_in_the_PUBLIC_regressed_ids_property_NOT_a_wrong_gate_i_enumerated_the_regressed_ids_consumers_rather_than_assuming_examples_regression_run_and_diff_py_prints_it_and_test_examples_smoke_asserts_on_it_and_NOTHING_gates
+decisions_made: []
+followups: []
+---

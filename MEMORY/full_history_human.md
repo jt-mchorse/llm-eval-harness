@@ -2346,3 +2346,46 @@ cases and passes silently.
 **Next session:** the remaining open issues here (#220, #212, #177) are a
 contract decision, a `priority:low` enhancement, and a doc question needing
 JT's intended breakdown.
+
+## 2026-09-04 — Issue #230: `RowDelta.flagged` accepted any JSON value
+**Branch:** `session/2026-09-04-0709-issue-230` · **PR:** #232
+
+`RowDelta.from_json` read `flagged` with a bare `payload.get("flagged", False)`
+and no type check — the last field on the row shape without one, and the
+row-level sibling of the `suite` gap closed last session in #228.
+
+What made it the last one left is that it fails differently from its
+neighbours. A non-string `example_id` or `status` crashes a renderer, so it
+announces itself as a traceback. `flagged` is read only by *truthiness* — in
+the markdown table cell, in the ascii row, and in `regressed_ids` — so a
+non-bool is read successfully, as the wrong answer, at exit 0. Before writing
+any code I reproduced it: a delta artifact whose row carries `"flagged":
+"false"` (the shape a shell-templated CI step produces, since every JSON string
+is truthy) posts a `:warning:` on an `unchanged` row underneath a summary line
+reading `flagged 0 · regressed 0 · unchanged 1`. The two halves of one PR
+comment contradict each other, and the unvalidated half is the one a reviewer
+sees.
+
+The issue named one direction; there are two. A truthy non-bool invents a flag;
+a falsy one — `0`, `""`, `[]`, or a present explicit `null` — suppresses a real
+one. Both are now rejected as the `ValueError` the comment path translates to a
+clean exit 2.
+
+The fix is one `isinstance(bool)` check, and the work was in ruling out three
+neighbours that all look right. `bool(payload.get(...))` makes the field's type
+correct and fixes nothing, because `bool("false")` is `True` — it launders the
+issue's own reproducer into a flag. `isinstance(v, int)` reads as correct
+precisely because `isinstance(True, int)` is `True` in Python, so it passes for
+every legitimate value while still accepting a raw `1`/`0` the writer can never
+emit. And rejecting only `str` closes the issue's title exactly while leaving
+`1`, `[0]` and `{"x": 1}` inventing flags. All three are built and run in the
+test file; the separating inputs are `1` and `0`.
+
+Honest severity, since the issue asked: the CLI's non-zero exit is *not*
+affected — it gates on `summary["n_flagged"]`, which `_require_int` already
+validates. This was silently-wrong output plus a phantom id in the public
+`regressed_ids` property, not a wrong gate. I enumerated that property's
+consumers rather than assuming.
+
+A portfolio-wide grep for the same pattern came back with exactly one hit: the
+line fixed here.
