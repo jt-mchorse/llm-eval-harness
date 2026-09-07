@@ -24,11 +24,12 @@ from __future__ import annotations
 import ast
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 from eval_harness import cli
-from eval_harness.judge import JudgeAuthError
+from eval_harness.judge import AnthropicBackend, JudgeAuthError, JudgeBackendError
 
 # --- fixtures -------------------------------------------------------------
 
@@ -62,6 +63,83 @@ class _FakeStatusError(Exception):
     def __init__(self, status_code: int) -> None:
         super().__init__(f"status {status_code}")
         self.status_code = status_code
+
+
+class _NamedConnectionError(Exception):
+    """A connection-level SDK failure: no status code, classified by name.
+
+    Named `APIConnectionError` at runtime so it matches `_TRANSIENT_EXC_NAMES` /
+    `_REMOTE_EXC_NAMES` the same way the real SDK class does, without importing
+    the optional `judge` extra. The class-name road is the only handle these
+    have — no response arrived, so there is no status to read.
+    """
+
+
+_NamedConnectionError.__name__ = "APIConnectionError"
+
+
+class _RaisingMessages:
+    """`client.messages` stand-in: every `create` raises, counting calls."""
+
+    def __init__(self, exc: BaseException) -> None:
+        self._exc = exc
+        self.calls = 0
+
+    def create(self, **kwargs):  # type: ignore[no-untyped-def]
+        self.calls += 1
+        raise self._exc
+
+
+class _BrokenContentMessages:
+    """Returns a message whose `content` is not iterable.
+
+    Models a bug in *our* response handling rather than a remote failure: the
+    call succeeded, and `complete`'s content-block loop is what breaks.
+    """
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def create(self, **kwargs):  # type: ignore[no-untyped-def]
+        self.calls += 1
+        return SimpleNamespace(content=object())
+
+
+class _Client:
+    def __init__(self, messages) -> None:  # type: ignore[no-untyped-def]
+        self.messages = messages
+
+
+def _real_backend(messages) -> AnthropicBackend:  # type: ignore[no-untyped-def]
+    """A real `AnthropicBackend` with a fake client.
+
+    Bypasses `__init__` so no `anthropic` install and no API key is needed —
+    the same construction `tests/test_judge.py` and
+    `tests/test_judge_auth_error.py` use. `_sleep` is a no-op, so the four
+    attempts of the retry budget are spent without a wall-clock cost.
+    """
+    backend = AnthropicBackend.__new__(AnthropicBackend)
+    backend.client = _Client(messages)
+    backend.model = "claude-haiku-4-5-20251001"
+    backend.max_tokens = 512
+    backend.max_attempts = 4
+    backend.base_retry_delay = 0.0
+    backend.max_retry_delay = 0.0
+    backend._sleep = lambda _seconds: None
+    return backend
+
+
+def _real_backend_factory(exc: BaseException):  # type: ignore[no-untyped-def]
+    """A `cli.AnthropicBackend` replacement that builds the *real* class.
+
+    The CLI constructs its backend as `AnthropicBackend(model=...)`, so the
+    replacement has to accept and ignore those kwargs.
+    """
+
+    def factory(**_kwargs):  # type: ignore[no-untyped-def]
+        return _real_backend(_RaisingMessages(exc))
+
+    return factory
 
 
 _OK = "SCORE: 0.9\nREASONING: fine"
@@ -222,36 +300,142 @@ def test_parse_failure_names_the_failing_row(
     assert "missing SCORE" in err
 
 
-# --- the boundary this issue deliberately does not cross ------------------
+# --- remote backend failures: exit 2, decided in #220 / D-020 -------------
+#
+# These two rows read `traceback` until #220. They are driven through a **real
+# `AnthropicBackend`** with a fake `client`, not through `_FakeBackend`,
+# because the translation lives in `AnthropicBackend.complete` and injecting
+# an SDK error at the `cli` seam skips the very frame under test. Before
+# #220 these rows were `_FakeBackend(exc=_FakeStatusError(400))` — a shape
+# production cannot produce, since in production that exception is raised by
+# the SDK *inside* `AnthropicBackend.complete`, one layer down. A test that
+# injects above the seam it pins can only ever confirm itself.
+
+_REAL_BACKEND_REMOTE = [
+    # (case id, exception the SDK raises, expected substring of the exit-2 line)
+    ("sdk-400", _FakeStatusError(400), "rejected the request"),
+    ("sdk-404-bad-model", _FakeStatusError(404), "rejected the request"),
+    ("sdk-500-exhausted", _FakeStatusError(500), "unreachable after 4 attempts"),
+    ("sdk-429-exhausted", _FakeStatusError(429), "unreachable after 4 attempts"),
+    ("connection-error", _NamedConnectionError("dns went away"), "unreachable after 4 attempts"),
+]
+
+
+@pytest.mark.parametrize("subcommand", ["run", "calibrate"])
+@pytest.mark.parametrize(
+    ("case", "exc", "expected_phrase"),
+    _REAL_BACKEND_REMOTE,
+    ids=[c for c, _, _ in _REAL_BACKEND_REMOTE],
+)
+def test_remote_backend_failures_exit_2_with_no_traceback(
+    subcommand: str, case: str, exc: BaseException, expected_phrase: str, tmp_path: Path, capsys
+) -> None:
+    """A remote failure is not a quality result (#220, D-020).
+
+    On both these subcommands exit 1 is already spoken for — "a row dropped
+    past `--threshold-drop`" for `run`, "Cohen's κ below threshold" for
+    `calibrate` — so a 429 storm that outlasted the retry budget was reported
+    to CI as a *quality regression*, sending an operator to look at their
+    prompts instead of at the API status page. Both halves now exit 2.
+
+    They share the code by decision (D-020): `_fail` documents exit 2 as
+    "I/O **or** usage error", and a rejected request is the usage half while
+    an exhausted budget against a remote that is down is the I/O half. The
+    difference an operator acts on is carried in the message, asserted per
+    row below — which is the part a shared exit code would otherwise lose.
+    """
+    rc = _invoke(subcommand, tmp_path, _real_backend_factory(exc))
+    assert rc == 2
+    err = capsys.readouterr().err
+    assert err.startswith("::error::") or "::error::" in err
+    assert expected_phrase in err
+    # The original exception is named, not swallowed: an operator can still
+    # tell a 400 from a 404 without reading a traceback.
+    assert type(exc).__name__ in err
+
+
+@pytest.mark.parametrize("subcommand", ["run", "calibrate"])
+def test_the_two_halves_are_distinguishable_in_the_message(
+    subcommand: str, tmp_path: Path, capsys
+) -> None:
+    """The decision's own escape hatch, stated as an assertion.
+
+    D-020 collapses two failures onto one exit code on the argument that the
+    message keeps them apart. If that ever stops being true the decision stops
+    being defensible, so it is pinned rather than trusted: the rejected-request
+    line and the retry-exhausted line must not be equal, and each must say the
+    thing the operator acts on.
+    """
+    # Separate working directories so the two invocations cannot share an
+    # `--out` / `--report` file and mask each other.
+    rejected_dir = tmp_path / "rejected"
+    exhausted_dir = tmp_path / "exhausted"
+    rejected_dir.mkdir()
+    exhausted_dir.mkdir()
+
+    _invoke(subcommand, rejected_dir, _real_backend_factory(_FakeStatusError(400)))
+    rejected = capsys.readouterr().err
+    _invoke(subcommand, exhausted_dir, _real_backend_factory(_FakeStatusError(500)))
+    exhausted = capsys.readouterr().err
+
+    assert rejected != exhausted
+    # "re-running may succeed" is the actionable half and must appear on
+    # exactly one of them.
+    assert "re-running may succeed" in exhausted
+    assert "re-running may succeed" not in rejected
+    assert "will fail the same way" in rejected
+    assert "will fail the same way" not in exhausted
+
+
+# --- the boundary #220 deliberately does not cross ------------------------
 
 _UNTRANSLATED = [
-    ("sdk-400", lambda **kw: _FakeBackend(exc=_FakeStatusError(400))),
-    ("sdk-500-exhausted", lambda **kw: _FakeBackend(exc=_FakeStatusError(500))),
     ("byo-backend-valueerror", lambda **kw: _FakeBackend(exc=ValueError("backend bug"))),
     ("byo-backend-typeerror", lambda **kw: _FakeBackend(exc=TypeError("backend bug"))),
+    ("byo-backend-runtimeerror", lambda **kw: _FakeBackend(exc=RuntimeError("backend bug"))),
+    ("byo-backend-keyerror", lambda **kw: _FakeBackend(exc=KeyError("backend bug"))),
 ]
 
 
 @pytest.mark.parametrize("subcommand", ["run", "calibrate"])
 @pytest.mark.parametrize(("case", "factory"), _UNTRANSLATED, ids=[c for c, _ in _UNTRANSLATED])
-def test_remote_and_byo_backend_failures_still_propagate(
+def test_byo_backend_bugs_still_propagate(
     subcommand: str, case: str, factory, tmp_path: Path
 ) -> None:
-    """Pinned, not endorsed.
+    """Pinned, and still not endorsed after #220.
 
-    A remote backend failure (a non-transient 400, or a 500 that exhausted
-    `retry_call`'s budget) is neither operator misconfiguration nor findings,
-    and choosing its exit code interacts with the retry budget — that is
-    issue #220, not a drive-by here. A bare exception from a **caller's own**
-    `Backend` implementation is different again and should keep its
-    traceback: swallowing it into exit 2 is how a real bug in someone's
-    custom backend gets reported as a usage error.
+    A bare exception from a **caller's own** `Backend` keeps its traceback:
+    swallowing it into exit 2 is how a real bug in someone's custom backend
+    gets reported as a usage error. #220 could not use `except Exception` at
+    the seam for exactly this reason, and did not: the translation lives
+    inside `AnthropicBackend.complete`, a frame a caller's own backend never
+    enters.
 
-    Pinning both means #220 has to edit this test on purpose rather than
-    change the contract silently.
+    The assertion is `not JudgeBackendError` rather than a bare
+    `pytest.raises(ValueError)`, because `JudgeBackendError` *is* a
+    `ValueError` — the pre-#220 version of this test asserted
+    `pytest.raises((_FakeStatusError, ValueError, TypeError))` and would have
+    passed unchanged if #220 had wrongly translated these rows too.
     """
-    with pytest.raises((_FakeStatusError, ValueError, TypeError)):
+    with pytest.raises((ValueError, TypeError, RuntimeError, KeyError)) as excinfo:
         _invoke(subcommand, tmp_path, factory)
+    assert not isinstance(excinfo.value, JudgeBackendError)
+    assert not isinstance(excinfo.value, JudgeAuthError)
+
+
+def test_a_bug_in_our_own_response_parsing_is_not_a_remote_failure(tmp_path: Path) -> None:
+    """The other half of "`except Exception` is not the mechanism".
+
+    `AnthropicBackend.complete` runs our own content-block loop inside the
+    same `try` that now retags remote failures. A bug there — `msg.content`
+    not being iterable — carries no status code and no SDK class name, so it
+    must fall through to the bare `raise` with its traceback, exactly like a
+    caller's own backend bug.
+    """
+    backend = _real_backend(_BrokenContentMessages())
+    with pytest.raises(TypeError) as excinfo:
+        backend.complete("sys", "user")
+    assert not isinstance(excinfo.value, JudgeBackendError)
 
 
 # --- the population the grid covers ---------------------------------------

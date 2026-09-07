@@ -37,6 +37,7 @@ from eval_harness import judge as judge_module
 from eval_harness.judge import (
     AnthropicBackend,
     JudgeAuthError,
+    JudgeBackendError,
     is_auth_error,
     is_transient_error,
 )
@@ -198,16 +199,33 @@ def test_judge_auth_error_is_a_valueerror() -> None:
     assert issubclass(JudgeAuthError, ValueError)
 
 
-def test_complete_leaves_a_non_auth_failure_untouched() -> None:
-    """A 500 is transient: it must still exhaust the retry budget and
-    re-raise as itself, not be swallowed by the new arm."""
+def test_complete_does_not_route_a_non_auth_failure_through_the_auth_arm() -> None:
+    """A 500 must exhaust the retry budget and must not become `JudgeAuthError`.
+
+    Edited on purpose by #220/D-020. This test's subject — the auth arm must
+    not claim a failure that is not a credential failure — is unchanged and is
+    the assertion that matters below. What changed is the *other* half: a
+    retry-exhausted 500 no longer escapes as itself at exit 1 but as
+    `JudgeBackendError` at exit 2, because on both subcommands that build a
+    judge, exit 1 already means a measured quality result.
+
+    `JudgeBackendError` is not a `JudgeAuthError`, so telling an operator to
+    set `ANTHROPIC_API_KEY` when the remote is simply down remains exactly as
+    wrong as it was before, and remains pinned here.
+    """
     sleeps: list[float] = []
     exc = _FakeStatusError(500)
     msgs = _RaisingMessages(exc)
-    with pytest.raises(_FakeStatusError):
+    with pytest.raises(JudgeBackendError) as excinfo:
         _backend(msgs, sleeps).complete("sys", "user")
+    assert not isinstance(excinfo.value, JudgeAuthError)
+    # The retry budget is spent in full, unchanged by the retag.
     assert msgs.calls == 4
     assert sleeps == [0.5, 1.0, 2.0]
+    assert excinfo.value.__cause__ is exc
+    # The retryable half of D-020 names the budget it spent, so the operator
+    # knows both that re-running may work and which number to raise.
+    assert "unreachable after 4 attempts" in str(excinfo.value)
 
 
 # --- CLI: both seams exit 2 with no traceback ------------------------------

@@ -17,6 +17,7 @@ from eval_harness.judge import (
     FAITHFULNESS_RUBRIC,
     AnthropicBackend,
     Judge,
+    JudgeBackendError,
     JudgeParseError,
     JudgeScore,
     clamp_judge_score,
@@ -398,13 +399,26 @@ def test_backend_complete_reraises_permanent_error_without_retry():
     # the *no-retry* property of a permanent error, which 400 exercises
     # identically; the auth-code path gets its own test below, and pins the
     # same `calls == 1` / `sleeps == []` property so nothing is lost here.
+    #
+    # Edited on purpose by #220/D-020: a 400 now leaves `complete` as
+    # `JudgeBackendError` rather than as itself, so the CLI can exit 2 instead
+    # of leaking a traceback at exit 1 (the code that means "a row dropped past
+    # --threshold-drop"). The subject of this test is unchanged and is still
+    # asserted below: a permanent error is not retried. The retag happens
+    # *after* `retry_call` returns, so it cannot affect that.
     clock = _Clock()
     msgs = _FakeMessages(fail_times=5, status_code=400, text="unused")
     be = _backend_with_fake(_FakeClient(msgs), sleep=clock)
-    with pytest.raises(_FakeAPIError):
+    with pytest.raises(JudgeBackendError) as excinfo:
         be.complete("sys", "user")
     assert msgs.calls == 1
     assert clock.sleeps == []
+    # The original exception is preserved as the cause, so nothing an operator
+    # or a library caller could previously see is lost.
+    assert isinstance(excinfo.value.__cause__, _FakeAPIError)
+    # A rejected request is the non-retryable half of D-020, and its message
+    # must say so rather than inviting a pointless re-run.
+    assert "rejected the request" in str(excinfo.value)
 
 
 @pytest.mark.parametrize(
