@@ -369,3 +369,61 @@ plus a `tmp_path` and nothing else.
 **Reversibility:** Cheap. Two lines in `pytest_generate_tests`, and the
 before/after behaviour of all six shapes is a measured variant table in
 `tests/test_pytest_plugin_body_signatures.py`.
+
+## D-020 — Remote judge failures share exit 2; the message, not the code, tells them apart (2026-09-07)
+**Decision:** The two judge-seam rows #218 left open — the remote rejecting the
+request (a non-transient 400/404, a bad `--model`) and a transient failure that
+outlasted `retry_call`'s attempt budget (429/5xx/connection) — both exit **2**,
+and the difference an operator acts on is carried in the `::error::` message
+rather than in a distinct exit code.
+
+**Why:** Exit 1 on `run` and `calibrate` is not a spare code. It already means
+"a row dropped past `--threshold-drop`" and "Cohen's κ below threshold", so a
+429 storm that outlasted the retry budget was being reported to CI as a
+*quality regression* — the one reading that sends an operator to look at their
+prompts instead of at the API status page. Exit 1 is the only genuinely wrong
+answer here.
+
+They share exit 2 because `_fail`'s own documented contract is "I/O **or**
+usage error", and these two are precisely its two halves: a rejected request is
+the usage half, an exhausted budget against a remote that is down is the I/O
+half. The one thing a shared code would lose is whether to fix the invocation
+or simply run it again later — and that rides in the message, which is exactly
+where this repo already carries every other exit-2 distinction. A missing file
+and a malformed file are both 2 with different messages.
+
+Because that argument makes the message load-bearing, it is pinned rather than
+trusted: `test_the_two_halves_are_distinguishable_in_the_message` asserts the
+two lines are not equal, that "re-running may succeed" appears on exactly the
+retryable one, and that the retry line names the budget it actually spent.
+
+**Mechanism.** `is_backend_failure`, a third duck-typed, import-free sibling of
+`is_transient_error` and `is_auth_error`. It asks a different *kind* of
+question — provenance ("did this come back over the wire?") rather than
+severity — and that is what let the fix avoid the `except Exception` the issue
+ruled out. The retag lives inside `AnthropicBackend.complete`, a frame a
+caller's own `Backend` never enters, and a bug in our own content-block loop
+inside that same `try` carries no status code and no SDK class name, so both
+keep their traceback.
+
+**Alternatives considered:**
+- A distinct exit 3 for retry-exhausted transients, so CI could auto-retry —
+  rejected because nothing in this repo or its GitHub Action branches on a
+  fourth code today, and every consumer reading "non-zero, non-one" as
+  "something is wrong" would need updating for a capability no caller has asked
+  for. This is the alternative to revisit, and the evidence that should reopen
+  it is a consumer that actually wants to auto-retry on an outage.
+- Leaving both on exit 1 (the status quo) — rejected: it is the one reading
+  that is actively false.
+- `except Exception` at the CLI seam — rejected: it would swallow a genuine bug
+  in a caller's own `Backend` into a clean usage-error line and delete the stack
+  trace that is the only way they could fix it. Strictly worse than the
+  traceback it replaces.
+- Splitting the pair — 400 on exit 2, retry-exhausted 5xx on exit 1 — rejected:
+  it divides them along the one axis that is not about severity, and leaves half
+  the problem exactly where it was.
+
+**Reversibility:** Cheap. The contract is pinned by one grid test and two doc
+tables, all edited in the same PR.
+
+**Related issues:** #220, #218, #194
