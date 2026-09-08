@@ -427,3 +427,65 @@ keep their traceback.
 tables, all edited in the same PR.
 
 **Related issues:** #220, #218, #194
+
+---
+
+## D-021 — `dump_jsonl` enforces the loader's representability rule, on the write path, through the same walk
+**Date:** 2026-09-08
+
+**Decision.** `Dataset.dump_jsonl` walks every record through the loader's own
+`_find_unrepresentable` before writing any bytes, raising `ValueError` naming
+the example index, its `id` and the JSON path. A non-`str` object key becomes a
+representability finding of its own (`NON_STRING_KEY`) rather than an
+`AttributeError` out of the walk.
+
+**Why.** #213 closed one side of this seam and the writer's docstring claimed
+the whole of it: "That guarantee is enforced, not merely asserted:
+`_validate_record` rejects the two classes of value this writer cannot
+faithfully emit." `_validate_record` runs on the **load** path. `Example` is
+exported, is a frozen dataclass with no `__post_init__`, and assembling a
+`Dataset` in Python — the ordinary use of a reusable eval framework — never
+meets the loader. Measured on `main`, with no loader involved: a `provenance` of
+`{"cost_usd": inf}` was written as a bare `Infinity` token, and `load_jsonl` of
+the file *just written* raised `DatasetLoadError`; a `{1: "one"}` key was
+written `{"1": "one"}` silently and reloaded with the key changed from `int` to
+`str`. The canonical writer emitted files its own reader refuses.
+
+The comment that reads as covering this does not. `dataset.py` says "Rejecting
+at load is the correct side of the seam. `dump_jsonl` could write with
+`errors="surrogatepass"`, but that puts invalid UTF-8 on disk." That reason is
+*true*, and it answers **how** the writer should handle a bad value — not
+**whether it is reachable with one**.
+
+The non-string-key axis was required rather than optional. Routing the writer
+through the shared walk is exactly what first hands that walk a Python-built
+dict, and it answered with `AttributeError: 'int' object has no attribute
+'encode'` (#231) — escaping every caller's `except ValueError` precisely as the
+`RecursionError` the walk is iterative to avoid would. It is also a finding on
+its own terms: `json.dumps` *coerces* an `int`/`float`/`bool`/`None` key to a
+string and raises a bare `TypeError` for any other key type.
+
+**Scope boundary, stated rather than assumed.** This is the representability
+rule, not full schema validation on the write path. `Example(id=123)` still
+writes an `id` that `load_jsonl` refuses; that is a strictly larger change with
+a different shape, and `test_the_scope_boundary_is_representability_not_schema`
+pins the boundary so the next reader does not conclude the write path is fully
+guarded.
+
+**Alternatives considered.**
+- Writing with `errors="surrogatepass"` — rejected: it puts invalid UTF-8 on
+  disk, which is strictly worse than refusing the record, and there is no
+  faithful JSON spelling of `NaN` to write at all.
+- Validating in `Example.__post_init__` — rejected: it moves the failure to
+  construction, cannot see a `provenance` dict mutated after construction (the
+  dataclass is frozen, the dict it holds is not), and would not cover a
+  `Dataset` whose `examples` list is assigned directly.
+- A second copy of the rules local to the writer — rejected, and this is the
+  neighbour that taught the most: it passes every behavioural assertion in the
+  new module. Only the two structural tests catch it.
+- Full schema validation on the write path — deferred, filed separately.
+
+**Reversibility:** Cheap. One call site, one kind constant, and the boundary is
+pinned by tests rather than by prose.
+
+**Related issues:** #234, #231, #213

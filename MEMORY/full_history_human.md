@@ -2426,3 +2426,55 @@ that should reopen it: a consumer that actually wants to auto-retry.
 **Next session:** #231 (`find_unrepresentable` raises a raw `AttributeError` on a
 non-string dict key) is the remaining actionable issue here; #177 and #212 both
 need JT's input rather than code.
+
+## 2026-09-08 — Issue #234: the writer emitted files its own loader rejects
+**Duration:** ~35 min · **Branch:** `session/2026-09-08-1420-issue-234`
+
+- #213 stopped `load_jsonl` admitting values `dump_jsonl` cannot faithfully
+  emit, and the writer's docstring claimed the seam was closed:
+  "That guarantee is enforced, not merely asserted." `_validate_record` runs on
+  the **load** path. `Example` is exported, is a frozen dataclass with no
+  `__post_init__`, and a `Dataset` assembled in Python — the ordinary use of a
+  reusable eval framework — never meets a loader.
+- Measured on `main`, no loader involved: `provenance={"cost_usd": inf}` was
+  written as a bare `Infinity` token and `load_jsonl` of the file *just
+  written* raised `DatasetLoadError`; a lone surrogate raised a raw
+  `UnicodeEncodeError` naming "position 94" of the serialized line and no
+  record; `provenance={1: "one"}` was written `{"1": "one"}` **silently** and
+  reloaded with the key changed from `int` to `str`.
+- `dump_jsonl` now walks every record through the loader's own
+  `_find_unrepresentable` before writing any bytes, and `find_unrepresentable`
+  reports a non-`str` object key as a third finding kind instead of raising
+  `AttributeError` (#231). Suite 1288 → 1444.
+- **A true reason for an over-broad exclusion.** `dataset.py` says "Rejecting
+  at load is the correct side of the seam. `dump_jsonl` could write with
+  `errors="surrogatepass"`, but that puts invalid UTF-8 on disk." True — and it
+  answers *how* the writer should handle a bad value, not *whether it is
+  reachable with one*.
+- **The enumeration counted the wrong unit, again.** `io_utils`' module comment
+  listed four enforcement sites, and every member of that survey was an
+  *ingress*: two loaders, a drift compute seam, a CLI backstop. Nothing in it
+  asked whether the rule's own writer could be reached without passing one.
+- **#231 was promoted by the fix itself.** It was filed `priority:low` because
+  both call sites are fed `json.loads` output, whose keys are always `str`.
+  That was true; routing the writer through the shared walk is what creates the
+  third call site that is not. Check the low pile before wiring a new caller
+  into a shared helper.
+- **The green neighbour that taught the most**, for the second run running:
+  copying the rules into the writer instead of sharing them passes all 19
+  rejection rows, all 18 accept rows, every message assertion and the whole
+  parity table. Only an AST check that `dump_jsonl` names the shared helper,
+  and a count that each reason string is written once, separate it. That
+  "written once" lock had to *parse* rather than grep — the module comment
+  explaining the fix contains the same words.
+
+**Why this work, this session:** llm-eval-harness is first in the build
+sequence among the priority-tier repos past their freshness floor, its two
+`priority:med` issues both need a maintainer decision, and the hunt started
+where the freshest surface is — the PRs merged in this session's own Phase A.
+
+**Open questions / blockers:** none.
+
+**Next session:** #235 — the write path checks representability but not schema,
+so `Example(id=123)` still writes an `id` `load_jsonl` refuses. The boundary is
+pinned by a test rather than assumed.
