@@ -46,6 +46,8 @@ from pathlib import Path
 from typing import Any, ClassVar
 
 from eval_harness.io_utils import (
+    NON_FINITE,
+    NON_STRING_KEY,
     UNENCODABLE,
     atomic_write_text,
     find_unrepresentable,
@@ -155,22 +157,54 @@ class Dataset:
         guarantees load → dump → re-load is byte-stable for any well-formed
         input, which is what makes round-trip identity testable.
 
-        That guarantee is enforced, not merely asserted: `_validate_record`
-        rejects the two classes of value this writer cannot faithfully emit —
-        non-finite numbers, which `json.dumps` renders as bare `NaN`/`Infinity`
-        tokens that are not JSON, and strings with no UTF-8 encoding, which
-        raise `UnicodeEncodeError` here (#213). Before that check both loaded
-        clean and `eval-harness validate` reported `findings=0`.
+        That guarantee is enforced on *both* sides of the seam, and until #234
+        only one of them: `_validate_record` rejects the classes of value this
+        writer cannot faithfully emit on the way in (#213), and this method
+        applies the identical rule on the way out, through the same
+        `_find_unrepresentable`.
+
+        The write half was the half that mattered and the one nobody had.
+        `_validate_record` runs on the *load* path, so it says nothing about a
+        `Dataset` assembled in Python — `Example` is exported, has no
+        `__post_init__`, and building goldens programmatically is the ordinary
+        use of this package. Measured on `main`: a `provenance` of
+        `{"cost_usd": inf}` was written as a bare `Infinity` token and
+        `load_jsonl` of the file just written raised `DatasetLoadError`; a
+        `{1: "one"}` key was written `{"1": "one"}` and reloaded with the key
+        silently changed to a string.
+
+        Rejection happens before any bytes are written — every record is walked
+        first, so a bad example leaves the destination exactly as it was rather
+        than truncating it to the good prefix. Raises `ValueError` naming the
+        example's index, its `id` and the JSON path, with the loader's own
+        reason text.
+
+        Scope: this is the *representability* rule, not full schema validation
+        on the write path. `Example(id=123)` still writes an `id` that
+        `load_jsonl` will refuse — a strictly larger question with a different
+        shape, tracked in #235 and deliberately not smuggled in here.
+
         `tests/test_dataset_representability.py` runs the property over a
         variant table rather than restating it in prose.
         """
         path = Path(path)
+        records = [ex.to_dict() for ex in self.examples]
+        for i, (ex, record) in enumerate(zip(self.examples, records, strict=True)):
+            unrepresentable = _find_unrepresentable(record)
+            if unrepresentable is not None:
+                json_path, reason = unrepresentable
+                # `ascii(ex.id)` and not `{ex.id!r}`: the id is itself a
+                # candidate for the surrogate failure being reported, and
+                # interpolating it verbatim would make *this* message
+                # unprintable — the same trap `io_utils._safe_path_segment`
+                # exists for, one layer up.
+                raise ValueError(f"examples[{i}] (id={ascii(ex.id)}): field {json_path!r} {reason}")
         # Compact separators (no spaces) plus sorted keys give us a stable,
         # diff-friendly canonical form. `ensure_ascii=False` keeps non-ASCII
         # inputs human-readable on disk.
         lines = (
-            json.dumps(ex.to_dict(), sort_keys=True, ensure_ascii=False, separators=(",", ":"))
-            for ex in self.examples
+            json.dumps(record, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+            for record in records
         )
         atomic_write_text(path, "\n".join(lines) + "\n")
 
@@ -247,12 +281,33 @@ def _find_unrepresentable(record: dict[str, Any]) -> tuple[str, str] | None:
             "encoding, so `dump_jsonl` raises UnicodeEncodeError on a file "
             "that otherwise validates clean"
         )
-    return path, (
-        f"is {detail}; dataset values must be finite. `dump_jsonl` emits a "
-        "bare `NaN`/`Infinity` token, which is not JSON: `JSON.parse` "
-        "rejects the line outright and `jq` silently coerces it to "
-        "`null`/1.8e308"
-    )
+    if kind == NON_FINITE:
+        return path, (
+            f"is {detail}; dataset values must be finite. `dump_jsonl` emits a "
+            "bare `NaN`/`Infinity` token, which is not JSON: `JSON.parse` "
+            "rejects the line outright and `jq` silently coerces it to "
+            "`null`/1.8e308"
+        )
+    if kind == NON_STRING_KEY:
+        # The only kind that can carry an empty path: it is reported at the
+        # dict that *holds* the key, and that dict is the record itself when
+        # the bad key is top-level. Neither shipped caller can produce it —
+        # `to_dict` writes literal `str` keys and `json.loads` only makes them
+        # — but `field ''` is not a sentence, and a sixth site is exactly the
+        # kind of caller that would arrive later and print it.
+        return path or "(record root)", (
+            f"has the non-string object key {detail}; `dump_jsonl` writes "
+            "`json.dumps`, which coerces an int/float/bool/None key to a "
+            'string — `{1: \'one\'}` is written `{"1": "one"}` and reloads '
+            'as the string `"1"`, silently — and raises a bare TypeError '
+            "for any other key type"
+        )
+    # Every kind `find_unrepresentable` can return must be spelled out here.
+    # A fallthrough `return` would hand a *new* axis whichever message happens
+    # to sit last in this function, which is how a guard ends up naming a harm
+    # it did not find; the loud version is a bug report instead of a wrong
+    # sentence in an operator's terminal.
+    raise AssertionError(f"unhandled representability kind {kind!r} at {path!r}")
 
 
 def _validate_record(raw: Any, line_no: int) -> Example:
