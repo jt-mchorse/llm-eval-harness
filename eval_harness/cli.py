@@ -37,7 +37,13 @@ from eval_harness.comment import (
 )
 from eval_harness.dataset import DatasetLoadError, load_jsonl, validate_dataset
 from eval_harness.io_utils import atomic_write_text
-from eval_harness.judge import AnthropicBackend, Judge, JudgeAuthError, JudgeParseError
+from eval_harness.judge import (
+    AnthropicBackend,
+    Judge,
+    JudgeAuthError,
+    JudgeBackendError,
+    JudgeParseError,
+)
 from eval_harness.runner import (
     DEFAULT_THRESHOLD_DROP,
     DatasetEchoSource,
@@ -405,6 +411,15 @@ def _run_calibrate(args: argparse.Namespace) -> int:
         # `ValueError` subclass never routed anything here, because neither
         # seam has an `except ValueError` arm.
         return _fail(f"judge did not return a usable verdict: {e}")
+    except JudgeBackendError as e:
+        # The last judge-layer class still escaping this seam (#220, D-020).
+        # Exit 1 here means "Cohen's κ below threshold" — a *measured*
+        # calibration result — so a 400 or a retry-exhausted 429 landing there
+        # told CI the judge disagrees with the human labels when in fact no
+        # labels were compared at all. `JudgeBackendError` already carries the
+        # retryable/not distinction in its message, so this arm adds no prefix
+        # of its own.
+        return _fail(str(e))
 
     report = render_report(result, judge_model=backend.model, threshold_kappa=args.threshold_kappa)
     if (rc := _write_output(args.report, report)) is not None:
@@ -506,6 +521,12 @@ def _run_run(args: argparse.Namespace) -> int:
         # response was reported to CI as a quality regression. `run_suite`
         # names the failing example id, which the parser cannot.
         return _fail(f"judge did not return a usable verdict: {e}")
+    except JudgeBackendError as e:
+        # Sibling of the `calibrate` arm (#220, D-020). Exit 1 on this path
+        # means "a row regressed past --threshold-drop", so an outage was
+        # reported as a quality regression — the one reading that sends an
+        # operator to look at their prompts instead of at the API status page.
+        return _fail(str(e))
     except EmptyTagFilterError as e:
         # Silent-empty-run is the worst failure mode; surface the requested
         # tags and the dataset's tag inventory so the operator can self-correct.

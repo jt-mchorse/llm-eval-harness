@@ -232,9 +232,29 @@ alias was visible in `--help`, locked by
   cannot supply. `JudgeAuthError` and `JudgeParseError` both subclass
   `ValueError`, but that relationship routes nothing: neither seam
   catches the broad `ValueError`, so a parse error escaped as a raw
-  traceback at exit 1 until an arm of its own was added. Remote backend
-  failures and bugs in a caller's own `Backend` still propagate, by
-  decision — see #220.
+  traceback at exit 1 until an arm of its own was added.
+- **Remote judge failures share exit 2 (#220, D-020).** The two rows
+  #218 left open — the remote rejecting the request (400/404, a bad
+  `--model`) and a transient failure outlasting `retry_call`'s budget
+  (429/5xx/connection) — are now translated by `JudgeBackendError`
+  arms on both seams. They share the code because `_fail` already
+  reads "I/O **or** usage error" and those are its two halves; the
+  difference an operator acts on rides in the message, and
+  `test_the_two_halves_are_distinguishable_in_the_message` pins that,
+  since a shared code is only defensible while the message keeps them
+  apart. The classifier is `is_backend_failure`, a third duck-typed,
+  import-free sibling of `is_transient_error` / `is_auth_error` that
+  asks a *provenance* question — did this come back over the wire —
+  rather than a severity one. That is what let the fix avoid the
+  `except Exception` the issue ruled out: the retag lives inside
+  `AnthropicBackend.complete`, a frame a caller's own `Backend` never
+  enters, and a bug in our own content-block loop inside that frame
+  carries no status code and no SDK class name, so both keep their
+  traceback. Unlike its two siblings it tests `isinstance(status, int)`
+  rather than set membership, because *any* HTTP status is evidence a
+  response arrived; a membership test would answer False for a status
+  the repo never enumerated and hand back the exit-1 traceback this
+  decision removed.
 - **`--tags` row-level subset filter (#15).** Set-union match over a
   row's `tags`; `eval-harness run --tags faithfulness` runs only the
   rows tagged with that label, exit code 2 with the dataset's tag

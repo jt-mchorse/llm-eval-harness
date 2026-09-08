@@ -186,6 +186,91 @@ def is_auth_error(exc: BaseException) -> bool:
     return isinstance(exc, TypeError) and _AUTH_TYPEERROR_MARKER in str(exc).lower()
 
 
+#: Class names for remote failures that carry *no* HTTP status: the
+#: connection-level pair, plus the two auth classes that exist precisely
+#: because an SDK might stop exposing ``status_code`` on them. Derived as the
+#: union of the two sets above rather than hand-copied, so editing either one
+#: cannot leave this classifier behind — the failure mode that would otherwise
+#: be invisible, because a name dropping out of the union only makes
+#: :func:`is_backend_failure` quieter, never louder.
+_REMOTE_EXC_NAMES = _TRANSIENT_EXC_NAMES | _AUTH_EXC_NAMES
+
+
+class JudgeBackendError(ValueError):
+    """The judge backend failed *operationally*: the remote said no, or was unreachable.
+
+    Sibling of :class:`JudgeAuthError`, and like it a ``ValueError`` subclass
+    only so a *library* caller can handle the bad-input family with one arm.
+    That relationship routes nothing in the CLI: neither judge seam catches the
+    broad ``ValueError``, so ``_run_run`` / ``_run_calibrate`` reach exit 2 via
+    an explicit ``except JudgeBackendError`` arm (#220).
+
+    Two failures land here and they share the code by decision, not by
+    accident (D-020):
+
+    - the remote rejected the request outright (a non-transient status such as
+      400 or 404 — a bad ``--model``, a ``max_tokens`` the model refuses);
+    - a transient failure outlasted :func:`retry_call`'s attempt budget (a 429
+      storm, a 5xx, a connection error).
+
+    ``_fail`` documents exit 2 as "I/O **or** usage error", and those are the
+    two halves: a rejected request is the usage half, an exhausted budget
+    against a remote that is down is the I/O half. What must *not* happen is
+    either one landing on exit 1, which on both these subcommands already means
+    "a row dropped past ``--threshold-drop``" / "Cohen's κ below threshold" —
+    a 429 storm reported to CI as a quality regression. The difference an
+    operator acts on (retry later vs. fix the invocation) is carried in the
+    message, which is where this repo already carries every other exit-2
+    distinction: a missing file and a malformed file are both 2.
+    """
+
+
+def is_backend_failure(exc: BaseException) -> bool:
+    """True when ``exc`` came from the remote API or the transport to it.
+
+    Third duck-typed, import-free sibling of :func:`is_transient_error` and
+    :func:`is_auth_error`, and the one that asks a different *kind* of
+    question. Those two ask "what sort of failure is this?"; this one asks
+    **where did it come from?** — because the thing the seam must not do is
+    retag a bug in our own code, or in a caller's own ``Backend``, as a remote
+    failure and swallow its traceback into a clean exit-2 line (#220).
+
+    Two handles, in decreasing robustness:
+
+    - An int ``status_code``. Every ``anthropic.APIStatusError`` subclass
+      carries one, and *any* HTTP status is evidence the failure came back
+      over the wire — so unlike its two siblings this one does not test
+      membership in a code set. A status this repo has never seen is still a
+      status.
+    - Class name in :data:`_REMOTE_EXC_NAMES`, for the connection-level
+      failures that never got a status because no response arrived.
+
+    The ``bool``-subclasses-``int`` guard both siblings carry is here too: a
+    truthy ``status_code`` of ``True`` is not a status code.
+
+    **Relationship to :func:`is_auth_error`, stated because it is checkable.**
+    This function claims two of that one's three handles — the 401/403 statuses
+    and the two auth class names — and deliberately *not* the third. The
+    credential-resolution ``TypeError`` is raised while building request
+    headers, **before any request is sent**, so by this function's own question
+    it did not come from the remote and must answer False. The seam consults
+    :func:`is_auth_error` first regardless, because on the overlap it has the
+    more actionable message.
+
+    Everything a caller's own ``Backend`` raises — ``ValueError``,
+    ``RuntimeError``, a plain ``TypeError``, an ``AssertionError`` — has
+    neither handle and answers False, keeping its traceback. So does a bug in
+    *our* content-block loop, which runs inside the same ``try``.
+    """
+    status = getattr(exc, "status_code", None)
+    if isinstance(status, bool):
+        # Same `bool`-subclasses-`int` guard the two siblings carry.
+        status = None
+    if isinstance(status, int):
+        return True
+    return type(exc).__name__ in _REMOTE_EXC_NAMES
+
+
 def retry_call(
     fn: Callable[[], _T],
     *,
@@ -332,7 +417,45 @@ class AnthropicBackend:
                     "`eval-harness drift --judge-stub`, or pass your own callable to "
                     "the library API — which needs no key at all."
                 ) from exc
+            # An *operational* remote failure — the API rejected the request,
+            # or a transient one outlasted the retry budget above (#220,
+            # D-020). Left untagged these were the last judge-layer failures
+            # escaping as a raw traceback at exit 1, which on both subcommands
+            # that build a judge already means "a row dropped past
+            # --threshold-drop" / "Cohen's κ below threshold" — so a 429 storm
+            # was reported to CI as a quality regression.
+            #
+            # `is_backend_failure` asks where the exception came from, not what
+            # sort it is, which is what keeps this from being the `except
+            # Exception` the issue rules out: a bug in the content-block loop
+            # above carries no status code and no SDK class name, so it falls
+            # through to the bare `raise` with its traceback intact. A caller's
+            # own `Backend` never enters this frame at all.
+            if is_backend_failure(exc):
+                raise JudgeBackendError(self._backend_failure_message(exc)) from exc
             raise
+
+    def _backend_failure_message(self, exc: BaseException) -> str:
+        """The operator-facing half of D-020: the code is shared, the message is not.
+
+        A rejected request and an exhausted retry budget both exit 2, so this
+        sentence is the only thing telling an operator whether to fix the
+        invocation or run it again later. Retry-exhaustion is stated with the
+        budget that was actually spent — "after 3 attempts" is a measurement,
+        and it is also the number the operator would raise.
+        """
+        detail = f"{type(exc).__name__}: {exc}"
+        if is_transient_error(exc):
+            return (
+                f"judge backend unreachable after {self.max_attempts} "
+                f"attempt{'s' if self.max_attempts != 1 else ''} ({detail}). This is a "
+                "transient failure that outlasted the retry budget, not a result — "
+                "re-running may succeed."
+            )
+        return (
+            f"judge backend rejected the request ({detail}). Check --model and the "
+            "judge settings; re-running unchanged will fail the same way."
+        )
 
 
 # ----------------------------------------------------------------------

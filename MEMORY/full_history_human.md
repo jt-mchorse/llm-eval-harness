@@ -2389,3 +2389,40 @@ consumers rather than assuming.
 
 A portfolio-wide grep for the same pattern came back with exactly one hit: the
 line fixed here.
+
+## 2026-09-07 — Issue #220: a remote judge failure is not a quality result
+**Duration:** ~18 min · **Branch:** `session/2026-09-07-0710-issue-220`
+
+- Closed the last two rows of the judge seam's exit-code grid. A non-transient
+  400 from the remote, and a transient failure that outlasted `retry_call`'s
+  budget, both escaped `run` and `calibrate` as a raw traceback at exit 1 — the
+  code that on those two subcommands already means "a row dropped past
+  `--threshold-drop`" and "Cohen's κ below threshold". A 429 storm was being
+  reported to CI as a quality regression. Both now exit 2, and the difference an
+  operator acts on rides in the message.
+- The mechanism is `is_backend_failure`, a third duck-typed, import-free sibling
+  of `is_transient_error` / `is_auth_error`. It asks a provenance question —
+  "did this come back over the wire?" — rather than a severity one, which is how
+  the fix avoided the `except Exception` the issue explicitly ruled out.
+- **The grid test stayed green through the whole code change.** It was replacing
+  `AnthropicBackend` wholesale at the `cli` seam, so its two `sdk-*` rows modelled
+  our own remote backend raising a raw SDK error *past* `complete` — a shape
+  production cannot produce, because the SDK raises it one layer down, inside the
+  very frame the fix lives in. Its assertion also read
+  `pytest.raises((_FakeStatusError, ValueError, TypeError))`, and
+  `JudgeBackendError` is a `ValueError`, so the pin would have passed unchanged
+  even if the fix had wrongly swallowed the caller-`Backend` rows too. Both rows
+  now drive a real `AnthropicBackend` with a fake client.
+
+**Why this work, this session:** #220 was the one open issue in this repo that
+was a real piece of engineering rather than a maintainer question, and its
+acceptance criteria named the decision, the mechanism constraint, and the tests
+that had to be edited on purpose — a fully specified job.
+
+**Open questions / blockers:** none. The alternative D-020 rejected (a distinct
+exit 3 so CI could auto-retry a transient outage) is recorded with the evidence
+that should reopen it: a consumer that actually wants to auto-retry.
+
+**Next session:** #231 (`find_unrepresentable` raises a raw `AttributeError` on a
+non-string dict key) is the remaining actionable issue here; #177 and #212 both
+need JT's input rather than code.

@@ -97,7 +97,7 @@ pretending to be a multi-rater gold standard.
 ## Architecture
 
 See [`docs/architecture.md`](docs/architecture.md) for the integrated flow,
-per-layer detail, and the design decisions behind each one (D-002…D-019).
+per-layer detail, and the design decisions behind each one (D-002…D-020).
 The shape:
 
 ```mermaid
@@ -322,7 +322,7 @@ hermetic.
 Because exit 1 on those two paths is *not* a spare code — it means "a row
 dropped past `--threshold-drop`" for `run` and "Cohen's κ below threshold"
 for `calibrate` — a judge that fails *operationally* must not land there.
-The seam's full contract (#218), pinned in
+The seam's full contract (#218, #220), pinned in
 `tests/test_cli_judge_seam_exit_codes.py`:
 
 | judge-layer failure | `run` | `calibrate` |
@@ -330,22 +330,44 @@ The seam's full contract (#218), pinned in
 | missing/invalid credential (`JudgeAuthError`) | 2 | 2 |
 | unparseable judge response (`JudgeParseError`) | 2 | 2 |
 | no `judge` extra installed (`ImportError`) | 2 | 2 |
-| remote backend failure (400, or 500 past the retry budget) | traceback | traceback |
+| remote rejected the request — 400, 404, a bad `--model` (`JudgeBackendError`) | 2 | 2 |
+| remote unreachable past the retry budget — 429/5xx/connection (`JudgeBackendError`) | 2 | 2 |
 | a bug in a caller's own `Backend` | traceback | traceback |
 | judge answered cleanly | 0 / 1 by findings | 0 / 1 by κ |
 
-The first three are translated by explicit `except` arms. Being a
+The first five are translated by explicit `except` arms. Being a
 `ValueError` subclass routes nothing on its own — neither seam catches the
 broad `ValueError`, which is why `JudgeParseError` exited 1 with a
 traceback for as long as it did. On a multi-row set the exit-2 line names
 the failing `example`/`row` id, which the parser itself cannot: it quotes
 the raw response but has no id in scope.
 
-The last two rows are deliberate, not pending cleanup. A remote failure is
-neither operator misconfiguration nor findings, and its exit code
-interacts with `retry_call`'s budget — that decision is issue #220. A bare
-exception from a caller's own `Backend` keeps its traceback on purpose:
-swallowing it into exit 2 would report a real bug as a usage error.
+The two remote-failure rows share exit 2 by decision (**D-020**, #220), not
+by accident. `_fail` documents exit 2 as "I/O **or** usage error" and those
+are its two halves: a rejected request is the usage half, an exhausted
+retry budget against a remote that is down is the I/O half. Neither is
+findings, and exit 1 is the only *wrong* answer on these paths. What a
+shared code would otherwise lose — whether to fix the invocation or just
+run it again later — is carried in the message instead, which is where this
+repo already carries every other exit-2 distinction (a missing file and a
+malformed file are both 2):
+
+```
+::error::judge backend rejected the request (BadRequestError: status 400).
+Check --model and the judge settings; re-running unchanged will fail the same way.
+
+::error::judge backend unreachable after 4 attempts (RateLimitError: status 429).
+This is a transient failure that outlasted the retry budget, not a result —
+re-running may succeed.
+```
+
+The classifier behind it, `is_backend_failure`, is the third duck-typed,
+import-free sibling of `is_transient_error` and `is_auth_error`, and it asks
+a different *kind* of question: not "what sort of failure is this" but
+"did it come from the remote at all". That is what keeps `except Exception`
+out of the seam. The last row is unchanged and deliberate: a bare exception
+from a caller's own `Backend` keeps its traceback, because swallowing it
+into exit 2 would report a real bug as a usage error.
 
 Run history is stored in SQLite at `~/.eval-harness/runs.db` (override
 with `--db`); two tables, `runs` and `rows`, with a foreign key from
