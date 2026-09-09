@@ -202,3 +202,14 @@
   reversibility: cheap
   related_issues: ["#234", "#231", "#213"]
   superseded_by: null
+
+- id: D-022
+  date: 2026-09-09
+  decision: dump_jsonl_rejects_a_dataset_whose_version_disagrees_with_its_rows_rather_than_overwriting_every_row_with_dataset_dot_version
+  rationale: Dataset_version_is_documented_as_the_value_of_dataset_version_carried_by_every_line_in_the_file_and_nothing_checked_it_on_the_way_out_so_Dataset_version_v1_examples_carrying_v2_wrote_a_file_that_RELOADED_AS_v2_the_two_repairs_are_reject_or_overwrite_and_OVERWRITING_IS_A_LOSSY_WRITE_NO_READER_CAN_DETECT_the_row_said_v2_the_file_says_v1_and_nothing_records_that_it_was_changed_while_REJECTING_matches_what_the_loader_already_says_for_the_neighbouring_mixed_version_case_split_mixed_version_data_into_separate_files_and_leaves_the_caller_to_state_which_version_they_meant
+  scope: the_write_path_only_load_jsonl_is_unchanged_it_already_derives_the_file_version_from_the_rows_and_rejects_disagreement_between_them
+  measured: "Dataset(version='v1', examples=[Example(dataset_version='v2')]).dump_jsonl(p) then load_jsonl(p).version -> 'v2' on main; after: ValueError naming both versions and the destination untouched"
+  alternatives_rejected: [overwrite_every_row_with_dataset_dot_version, leave_it_and_document_that_dataset_dot_version_is_advisory_on_the_write_path]
+  reversibility: cheap
+  related_issues: ["#235", "#234"]
+  superseded_by: null
