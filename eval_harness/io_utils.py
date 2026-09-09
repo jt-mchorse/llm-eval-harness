@@ -99,17 +99,28 @@ def _name_bytes(base: str) -> int:
 # escape above U+FFFF".
 #
 # One definition, here rather than in any caller, because the rule now has
-# four enforcement sites with different consequences to describe:
+# five enforcement sites with different consequences to describe:
 #   `dataset._validate_record`       (#213)  -- `dump_jsonl` cannot emit it
 #   `drift.compute_drift`            (#215)  -- `render_html` cannot be written
 #   `calibration._row_from_dict`     (#217)  -- `render_report` cannot be written,
 #                                               and by then the judge tokens are spent
 #   `cli._write_output`              (#217)  -- the backstop: whatever slipped past
 #                                               the loaders exits 2, not 1-with-a-traceback
+#   `Dataset.dump_jsonl`             (#234)  -- the writer itself, for a record
+#                                               that reached it without a loader
 # Each phrases its own consequence; all share the detection so they cannot
 # answer differently for the same string. `find_unencodable` is the per-string
-# half; `find_unrepresentable` below is the record walk the two loader-side
-# sites share.
+# half; `find_unrepresentable` below is the record walk the loader sites and
+# the writer share.
+#
+# The fifth arrived late for a reason worth leaving here. For four sites this
+# list read as a survey of where the rule is enforced, and every member of it
+# was an *ingress* -- two loaders, a drift compute seam, a CLI backstop. The
+# question none of them asks is whether the rule's own writer can be reached
+# without passing one, and `Dataset.dump_jsonl` could: `Example` is exported,
+# has no `__post_init__`, and a `Dataset` assembled in Python never sees
+# `load_jsonl`. So the canonical writer emitted `{"cost_usd":Infinity}` --
+# a file its own loader rejects on the very next read (#234).
 
 
 def find_unencodable(text: str) -> tuple[str, int] | None:
@@ -127,12 +138,13 @@ def find_unencodable(text: str) -> tuple[str, int] | None:
     return None
 
 
-#: The two shapes a record can carry that a canonical JSON writer cannot
-#: faithfully emit. Named so a caller can enforce a subset: the axes have
-#: different consequences and not every seam has one to name for both.
+#: The shapes a record can carry that a canonical JSON writer cannot faithfully
+#: emit. Named so a caller can enforce a subset: the axes have different
+#: consequences and not every seam has one to name for all of them.
 UNENCODABLE = "unencodable"
 NON_FINITE = "non_finite"
-_ALL_KINDS = frozenset({UNENCODABLE, NON_FINITE})
+NON_STRING_KEY = "non_string_key"
+_ALL_KINDS = frozenset({UNENCODABLE, NON_FINITE, NON_STRING_KEY})
 
 
 def _safe_path_segment(key: str) -> str:
@@ -155,15 +167,27 @@ def find_unrepresentable(
     a canonical JSON writer cannot faithfully emit, or ``None`` when the whole
     record is representable.
 
-    ``kind`` is :data:`UNENCODABLE` or :data:`NON_FINITE`; ``detail`` is the
-    fragment a caller interpolates into its own message -- ``"'\\ud800' at
-    position 4"`` for the former, ``"nan"`` for the latter. **The caller phrases
-    the consequence.** That is the split #215 established for a single string
-    (`find_unencodable` is shared; each site says what breaks) applied one level
-    up to the record walk, so the two record-level enforcement sites --
-    ``dataset._validate_record`` (#213) and ``calibration._row_from_dict``
-    (#217) -- cannot answer differently for the same input while still naming
-    different harms.
+    ``kind`` is :data:`UNENCODABLE`, :data:`NON_FINITE` or
+    :data:`NON_STRING_KEY`; ``detail`` is the fragment a caller interpolates
+    into its own message -- ``"'\\ud800' at position 4"``, ``"nan"``, ``"1
+    (int)"``. **The caller phrases the consequence.** That is the split #215
+    established for a single string (`find_unencodable` is shared; each site
+    says what breaks) applied one level up to the record walk, so the
+    record-level enforcement sites -- ``dataset._validate_record`` (#213),
+    ``calibration._row_from_dict`` (#217) and ``Dataset.dump_jsonl`` (#234) --
+    cannot answer differently for the same input while still naming different
+    harms.
+
+    :data:`NON_STRING_KEY` arrived with the write-side site (#234) and is the
+    reason it had to. The two loader sites are fed `json.loads` output, whose
+    object keys are always `str`; a `Dataset` built in Python is not, so
+    ``dump_jsonl`` is the first caller that can hand this walk a non-string
+    key. It is a representability finding on its own terms, not merely a crash
+    to avoid: `json.dumps` *coerces* an `int`/`float`/`bool`/`None` key to a
+    string (``{1: "one"}`` is written ``{"1": "one"}``, and reloads as the
+    string ``"1"``), and raises a raw `TypeError` for any other key type. The
+    first is the sharper half -- silent, and it breaks the round-trip identity
+    ``dump_jsonl`` exists to guarantee.
 
     ``kinds`` selects which axes are enforced. It is not decoration: the
     calibration loader enforces ``UNENCODABLE`` only, because no calibration
@@ -197,6 +221,28 @@ def find_unrepresentable(
                 return path, NON_FINITE, repr(node)
         elif isinstance(node, dict):
             for k, v in node.items():
+                if not isinstance(k, str):
+                    # Reported where it is found, not pushed as a node: there
+                    # is no path segment to push it under until the key has
+                    # been rendered, and rendering it is the step that used to
+                    # crash. `_safe_path_segment` calls `find_unencodable`,
+                    # which calls `k.encode` -- so an `int` key raised
+                    # `AttributeError` out of the line below, escaping every
+                    # caller's `except ValueError` exactly the way the
+                    # `RecursionError` this walk is iterative to avoid would
+                    # (#231). `ascii()` and not `repr()` because a key can be a
+                    # *container* of strings, and a tuple holding a lone
+                    # surrogate would put it back into the message this
+                    # function exists to keep clean.
+                    if NON_STRING_KEY in kinds:
+                        return path, NON_STRING_KEY, f"{ascii(k)} ({type(k).__name__})"
+                    # Axis not enforced here, but the *value* still is: descend
+                    # under a rendered key so a caller enforcing only
+                    # UNENCODABLE keeps finding surrogates below a non-string
+                    # key instead of losing that subtree.
+                    seg = _safe_path_segment(ascii(k))
+                    stack.append((f"{path}.{seg}" if path else seg, v))
+                    continue
                 seg = _safe_path_segment(k)
                 child = f"{path}.{seg}" if path else seg
                 # A key is a string on the record too, and is subject to the

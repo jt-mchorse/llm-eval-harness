@@ -255,6 +255,20 @@ alias was visible in `--help`, locked by
   response arrived; a membership test would answer False for a status
   the repo never enumerated and hand back the exit-1 traceback this
   decision removed.
+- **The canonical writer enforces the loader's rule (#234, D-021).** #213
+  made `load_jsonl` reject the values `dump_jsonl` cannot faithfully emit,
+  and the writer's docstring claimed the seam was closed. It was closed on
+  one side: `_validate_record` runs on the *load* path, `Example` is exported
+  with no `__post_init__`, and a `Dataset` assembled in Python never meets a
+  loader. So `dump_jsonl` wrote `{"cost_usd":Infinity}` — a file `load_jsonl`
+  rejects on the very next read — and coerced a `{1: "one"}` key to `{"1":
+  "one"}` silently. It now walks every record through the *same*
+  `_find_unrepresentable` before any bytes are written, raising `ValueError`
+  naming `examples[i]`, the id and the JSON path; a non-`str` object key is a
+  third finding kind (`NON_STRING_KEY`) rather than the `AttributeError` the
+  walk used to raise on one (#231). The rule is representability, not schema:
+  `Example(id=123)` still writes, and the boundary has its own test rather
+  than a comment.
 - **`--tags` row-level subset filter (#15).** Set-union match over a
   row's `tags`; `eval-harness run --tags faithfulness` runs only the
   rows tagged with that label, exit code 2 with the dataset's tag
