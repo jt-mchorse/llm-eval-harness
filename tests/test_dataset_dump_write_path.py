@@ -496,18 +496,40 @@ def test_every_kind_the_walk_can_return_has_a_reason() -> None:
         assert found[1], kind
 
 
-def test_the_scope_boundary_is_representability_not_schema(tmp_path: Path) -> None:
-    """Stated in the docstring, pinned here.
+def test_the_scope_boundary_moved_to_the_expected_output_item_type(tmp_path: Path) -> None:
+    """Where the boundary is NOW, updated rather than deleted (#235).
 
-    `dump_jsonl` enforces the rule about values a canonical writer cannot
-    faithfully emit. It does *not* validate the record's schema, so an `id`
-    that is not a string still writes and `load_jsonl` still refuses it. That
-    is a strictly larger change with a different shape (#235), and leaving
-    it undeclared is how the next reader concludes the write path is fully
-    guarded when it is not.
+    This test used to assert the opposite: that `dump_jsonl` enforced
+    representability only, so `Example(id=123)` wrote a file `load_jsonl`
+    refused. #235 moved the line — the schema is enforced on both sides now,
+    from the same `_FIELD_RULES` and the same `_DatasetInvariants`.
+
+    What is still asymmetric, deliberately, is the per-item
+    `ExpectedOutput` rule, because the two sides have different domains: the
+    loader receives JSON objects and constructs `ExpectedOutput`s from them, so
+    `__post_init__` validates `kind`/`value` there; this side already holds
+    instances. The writer therefore has its own rule for the one thing it can
+    be handed that the loader cannot — a non-`ExpectedOutput` item — and does
+    not restate `kind`/`value` validation that construction already did.
+
+    Leaving the boundary undeclared is how the next reader concludes the write
+    path is fully guarded when it is not, so it is asserted from both ends.
     """
-    ds = Dataset(version="v1", examples=[_example(id=123)])
+    # The moved half: what used to write now refuses, before any bytes.
     out = tmp_path / "goldens.jsonl"
-    ds.dump_jsonl(out)
-    with pytest.raises(DatasetLoadError, match="'id' must be a non-empty string"):
-        load_jsonl(out)
+    with pytest.raises(ValueError, match="'id' must be a non-empty string"):
+        Dataset(version="v1", examples=[_example(id=123)]).dump_jsonl(out)
+    assert not out.exists()
+
+    # The half that stays asymmetric: `kind`/`value` are validated at
+    # construction, so the writer does not re-check them...
+    with pytest.raises(ValueError, match="invalid expected_output kind"):
+        ExpectedOutput(kind="nope", value="x")
+
+    # ...but a non-`ExpectedOutput` item is the writer's own domain, and it
+    # raises this package's `ValueError` rather than reaching `to_dict()` as a
+    # bare `AttributeError`.
+    ds = Dataset(version="v1", examples=[_example(expected_outputs=(1,))])
+    with pytest.raises(ValueError, match="must be an ExpectedOutput"):
+        ds.dump_jsonl(out)
+    assert not out.exists()
