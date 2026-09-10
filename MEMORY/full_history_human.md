@@ -2478,3 +2478,54 @@ where the freshest surface is — the PRs merged in this session's own Phase A.
 **Next session:** #235 — the write path checks representability but not schema,
 so `Example(id=123)` still writes an `id` `load_jsonl` refuses. The boundary is
 pinned by a test rather than assumed.
+
+## 2026-09-09 — Issue #235: the write path learned the schema, and the quiet rows were the point
+**Duration:** ~62 min · **Branch:** `session/2026-09-09-0737-issue-235`
+
+#234 put the representability rule on `dump_jsonl` and its docstring scoped the
+schema out by name. `_validate_record` runs on the load path only, so a
+`Dataset` assembled in Python wrote files `load_jsonl` refuses.
+
+The issue named seven fields. Measuring found thirteen shapes across three
+layers — per-field shape, the cross-record rules `load_jsonl` enforces in its
+own loop (unique ids, one `dataset_version`, non-empty), and `Dataset.version`,
+which belongs to no record at all. A write-side gap has as many layers as the
+reader has loops.
+
+Ten of the thirteen wrote a file the loader refuses, which a user at least
+*sees*. Three round-tripped and were wrong, and those were worth the change:
+`Example.to_dict()` does `list(self.tags)` and `dict(self.provenance)`, so
+`tags="urgent"` became six single-character tags, a list `provenance` became
+`{}`, and a `Dataset.version` that disagreed with its rows reloaded as the other
+version.
+
+That last fact settled the design. The obvious spelling is to check the record
+`to_dict()` produced — and it passes eleven of the thirteen rows, because by the
+time a string `tags` reaches the record it is already a well-formed list of six
+strings. The check reads the `Example`'s attributes instead. Built and ran that
+neighbour: seven red, exactly the two silent rows and their twins.
+
+The other neighbour is the one this repo has now measured three runs running:
+copy the rules into the writer rather than share them. It passes all thirteen
+reject rows, all eight accept rows and both destination-untouched tables, and is
+caught only by the two structural tests. A behavioural suite cannot distinguish
+one definition from two identical ones — that is what the shape *is*.
+
+Two details the extraction forced. `_validate_record` checks `tags` after the
+`expected_outputs` item loop, so a record with both a bad tag and a bad item
+reports the item; a single all-fields call would have re-ranked that diagnosis
+with nothing failing, so the shared helper takes its field order as a parameter
+and there is a named test for it. And the cross-record rules had to be an
+accumulator rather than a function over the whole list, because `load_jsonl`
+enforces them streaming — collecting first would change when it fails on a large
+file and which line a later error reports.
+
+**Why this work, this session:** the priority tier crossed its 18-hour floor and
+this was the only one of the repo's three open issues that needed no maintainer
+input (#177 needs the intended per-group breakdown, #212 needs a coordinate-space
+decision and moves published numbers).
+
+**Open questions / blockers:** none. D-022 records the reject-vs-overwrite fork.
+
+**Next session:** #212 is the remaining substantive one here and it is genuinely
+gated — it moves every already-published number on every axis.

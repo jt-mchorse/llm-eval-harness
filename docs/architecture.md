@@ -266,9 +266,26 @@ alias was visible in `--help`, locked by
   `_find_unrepresentable` before any bytes are written, raising `ValueError`
   naming `examples[i]`, the id and the JSON path; a non-`str` object key is a
   third finding kind (`NON_STRING_KEY`) rather than the `AttributeError` the
-  walk used to raise on one (#231). The rule is representability, not schema:
-  `Example(id=123)` still writes, and the boundary has its own test rather
-  than a comment.
+  walk used to raise on one (#231).
+- **And the schema too, from one definition (#235, D-022).** D-021 stopped at
+  representability, so `Example(id=123)` still wrote an `id` `load_jsonl`
+  refuses. Measured across every field and every cross-record rule, ten shapes
+  wrote a file the loader rejects — and three round-tripped *silently wrong*,
+  which is the half worth the change: `Example.to_dict()` does
+  `list(self.tags)`, so `tags="urgent"` became six single-character tags, a
+  list `provenance` was coerced to `{}`, and a `Dataset.version` that
+  disagreed with its rows reloaded as the other version. The per-field rules
+  now live once in `_FIELD_RULES` and the cross-record ones in
+  `_DatasetInvariants`, driven by both `_validate_record` and `dump_jsonl`, in
+  the loader's own order so the two sides also agree on *which* problem they
+  name. The write-side check reads the `Example`'s attributes rather than
+  `to_dict()`'s output — by the time a string `tags` reaches the record it is
+  already a well-formed list of six strings. D-022 settles the one genuine
+  fork: a `Dataset.version` disagreeing with its rows is rejected, not
+  silently overwritten, because overwriting is a lossy write no reader can
+  detect. The boundary that remains — per-item `ExpectedOutput` validation,
+  where the two sides have different domains — has its own test rather than a
+  comment.
 - **`--tags` row-level subset filter (#15).** Set-union match over a
   row's `tags`; `eval-harness run --tags faithfulness` runs only the
   rows tagged with that label, exit code 2 with the dataset's tag

@@ -40,7 +40,7 @@ from __future__ import annotations
 
 import json
 from collections import Counter
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, ClassVar
@@ -179,26 +179,98 @@ class Dataset:
         example's index, its `id` and the JSON path, with the loader's own
         reason text.
 
-        Scope: this is the *representability* rule, not full schema validation
-        on the write path. `Example(id=123)` still writes an `id` that
-        `load_jsonl` will refuse — a strictly larger question with a different
-        shape, tracked in #235 and deliberately not smuggled in here.
+        Since #235 the *schema* is enforced here too, through the same
+        `_FIELD_RULES` and `_DatasetInvariants` the loader uses, so this method
+        cannot write a file `load_jsonl` refuses. The checks run in the loader's
+        own order — per-field shape, then representability, then the
+        cross-record invariants — so the two sides also agree on *which*
+        problem they name when a record has more than one.
 
-        `tests/test_dataset_representability.py` runs the property over a
-        variant table rather than restating it in prose.
+        The field checks run against the `Example`'s own attributes, not
+        against `to_dict()`'s output, and that is load-bearing rather than
+        incidental. `to_dict()` does `dict(self.provenance)` and
+        `list(self.tags)`, so `tags="urgent"` becomes a perfectly well-formed
+        `["u","r","g","e","n","t"]` — six tags, round-tripping cleanly, with
+        nothing left in the record for a rule to object to. Measured on `main`
+        alongside `provenance=[]` silently becoming `{}` and a `Dataset.version`
+        that disagreed with its rows reloading as the *other* version.
+
+        `Dataset.version` disagreeing with the rows is rejected rather than
+        silently overwritten (D-022): the loader's own message for the
+        neighbouring case says "split mixed-version data into separate files",
+        and overwriting every row with `self.version` would be a lossy write
+        that no reader could detect.
+
+        `tests/test_dataset_representability.py` runs the representability
+        property over a variant table, and
+        `tests/test_dataset_dump_write_path.py` does the same for the schema.
         """
         path = Path(path)
-        records = [ex.to_dict() for ex in self.examples]
-        for i, (ex, record) in enumerate(zip(self.examples, records, strict=True)):
+        if not self.examples:
+            # `"\n".join([]) + "\n"` is a single blank line, which
+            # `load_jsonl` rejects as "blank line; dataset must have one JSON
+            # object per line". Refusing here names the real problem.
+            raise ValueError("dataset has no examples; nothing to write")
+
+        invariants = _DatasetInvariants()
+        records: list[dict[str, Any]] = []
+        for i, ex in enumerate(self.examples):
+            # `ascii(ex.id)` and not `{ex.id!r}`: the id is itself a candidate
+            # for the surrogate failure being reported, and interpolating it
+            # verbatim would make *this* message unprintable — the same trap
+            # `io_utils._safe_path_segment` exists for, one layer up.
+            where = f"examples[{i}] (id={ascii(ex.id)})"
+
+            reason = _find_field_violation(
+                {
+                    "id": ex.id,
+                    "input": ex.input,
+                    "dataset_version": ex.dataset_version,
+                    "provenance": ex.provenance,
+                    "expected_outputs": ex.expected_outputs,
+                    "tags": ex.tags,
+                },
+                ("id", "input", "dataset_version", "provenance", "expected_outputs", "tags"),
+            )
+            if reason is not None:
+                raise ValueError(f"{where}: {reason}")
+
+            # The one rule that is deliberately writer-only: the two sides have
+            # genuinely different domains here. The loader sees JSON objects and
+            # builds `ExpectedOutput`s from them (so `__post_init__` validates
+            # `kind`/`value`); this side already holds instances, and the thing
+            # it can be handed that the loader cannot is a non-`ExpectedOutput`
+            # item — which would otherwise reach `to_dict()` as a raw
+            # `AttributeError` instead of this package's `ValueError`.
+            for j, eo in enumerate(ex.expected_outputs):
+                if not isinstance(eo, ExpectedOutput):
+                    raise ValueError(
+                        f"{where}: expected_outputs[{j}] must be an ExpectedOutput, "
+                        f"got {type(eo).__name__}"
+                    )
+
+            record = ex.to_dict()
             unrepresentable = _find_unrepresentable(record)
             if unrepresentable is not None:
                 json_path, reason = unrepresentable
-                # `ascii(ex.id)` and not `{ex.id!r}`: the id is itself a
-                # candidate for the surrogate failure being reported, and
-                # interpolating it verbatim would make *this* message
-                # unprintable — the same trap `io_utils._safe_path_segment`
-                # exists for, one layer up.
-                raise ValueError(f"examples[{i}] (id={ascii(ex.id)}): field {json_path!r} {reason}")
+                raise ValueError(f"{where}: field {json_path!r} {reason}")
+
+            reason = invariants.violation_for(ex.id, ex.dataset_version)
+            if reason is not None:
+                raise ValueError(f"{where}: {reason}")
+
+            records.append(record)
+
+        # D-022. `Dataset.version` is documented as "the value of
+        # `dataset_version` carried by every line in the file"; nothing checked
+        # it on the way out, so `Dataset(version="v1", examples=[... "v2"])`
+        # wrote a file that reloaded as `v2`.
+        if self.version != invariants.version:
+            raise ValueError(
+                f"Dataset.version {self.version!r} does not match the "
+                f"dataset_version {invariants.version!r} carried by its examples; "
+                "Dataset.version is the version every row must carry (D-022)"
+            )
         # Compact separators (no spaces) plus sorted keys give us a stable,
         # diff-friendly canonical form. `ensure_ascii=False` keeps non-ASCII
         # inputs human-readable on disk.
@@ -218,6 +290,140 @@ _REQUIRED_FIELDS: tuple[str, ...] = (
     "dataset_version",
     "provenance",
 )
+
+
+# --- schema, shared by both sides of the seam (#235) -------------------------
+#
+# `_validate_record` ran on the load path only, so a `Dataset` assembled in
+# Python wrote files `load_jsonl` refuses. #234 closed the *representability*
+# half of that gap and its docstring scoped this half out explicitly. Measured
+# on `main`, building a `Dataset` in Python, dumping, and reloading with this
+# package's own loader:
+#
+#     id=123 / id=""                  wrote a file the loader refuses
+#     input=123                       wrote a file the loader refuses
+#     dataset_version=123 / ""        wrote a file the loader refuses
+#     expected_outputs=()             wrote a file the loader refuses
+#     tags=(1,)                       wrote a file the loader refuses
+#     two examples sharing an id      wrote a file the loader refuses
+#     mixed dataset_version           wrote a file the loader refuses
+#     zero examples                   wrote a file the loader refuses
+#     provenance=[]                   ROUND-TRIPPED, silently coerced to {}
+#     tags="urgent"                   ROUND-TRIPPED, silently exploded to
+#                                     ["u","r","g","e","n","t"] -- six tags
+#     Dataset.version != row version  ROUND-TRIPPED, reloaded as the OTHER one
+#
+# The last three are the sharp ones and none was in #235's list. A refusal is
+# loud; a silent coercion is not, and `Example.to_dict()` performs both of them
+# (`dict(self.provenance)`, `list(self.tags)`) on the way to a record that is
+# then perfectly well-formed. That is why the write-side check below runs
+# against the `Example`'s own attributes and NOT against `to_dict()`'s output:
+# by the time `tags="urgent"` reaches the record it is already a valid list of
+# six strings, and no rule stated over the record can see what it was.
+#
+# One definition, called from both sides -- the neighbour #234 measured is a
+# copy in the writer, which passes every behavioural test.
+
+
+def _is_str(v: Any) -> bool:
+    return isinstance(v, str)
+
+
+def _is_non_empty_str(v: Any) -> bool:
+    return isinstance(v, str) and bool(v)
+
+
+def _is_mapping(v: Any) -> bool:
+    # `Mapping`, not `dict`: a JSON object is always a `dict`, so this is
+    # identical on the load path, and it is the honest spelling of the rule for
+    # a caller who hands `Example` a `MappingProxyType` or a `Counter`.
+    return isinstance(v, Mapping)
+
+
+def _is_sequence_not_str(v: Any) -> bool:
+    # `str` and `bytes` ARE sequences, and that is the whole hazard on the write
+    # path: `list("urgent")` is a perfectly good list of strings. A JSON array
+    # is a `list`, so excluding them changes nothing on the load path.
+    return isinstance(v, Sequence) and not isinstance(v, (str, bytes, bytearray))
+
+
+def _is_non_empty_sequence(v: Any) -> bool:
+    return _is_sequence_not_str(v) and len(v) > 0
+
+
+def _is_str_sequence(v: Any) -> bool:
+    return _is_sequence_not_str(v) and all(isinstance(t, str) for t in v)
+
+
+# (field name, predicate, the loader's exact reason text). The reasons are
+# byte-identical to what `_validate_record` raised before this was extracted --
+# six test files and the CLI's operator-facing output quote them.
+_FIELD_RULES: tuple[tuple[str, Any, str], ...] = (
+    ("id", _is_non_empty_str, "field 'id' must be a non-empty string"),
+    ("input", _is_str, "field 'input' must be a string"),
+    (
+        "dataset_version",
+        _is_non_empty_str,
+        "field 'dataset_version' must be a non-empty string",
+    ),
+    ("provenance", _is_mapping, "field 'provenance' must be an object"),
+    (
+        "expected_outputs",
+        _is_non_empty_sequence,
+        "field 'expected_outputs' must be a non-empty list",
+    ),
+    ("tags", _is_str_sequence, "field 'tags' must be a list of strings"),
+)
+
+_FIELD_RULES_BY_NAME = {name: (pred, reason) for name, pred, reason in _FIELD_RULES}
+
+
+def _find_field_violation(values: Mapping[str, Any], fields: Sequence[str]) -> str | None:
+    """First broken per-field rule among *fields*, in the order given, or None.
+
+    The order is a parameter because `_validate_record` interleaves its checks
+    with building the `Example` -- `tags` is checked after the
+    `expected_outputs` item loop, so a record with a bad tag AND a bad item
+    reports the item. Passing the order preserves that exactly rather than
+    quietly re-ranking the diagnosis while extracting the rule.
+    """
+    for name in fields:
+        predicate, reason = _FIELD_RULES_BY_NAME[name]
+        if not predicate(values[name]):
+            return reason
+    return None
+
+
+class _DatasetInvariants:
+    """The cross-record rules `load_jsonl` enforces, drivable one row at a time.
+
+    Unique ids and a single `dataset_version` are properties of the *file*, not
+    of a record, so they cannot live in `_find_field_violation`. They are shared
+    as a small accumulator rather than as a function over the whole list
+    because `load_jsonl` enforces them streaming, per line: collecting first
+    would change *when* it fails on a large file, and which line number a
+    later shape error reports.
+
+    `dump_jsonl` drives the same accumulator over `self.examples` before writing
+    a byte, so the writer refuses exactly what the reader would.
+    """
+
+    def __init__(self) -> None:
+        self._seen_ids: set[str] = set()
+        self.version: str | None = None
+
+    def violation_for(self, row_id: str, row_version: str) -> str | None:
+        if row_id in self._seen_ids:
+            return f"duplicate id {row_id!r}; ids must be unique within a file"
+        self._seen_ids.add(row_id)
+        if self.version is None:
+            self.version = row_version
+        elif row_version != self.version:
+            return (
+                f"dataset_version {row_version!r} does not match file version "
+                f"{self.version!r}; split mixed-version data into separate files"
+            )
+        return None
 
 
 # --- representability (#213) ------------------------------------------------
@@ -332,19 +538,19 @@ def _validate_record(raw: Any, line_no: int) -> Example:
     if missing:
         raise DatasetLoadError(line_no, f"missing required field(s): {missing}")
 
-    # Per-field type checks.
-    if not isinstance(raw["id"], str) or not raw["id"]:
-        raise DatasetLoadError(line_no, "field 'id' must be a non-empty string")
-    if not isinstance(raw["input"], str):
-        raise DatasetLoadError(line_no, "field 'input' must be a string")
-    if not isinstance(raw["dataset_version"], str) or not raw["dataset_version"]:
-        raise DatasetLoadError(line_no, "field 'dataset_version' must be a non-empty string")
-    if not isinstance(raw["provenance"], dict):
-        raise DatasetLoadError(line_no, "field 'provenance' must be an object")
+    # Per-field type checks, from `_FIELD_RULES` so `dump_jsonl` enforces the
+    # identical contract on the way out (#235). Order preserved exactly: `tags`
+    # is still checked after the `expected_outputs` item loop below, so a record
+    # with both a bad tag and a bad item still reports the item.
+    tags_raw = raw.get("tags", [])
+    values = {**raw, "tags": tags_raw}
+    reason = _find_field_violation(
+        values, ("id", "input", "dataset_version", "provenance", "expected_outputs")
+    )
+    if reason is not None:
+        raise DatasetLoadError(line_no, reason)
 
     eo_raw = raw["expected_outputs"]
-    if not isinstance(eo_raw, list) or not eo_raw:
-        raise DatasetLoadError(line_no, "field 'expected_outputs' must be a non-empty list")
 
     expected_outputs: list[ExpectedOutput] = []
     for i, item in enumerate(eo_raw):
@@ -357,9 +563,9 @@ def _validate_record(raw: Any, line_no: int) -> Example:
         except ValueError as e:
             raise DatasetLoadError(line_no, f"expected_outputs[{i}]: {e}") from None
 
-    tags_raw = raw.get("tags", [])
-    if not isinstance(tags_raw, list) or not all(isinstance(t, str) for t in tags_raw):
-        raise DatasetLoadError(line_no, "field 'tags' must be a list of strings")
+    reason = _find_field_violation(values, ("tags",))
+    if reason is not None:
+        raise DatasetLoadError(line_no, reason)
 
     # Reject any unknown top-level fields so typos don't silently no-op.
     allowed = set(_REQUIRED_FIELDS) | {"tags"}
@@ -399,9 +605,8 @@ def load_jsonl(path: str | Path) -> Dataset:
     if not path.exists():
         raise FileNotFoundError(path)
 
-    seen_ids: set[str] = set()
+    invariants = _DatasetInvariants()
     examples: list[Example] = []
-    version: str | None = None
 
     with path.open("r", encoding="utf-8") as fh:
         for line_no, raw_line in enumerate(fh, start=1):
@@ -419,26 +624,19 @@ def load_jsonl(path: str | Path) -> Dataset:
 
             ex = _validate_record(parsed, line_no)
 
-            if ex.id in seen_ids:
-                raise DatasetLoadError(
-                    line_no, f"duplicate id {ex.id!r}; ids must be unique within a file"
-                )
-            seen_ids.add(ex.id)
-
-            if version is None:
-                version = ex.dataset_version
-            elif ex.dataset_version != version:
-                raise DatasetLoadError(
-                    line_no,
-                    f"dataset_version {ex.dataset_version!r} does not match file version {version!r}; "
-                    "split mixed-version data into separate files",
-                )
+            # Unique ids + a single dataset_version, from the accumulator
+            # `dump_jsonl` also drives (#235), so the writer refuses exactly
+            # what this loop would.
+            reason = invariants.violation_for(ex.id, ex.dataset_version)
+            if reason is not None:
+                raise DatasetLoadError(line_no, reason)
 
             examples.append(ex)
 
     if not examples:
         raise DatasetLoadError(0, f"dataset file {path} contains no examples")
 
+    version = invariants.version
     assert version is not None  # narrows for type checkers; populated above by the first valid line
     return Dataset(version=version, examples=examples, source_path=path)
 

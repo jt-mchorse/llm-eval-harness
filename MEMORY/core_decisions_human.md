@@ -489,3 +489,22 @@ guarded.
 pinned by tests rather than by prose.
 
 **Related issues:** #234, #231, #213
+
+## D-022 — `dump_jsonl` rejects a `Dataset` whose `version` disagrees with its rows
+**Date:** 2026-09-09 · **Issue:** #235 · **Reversibility:** cheap
+
+`Dataset.version` is documented as "the value of `dataset_version` carried by
+every line in the file". Nothing checked that on the way out, so
+`Dataset(version="v1", examples=[Example(dataset_version="v2")])` wrote a file
+that reloaded as `v2` — the field that names the version quietly lost the
+argument to the field on the row.
+
+Two repairs were available. Overwriting every row with `self.version` makes the
+write succeed, and that is exactly what is wrong with it: it is a lossy write no
+reader can detect. The row said `v2`, the file says `v1`, and nothing on disk
+records that a value was changed. Rejecting matches what the loader already says
+for the neighbouring mixed-version case — "split mixed-version data into separate
+files" — and leaves the caller to state which version they meant.
+
+Scope is the write path only. `load_jsonl` is unchanged: it already derives the
+file version from the rows and rejects rows that disagree with each other.
