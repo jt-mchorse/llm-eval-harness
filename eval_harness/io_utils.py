@@ -144,7 +144,31 @@ def find_unencodable(text: str) -> tuple[str, int] | None:
 UNENCODABLE = "unencodable"
 NON_FINITE = "non_finite"
 NON_STRING_KEY = "non_string_key"
-_ALL_KINDS = frozenset({UNENCODABLE, NON_FINITE, NON_STRING_KEY})
+UNSERIALIZABLE_TYPE = "unserializable_type"
+_ALL_KINDS = frozenset({UNENCODABLE, NON_FINITE, NON_STRING_KEY, UNSERIALIZABLE_TYPE})
+
+#: The Python types `json.dumps` emits *faithfully* -- one JSON value out, the
+#: same Python value back from `json.loads`. A `Counter`, an `OrderedDict`, an
+#: `IntEnum`, a `str` subclass and a `list` subclass all round-trip **equal**
+#: through this writer (measured, #238), so all five must pass.
+#:
+#: Four of them pass because the arms *above* the type check are spelled with
+#: `isinstance` and consume them first -- a `Counter` is handled by the `dict`
+#: arm, a `str` subclass by the `str` arm. Only an `int` subclass reaches the
+#: type check, `int` having no arm of its own. So the faithful set is enforced
+#: by two mechanisms that have to agree, and `type(v) in` here is red on
+#: exactly one of the five (measured: `IntEnum`) while `type(v) ==` in the arms
+#: above would be red on the other four. Both halves are pinned in
+#: `tests/test_dataset_dump_value_types.py`; neither is obvious from reading
+#: this line alone, which is why the count is written down.
+#:
+#: `tuple` is deliberately absent. It is the one type that serializes without
+#: erroring and still is not faithful -- `("a","b")` is written as a JSON array
+#: and reloads as a `list`, so the record survives and the *value* does not.
+#: That is the silent half of this axis, and the reason the axis is a type
+#: check rather than a `try: json.dumps(...) except TypeError` (which is green
+#: on exactly the tuple rows).
+_FAITHFUL_JSON_TYPES: tuple[type, ...] = (str, int, float, bool, dict, list)
 
 
 def _safe_path_segment(key: str) -> str:
@@ -167,10 +191,11 @@ def find_unrepresentable(
     a canonical JSON writer cannot faithfully emit, or ``None`` when the whole
     record is representable.
 
-    ``kind`` is :data:`UNENCODABLE`, :data:`NON_FINITE` or
-    :data:`NON_STRING_KEY`; ``detail`` is the fragment a caller interpolates
-    into its own message -- ``"'\\ud800' at position 4"``, ``"nan"``, ``"1
-    (int)"``. **The caller phrases the consequence.** That is the split #215
+    ``kind`` is :data:`UNENCODABLE`, :data:`NON_FINITE`,
+    :data:`NON_STRING_KEY` or :data:`UNSERIALIZABLE_TYPE`; ``detail`` is the
+    fragment a caller interpolates into its own message --
+    ``"'\\ud800' at position 4"``, ``"nan"``, ``"1 (int)"``, ``"tuple"``.
+    **The caller phrases the consequence.** That is the split #215
     established for a single string (`find_unencodable` is shared; each site
     says what breaks) applied one level up to the record walk, so the
     record-level enforcement sites -- ``dataset._validate_record`` (#213),
@@ -188,6 +213,21 @@ def find_unrepresentable(
     string ``"1"``), and raises a raw `TypeError` for any other key type. The
     first is the sharper half -- silent, and it breaks the round-trip identity
     ``dump_jsonl`` exists to guarantee.
+
+    :data:`UNSERIALIZABLE_TYPE` is the *value*-side twin of
+    :data:`NON_STRING_KEY`, and arrived for the same reason one axis later
+    (#238). This walk type-checked a record's keys and only three *axes* of its
+    values, so every other value type fell straight through it. The two harms
+    are the pair the non-string-key paragraph above already names, on the other
+    side of the colon: a `tuple` is *coerced* -- written as a JSON array,
+    reloaded as a `list`, no error, and the round-trip identity ``dump_jsonl``
+    exists to guarantee quietly broken -- while a `set`, `bytes`, `date`,
+    `Decimal`, `mappingproxy` or plain object raises a bare `TypeError` naming
+    no example, no id and no field path. `provenance` is documented free-form
+    (``dict[str, Any]``), so it is the one field where an arbitrary Python
+    object is the *ordinary* input, and `Example.expected_outputs` and
+    `Example.tags` are both declared as tuples, which makes a tuple-valued
+    `provenance` entry this package's own house idiom rather than an exotic.
 
     ``kinds`` selects which axes are enforced. It is not decoration: the
     calibration loader enforces ``UNENCODABLE`` only, because no calibration
@@ -253,6 +293,38 @@ def find_unrepresentable(
         elif isinstance(node, list):
             for i, v in enumerate(node):
                 stack.append((f"{path}[{i}]", v))
+        elif node is not None and not isinstance(node, _FAITHFUL_JSON_TYPES):
+            # The value-side twin of the non-string-key arm above, and it
+            # carries the same pair of harms that arm's own comment names for
+            # keys: `json.dumps` either *coerces* the value (a `tuple` becomes
+            # a JSON array and reloads as a `list`) or raises a bare
+            # `TypeError` (`set`, `bytes`, `date`, `Decimal`, `mappingproxy`,
+            # any plain object) -- which escapes every caller's
+            # `except ValueError` exactly as the `AttributeError` on an int key
+            # did (#231) and as a non-`ExpectedOutput` item reaching
+            # `to_dict()` did (#235). Keys got both halves closed; values had
+            # neither (#238).
+            #
+            # The membership test is written over the whole faithful set even
+            # though the arms above already consumed `bool`/`str`/`float`/
+            # `dict`/`list`, so the rule reads in one place and survives a
+            # reordering of the chain. `int` and `None` are what actually
+            # reach here and pass.
+            #
+            # `type(node).__name__` and never the value: a `tuple` can hold a
+            # lone surrogate, which is the exact string `_safe_path_segment`
+            # and the `ascii(k)` above exist to keep out of these messages.
+            if UNSERIALIZABLE_TYPE in kinds:
+                return path, UNSERIALIZABLE_TYPE, type(node).__name__
+            # Axis not enforced by this caller, but the items still are, on the
+            # same reasoning as the non-string-key arm: a caller asking only
+            # for UNENCODABLE should keep finding a surrogate inside a tuple
+            # rather than losing that subtree. Only `tuple` -- a `set` has no
+            # stable index to name in a path, so there is no honest `[i]` to
+            # report and descending would make the message order-dependent.
+            if isinstance(node, tuple):
+                for i, v in enumerate(node):
+                    stack.append((f"{path}[{i}]", v))
     return None
 
 

@@ -49,6 +49,7 @@ from eval_harness.io_utils import (
     NON_FINITE,
     NON_STRING_KEY,
     UNENCODABLE,
+    UNSERIALIZABLE_TYPE,
     atomic_write_text,
     find_unrepresentable,
 )
@@ -507,6 +508,17 @@ def _find_unrepresentable(record: dict[str, Any]) -> tuple[str, str] | None:
             'string — `{1: \'one\'}` is written `{"1": "one"}` and reloads '
             'as the string `"1"`, silently — and raises a bare TypeError '
             "for any other key type"
+        )
+    if kind == UNSERIALIZABLE_TYPE:
+        return path, (
+            f"is of type {detail}, which `json.dumps` cannot emit "
+            "faithfully: a tuple is written as a JSON array and reloads as a "
+            "`list` — silently, so the file validates and "
+            "`load_jsonl(dump_jsonl(ds))` is no longer equal to `ds` — and "
+            "every other such type raises a bare TypeError naming no example, "
+            "no id and no field. Store the JSON shape you mean, a list or a "
+            "string, rather than letting the writer pick one for you (D-022: "
+            "a lossy write no reader can detect is refused, not performed)"
         )
     # Every kind `find_unrepresentable` can return must be spelled out here.
     # A fallthrough `return` would hand a *new* axis whichever message happens
