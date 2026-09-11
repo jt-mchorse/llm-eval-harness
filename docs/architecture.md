@@ -149,7 +149,13 @@ level up. Its `kinds` parameter is load-bearing, not decoration: the
 calibration loader enforces the unencodable axis only, because no
 calibration writer emits `provenance` and there is therefore no
 non-finite consequence to name there. A rejection with no consequence
-is how a guard drifts away from the harm it was written for.
+is how a guard drifts away from the harm it was written for. The walk
+now carries four axes — unencodable strings, non-finite numbers,
+non-string object keys, and (since #238) values whose *type* JSON
+cannot carry faithfully; `dataset._find_unrepresentable` raises on an
+unhandled kind rather than falling through to whichever sentence sits
+last, so a fifth axis cannot arrive without a consequence written for
+it.
 
 ## Layer 5 — Pytest plugin (#5)
 
@@ -286,6 +292,32 @@ alias was visible in `--help`, locked by
   detect. The boundary that remains — per-item `ExpectedOutput` validation,
   where the two sides have different domains — has its own test rather than a
   comment.
+- **The walk type-checked keys, not values (#238).** `NON_STRING_KEY` closed
+  both of the harms a bad *key* carries — silent coercion and a bare
+  `TypeError` — and the walk still looked at only three *axes* of a value:
+  is this string encodable, is this float finite. Every other value type fell
+  through it, so `provenance`, the one field documented free-form
+  (`dict[str, Any]`), carried the same pair of harms unclosed. Measured: a
+  `tuple` round-tripped **silently** as a `list` — no error, a file that
+  validates, and `load_jsonl(dump_jsonl(ds)) != ds`, which is the identity
+  `dump_jsonl` exists to guarantee — while `set`, `frozenset`, `bytes`,
+  `bytearray`, `date`, `mappingproxy`, `Decimal`, `complex` and a plain object
+  raised a bare `TypeError` out of `json.dumps` naming no example, no id and
+  no field, and escaping every caller's `except ValueError` exactly as #231's
+  `AttributeError` and #235's did. `UNSERIALIZABLE_TYPE` is the fourth axis
+  and the value-side twin of `NON_STRING_KEY`: a value must be `isinstance` of
+  `_FAITHFUL_JSON_TYPES` (`str`, `int`, `float`, `bool`, `dict`, `list`, plus
+  `None`). `tuple` is deliberately excluded — it serializes, but not
+  faithfully, and per D-022 a lossy write no reader can detect is refused
+  rather than performed. The axis is a no-op on the two loader sites, since
+  `json.loads` cannot construct a member of it, and that is pinned by a test
+  that discovers the parser's output types rather than listing them. The
+  faithful set turns out to be enforced by *two* mechanisms that must agree:
+  the `isinstance` arms above the type check consume `dict`/`str`/`list`
+  subclasses (a counter, an ordered dict), and the type check itself
+  consumes `int` subclasses (an integer enum) — so `type(v) in` is wrong in one
+  place and `type(v) ==` would be wrong in the other, each breaking a
+  different subset of the five subclass values that round-trip equal today.
 - **`--tags` row-level subset filter (#15).** Set-union match over a
   row's `tags`; `eval-harness run --tags faithfulness` runs only the
   rows tagged with that label, exit code 2 with the dataset's tag

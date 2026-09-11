@@ -459,6 +459,7 @@ def test_dump_jsonl_calls_the_shared_walk_rather_than_restating_the_rules() -> N
         "is not encodable as UTF-8",
         "dataset values must be finite",
         "has the non-string object key",
+        "which `json.dumps` cannot emit faithfully",
     ],
 )
 def test_each_reason_is_written_once(fragment: str) -> None:
@@ -480,11 +481,15 @@ def test_every_kind_the_walk_can_return_has_a_reason() -> None:
     unhandled — the fallthrough this function raises on. The floor asserts the
     discovery found something, so a rename cannot make this test vacuous.
     """
-    assert len(_ALL_KINDS) >= 3
+    assert len(_ALL_KINDS) >= 4
     samples: dict[str, dict[str, Any]] = {
         "unencodable": {"f": LONE},
         "non_finite": {"f": math.inf},
         "non_string_key": {"f": {1: "x"}},
+        # #238. This lock is what caught the fourth axis arriving: the sample
+        # set was 3 and `_ALL_KINDS` became 4, so the run went red at the
+        # discovery rather than at some later caller printing a wrong sentence.
+        "unserializable_type": {"f": (1, 2)},
     }
     assert set(samples) == set(_ALL_KINDS), (
         "a representability kind has no sample here; add one and a reason in "

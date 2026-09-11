@@ -2529,3 +2529,69 @@ decision and moves published numbers).
 
 **Next session:** #212 is the remaining substantive one here and it is genuinely
 gated — it moves every already-published number on every axis.
+
+---
+
+## 2026-09-10 — the walk type-checked keys, not values (#238)
+
+**Focus:** `io_utils.find_unrepresentable` — the record walk shared by both
+loader sites and by `Dataset.dump_jsonl`.
+
+**What got done.** #234 gave the walk a third finding kind, `NON_STRING_KEY`,
+and its docstring explains why in a sentence worth reading twice: `json.dumps`
+*coerces* an int/float/bool/None key to a string, and raises a raw `TypeError`
+for any other key type. That sentence names two distinct harms — one silent,
+one loud — and #234 closed both. For keys. The walk still looked at values
+along only three *axes*: is this string encodable, is this float finite, is
+this key a string. A value whose *type* was none of the five the walk branches
+on fell straight through it.
+
+So `provenance` — the one field this format documents as free-form
+(`dict[str, Any]`), and therefore the one place an arbitrary Python object is
+the ordinary input rather than an abuse — carried the identical pair of harms
+with neither closed. Measured on `main` by building a `Dataset` in Python,
+dumping it, and reloading with this package's own loader: a `tuple` was written
+as a JSON array and came back a `list`, silently, with no error and a file that
+validates clean; a `set`, `frozenset`, `bytes`, `bytearray`, `date`,
+`mappingproxy`, `Decimal`, `complex` or plain object raised a bare `TypeError`
+out of `json.dumps` naming no example, no id and no field, escaping every
+caller's `except ValueError` exactly as #231's `AttributeError` and #235's did.
+
+The tuple row is the one worth the change, and it is the reason this is a type
+check and not the obvious `try: json.dumps(...) except TypeError`. A tuple
+serializes without erroring. Nothing fires, the file validates, the line
+reloads — and `load_jsonl(dump_jsonl(ds))` is no longer equal to `ds`, which is
+the round-trip identity `dump_jsonl`'s own docstring exists to guarantee. Nor
+is a tuple exotic in this dataclass: `Example.expected_outputs` and
+`Example.tags` are both *declared as tuples*, so tuple-valued metadata is the
+house idiom.
+
+`UNSERIALIZABLE_TYPE` is the fourth axis, and the value-side twin of
+`NON_STRING_KEY` down to the shape: one kind rather than two, with the type
+name in `detail`, because the arm it mirrors already merges exactly that
+coerce-or-crash pair. `tuple` sits deliberately outside the faithful set — it
+serializes, but not faithfully, and D-022 already settled that a lossy write no
+reader can detect is refused rather than performed. No new decision was needed;
+this applies D-022 rather than revisiting it.
+
+**The correction worth keeping.** Both plausible wrong fixes were built and
+run. The `except TypeError` wrapper passes 9 of 14 rejected rows and is red on
+exactly the five tuple-shaped ones — the entire point of the change. The other
+neighbour, `type(v) in` instead of `isinstance`, I had already described in a
+code comment as refusing *five* kinds of working input, on the reasoning that a
+`Counter`, an `OrderedDict`, an `IntEnum`, a `str` subclass and a `list`
+subclass all satisfy `isinstance` but not identity. Built it: it refuses one.
+The other four never reach the new arm at all, because the arms above it are
+spelled with `isinstance` and consume them first — a `Counter` is handled by the
+`dict` arm. The faithful set turns out to be enforced by two mechanisms that
+have to agree, and each wrong spelling breaks a *different* subset. The comment
+and the test now say the measured thing instead of the plausible one.
+
+**Why this was prioritized.** `llm-eval-harness` had no open `priority:high`
+issue, and the highest-yield surface in this portfolio is the diff merged
+twenty minutes earlier in the same run.
+
+**Open questions / blockers:** none. `validate_dataset` still holds a third
+copy of the duplicate-id and version-drift rules that #235 unified for
+`load_jsonl` and `dump_jsonl` — no measured divergence yet, but it is the
+obvious next place to look in this file.
