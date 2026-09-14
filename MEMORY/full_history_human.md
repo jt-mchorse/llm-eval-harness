@@ -2595,3 +2595,65 @@ twenty minutes earlier in the same run.
 copy of the duplicate-id and version-drift rules that #235 unified for
 `load_jsonl` and `dump_jsonl` — no measured divergence yet, but it is the
 obvious next place to look in this file.
+
+## 2026-09-11 — the HTML report's 200-character cap was counting markup (#240)
+
+**What got done.** `render_html` put a candidate input into the drift report's
+"most distant examples" cell as `html.escape(r.text)[:200]`. Read quickly that
+is a 200-character cap on the text. It is a 200-character cap on the *escaped
+markup*, and every `&`, `<`, `>`, `"` and `'` in the input costs four or five
+characters of that budget. Measured through the real renderer: an
+apostrophe-heavy prose row showed 170 of its 412 characters where the cap
+promises 200, an XHTML-authoring prompt showed 147, and — the row that makes this
+a bug rather than a rounding preference — a 193-character code-review prompt,
+which is *under* the cap and should therefore have been left completely alone,
+lost 31 characters. With no marker, so it read as a whole input.
+
+There is a second harm that follows from measuring the cut in the wrong unit: the
+cut index can fall between the `&` and the `;` of a reference the escape had just
+produced. `"x" * 197 + "&"` rendered a literal `&am`; `"x" * 197 + "'"` rendered
+`&#x`. HTML5 resolves *some* of those fragments from its legacy named set and
+renders others literally, so the corruption was offset-dependent — which is worse
+than uniformly broken, because it would not reproduce from a rounded repro.
+
+The fix cuts the source first and marks the cut, which is what the other three
+truncations in this package already did: `cli.py`'s run-id column, `judge.py`'s
+non-finite-score message, and `comment.py`'s `md_code_span(run_id[:8])`. The
+correct ordering was already here three times; `render_html` was the one site
+that did not have it. A lock now pins the ordering over the package's AST rather
+than over one line, so a second escape-then-slice site anywhere in `eval_harness`
+fails too.
+
+**Two things I got wrong and fixed.** The first draft of that lock was a line
+regex, and it matched the new helper's own docstring — which has to quote
+`html.escape(text)[:limit]` in order to explain the defect. The obvious repair,
+skipping string tokens, would have been worse: the real site lives *inside* an
+f-string, and Python 3.11 tokenises an f-string as a single string token while
+3.12 breaks it into pieces. CI runs 3.11 and 3.12; this machine runs 3.14. A
+token-based lock would have been green locally and gated nothing in CI — a
+host-environment assertion wearing a source check's clothes. The AST is the one
+view of the file that is identical on all three.
+
+The second was in my own falsification harness. I ran four plausible wrong fixes
+against the new tests, and the third came back with zero failures. It had a
+syntax error: the module never imported, pytest failed at collection, and my
+"count the FAILED lines" check read that as a clean pass. An arm runner needs an
+import guard before it is allowed to report anything.
+
+**Why this was prioritized.** Both of `llm-eval-harness`'s open issues are
+waiting on a decision from JT, so the work came from hunting, and the richest
+surface was the renderer nobody had re-read since the representability sweep
+argued about its truncation in passing — and argued about it in the wrong unit.
+
+**A second issue, filed not fixed.** Regenerating `docs/demo-artifacts/drift_report.html`
+to check whether this change moved it showed that the committed artifact does not
+reproduce from `main` at all: the embedding axis reads 0.1722 in the committed
+file and 0.2454 when regenerated, and the representative-example table differs in
+ordering, not just in one value. I confirmed that is independent of this change by
+putting `main`'s `drift.py` back in place and regenerating again. It is #241; this
+PR leaves the artifact untouched rather than mixing an unrelated numeric change
+into a diff about string truncation.
+
+**Open questions / blockers:** none for #240. #241 needs someone to establish
+*which* number is correct before regenerating — a regression in `hash_embed` or
+`_kmeans` would look exactly like a stale artifact.

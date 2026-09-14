@@ -25,7 +25,9 @@ there was drift when no report had been produced at all. The write-seam
 
 And whether it crashed at all was decided by data *position*, not by the data
 being bad, because `render_html` puts raw input text in exactly one place --
-`html.escape(r.text)[:200]` over `representative_examples`::
+`html.escape(_truncate_text(r.text))` over `representative_examples`
+(spelled `html.escape(r.text)[:200]` until #240, which is a *markup* budget --
+see `tests/test_drift_report_cell_truncation.py`)::
 
     variant                                        picked into rep list   result
     surrogate on a highly-distant candidate row    True                   crash @4717
@@ -198,10 +200,35 @@ def test_golden_is_reported_before_candidate_when_both_are_bad() -> None:
                 "unrelated gibberish tokens",
             ],
         ),
-        # Past `html.escape(r.text)[:200]`: the slice dropped it.
+        # Past the render truncation: the cut dropped it.
         (
             "past the 200-char render truncation",
             ["alpha beta gamma delta epsilon " * 8 + HIGH, *CANDIDATE],
+        ),
+        # Sibling of the row above, added with #240, and the row that makes this
+        # parametrize able to tell the two units apart. `"alpha beta ... " * 8`
+        # and `"x" * 250` are both all-ASCII, so the source offset of `HIGH` and
+        # its offset in `html.escape(...)` output are the SAME NUMBER -- which is
+        # why they stayed green through the whole time the cut was applied to the
+        # escaped markup, and why their own labels could name a unit the code did
+        # not use. `"don't " * 30` is 180 source characters and 330 markup
+        # characters, so `HIGH` sits UNDER the cap in text and PAST it in markup.
+        #
+        # Measured, `html.escape(...)` of each cell then `.encode("utf-8")`:
+        #
+        #   row              fixed (text unit)      unfixed (markup unit)
+        #   ---------------  ---------------------  ---------------------
+        #   "x" * 250        cut drops it           cut drops it
+        #   "don't " * 30    SURVIVES the cut       cut drops it
+        #
+        # So this row is load-bearing in a way the old one never was: under #240
+        # the cut no longer removes this surrogate, which makes D-018's check the
+        # only thing standing between it and a `UnicodeEncodeError` at the write.
+        # Narrowing that check would go red here and stay green on every
+        # pre-existing row.
+        (
+            "under the cap in text, past it in markup",
+            ["don't " * 30 + HIGH, *CANDIDATE],
         ),
     ],
 )
@@ -272,6 +299,16 @@ CLI_CASES = [
     ),
     pytest.param(
         GOLDEN, ["x" * 250 + HIGH, *CANDIDATE], 2, id="surrogate-past-200-char-truncation"
+    ),
+    # `"x" * 250` is ASCII, so that row's source offset and its offset in the
+    # escaped markup are identical and it cannot tell the two units apart (#240).
+    # `"don't " * 30` is 180 source characters and 330 markup characters, so the
+    # surrogate sits *under* the cap in text and *past* it in markup.
+    pytest.param(
+        GOLDEN,
+        ["don't " * 30 + HIGH, *CANDIDATE],
+        2,
+        id="surrogate-under-cap-in-text-past-in-markup",
     ),
 ]
 

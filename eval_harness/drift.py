@@ -552,15 +552,27 @@ def compute_drift(
     # Measured before this check, with the surrogate on a *candidate* row and
     # everything else identical, the outcome was decided by data position rather
     # than by the data being bad -- `render_html` puts raw input text in exactly
-    # one place, `html.escape(r.text)[:200]` over `representative_examples`:
+    # one place, `html.escape(_truncate_text(r.text))` over
+    # `representative_examples`:
     #
     #   surrogate on a highly-distant candidate row   -> UnicodeEncodeError, exit 1
     #   surrogate on a near-duplicate of a golden row -> ranked out of the top-N,
     #                                                    report written, row absent
-    #   surrogate at char 240 of a distant row        -> `[:200]` drops it, report
-    #                                                    written
+    #   surrogate past `_CELL_TEXT_CAP` of a distant  -> the cut drops it, report
+    #     row                                            written
     #   surrogate in the golden set only              -> golden text is never
     #                                                    rendered, report written
+    #
+    # That third row used to read "surrogate at char 240 -> `[:200]` drops it",
+    # and the claim was stated in the wrong unit: the slice was applied to the
+    # *escaped markup*, so the source position at which a character fell out of
+    # the report depended on how many `&`/`<`/`>`/`"`/`'` preceded it, and could
+    # be as low as 147 (#240). The direction happened to hold -- escaping can
+    # only lengthen a string, so anything past the cap in source characters is
+    # past it in markup characters too -- which is exactly why the wrong unit
+    # survived here unnoticed. `_truncate_text` now cuts the source, so the row
+    # is true in the unit it is written in, and every statement about this cap
+    # names `_CELL_TEXT_CAP` rather than a literal.
     #
     # Both sides reject, and that is deliberately *not* D-017's split (D-018).
     # D-017 lets token-less candidate rows through because a single emoji must
@@ -913,6 +925,69 @@ def _bar_chart_svg(
     return "".join(parts)
 
 
+#: Cap on how much of a candidate input the HTML report shows in the
+#: "most distant examples" table, in **characters of text** -- the unit every
+#: statement about this cap has always been written in (the prose in
+#: `compute_drift`'s representability block, and
+#: `tests/test_drift_unencodable_inputs.py`'s `surrogate-past-200-char-truncation`
+#: row). Named once so the renderer, that prose and the tests cannot drift apart
+#: on the number the way they drifted apart on the unit (#240).
+_CELL_TEXT_CAP = 200
+
+#: Marker appended when `_truncate_text` actually cut, so the operator can tell a
+#: sentence that ends from one that was stopped. Same character `cli.py`'s run-id
+#: column and `judge.py`'s non-finite-score message already use.
+_TRUNCATION_MARKER = "\u2026"
+
+
+def _truncate_text(text: str, limit: int = _CELL_TEXT_CAP) -> str:
+    """Cut *text* to *limit* characters, marking the cut, for later escaping.
+
+    Slices the **source** and returns text, not markup. Escaping is the caller's
+    next step and must stay that way round: `html.escape(text)[:limit]` spends
+    the budget on the markup instead of on the text, because every `&`, `<`, `>`,
+    `"` and `'` costs 4-5 characters of it. Measured on `bba39c2` through
+    `render_html`, `VISIBLE` being `len(html.unescape(cell))` (#240):
+
+        input                                     source  markup  VISIBLE
+        ----------------------------------------  ------  ------  -------
+        code-review prompt `a['k'] && b["v"] < c`    193     200      162
+        English prose with apostrophes               412     200      170
+        XHTML-authoring prompt `<div>`, `&amp;`      348     200      147
+        plain ASCII (the control)                    400     200      200
+
+    The first row is why this is a bug and not a rounding preference: 193
+    characters is *under* the cap, so the cap should not touch that input at all,
+    and 31 characters went missing anyway with no marker. A code-review prompt is
+    one of the likeliest shapes in an LLM eval golden set, not an exotic.
+
+    The second harm the order fixes is structural: a cut index measured in markup
+    can land between the `&` and the `;` of a reference the escape just produced
+    -- `"x" * 197 + "&"` rendered a literal `&am`, and `"x" * 197 + "'"` a literal
+    `&#x`. For some offsets HTML5's legacy named-reference set resolves the
+    fragment anyway (`&amp` -> `&`, `&lt` -> `<`), so the corruption is
+    offset-dependent, which is worse than uniformly broken because it will not
+    reproduce from a rounded repro. Slicing first makes a split reference
+    unconstructible rather than merely unlikely.
+
+    Three siblings in this package already slice the source: `cli.py`'s
+    `run_id[:12] + ("\u2026" if ...)`, `judge.py`'s `group(1)[:32]` then
+    `\u2026`, and `comment.py`'s `md_code_span(run_id[:8])` -- which is the same
+    ordering rule for the Markdown escape. `render_html` was the one site that
+    escaped first.
+
+    The marker is appended rather than fitted inside *limit*: it is not part of
+    the input, so counting it against the input's budget would make the visible
+    text 199 characters and reintroduce a second, smaller version of exactly the
+    unit confusion this fixes.
+    """
+    if limit < 0:
+        raise ValueError(f"limit must be non-negative; got {limit}")
+    if len(text) <= limit:
+        return text
+    return text[:limit] + _TRUNCATION_MARKER
+
+
 def render_html(report: DriftReport) -> str:
     """Render the drift report to a single HTML document. Dep-free."""
     length_labels = [
@@ -945,7 +1020,7 @@ def render_html(report: DriftReport) -> str:
 
     examples_rows = "\n".join(
         f"<tr><td>{r.distance_to_nearest_golden_cluster:.3f}</td>"
-        f"<td>{html.escape(r.text)[:200]}</td></tr>"
+        f"<td>{html.escape(_truncate_text(r.text))}</td></tr>"
         for r in report.representative_examples
     )
     if report.judge is not None:

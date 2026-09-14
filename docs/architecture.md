@@ -129,6 +129,23 @@ shared with `dataset.py`'s representability check (#213) via
 `io_utils.find_unencodable`, so the two enforcement sites cannot answer
 differently for the same string (#215).
 
+The representative-example cell that `render_html` puts that raw text into
+is capped, and the cap is in **characters of text** — `drift._CELL_TEXT_CAP`,
+applied by `drift._truncate_text` before `html.escape`, with a `…` marker
+when it cuts. The ordering is the contract, not a style choice: until #240
+the cell was `html.escape(r.text)[:200]`, which spends the budget on the
+*markup*, so every `&`, `<`, `>`, `"` and `'` cost 4–5 characters of it. A
+193-character code-review prompt — under the cap, so untouched by it —
+rendered 162 characters, silently; an apostrophe-heavy prose row rendered
+170 of 412. A markup-measured cut can also land between the `&` and the `;`
+of a reference it just produced, emitting a literal `&am` or `&#x` into the
+document. Slicing the source first makes that unconstructible. `cli.py`'s
+run-id column, `judge.py`'s non-finite-score message and `comment.py`'s
+`md_code_span` call all already sliced before escaping; `render_html` was
+the one site that did not, and
+`tests/test_drift_report_cell_truncation.py` locks the ordering over the
+package AST so a second one cannot appear.
+
 `#217` found the third and fourth sites. `io_utils`' own docstring names
 four writer families; two had the guard. `calibration.load_calibration`
 had none, so a lone surrogate in a calibration row passed
