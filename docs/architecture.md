@@ -376,6 +376,24 @@ alias was visible in `--help`, locked by
   `tests/test_mypy_clean.py`, so they can't silently drift from the code.
   No blanket `ignore_missing_imports`; the optional `anthropic` SDK is
   the one per-module override.
+- **Published-number locks (#144, #241).** Two surfaces quote drift
+  scores that a reader takes on trust, and both are pinned against a
+  live `drift.compute_drift` rather than against a stored fixture.
+  The README's `# stdout:` example is pinned by pairing 7 of
+  [`tests/test_readme_defaults_snapshot.py`](../tests/test_readme_defaults_snapshot.py);
+  the demo flow that [`examples/drift_report.py`](../examples/drift_report.py)
+  and [`scripts/capture_demo.py`](../scripts/capture_demo.py) render is
+  pinned by
+  [`tests/test_demo_drift_published_values.py`](../tests/test_demo_drift_published_values.py),
+  which locks the stdout scores, the HTML summary table, and the
+  most-distant-inputs rows *in order*. The second lock exists because
+  the first one's absence had already been demonstrated: #208 moved
+  both surfaces in one commit, the README's lock fired and the demo's
+  silence let a stale embedding score stand for 36 commits (#241).
+  A value lock is paired with an order-independence arm over the same
+  corpus, because before #208 that corpus yielded 19 distinct embedding
+  scores across 60 shuffles — pinning a literal without that arm pins a
+  coin flip rather than a property.
 
 ## What's deliberately not in the harness
 
