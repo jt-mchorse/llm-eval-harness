@@ -2657,3 +2657,50 @@ into a diff about string truncation.
 **Open questions / blockers:** none for #240. #241 needs someone to establish
 *which* number is correct before regenerating — a regression in `hash_embed` or
 `_kmeans` would look exactly like a stale artifact.
+
+## 2026-09-14 — Session on #241 (62 min)
+
+**Focus.** #241 reported that the demo's drift report "does not reproduce":
+the embedding axis read 0.1722 in the committed artifact and 0.2454 when
+regenerated from `main`.
+
+**What actually turned out to be true.** Checking the premise before working
+the acceptance criteria is what found the real bug. `docs/demo-artifacts/` has
+been gitignored since `61c9f98` — the same commit that introduced
+`scripts/capture_demo.py` — and `git log --all` on that path is empty, so the
+directory has never been tracked. The 0.1722 file was a stale leftover on the
+local disk, not a published artifact, and nothing outside `capture_demo.py`
+references it. The README's drift numbers, which *are* published and committed,
+reproduce exactly and are already locked. So two of the issue's three acceptance
+criteria were not actionable as written.
+
+**The number question, answered by bisection.** The embedding axis moved at
+`1185fe9` (#208, the order-independence fix). The current value is the right one,
+and not merely because it is newer: at the commit before that fix, 60 random
+shuffles of the byte-identical demo corpus produce 19 distinct embedding scores,
+and 0.1722 is one draw that came up 3 times. After the fix, all 60 agree on
+0.2454. The value was also checked against a Jensen-Shannon divergence computed
+from first principles over the cluster histograms, agreeing to 1e-15.
+
+**The real defect.** The demo flow had no value lock. Its two existing checks
+assert that the string "embedding axis" appears in stdout and that the HTML
+contains `<svg` and `</html>` — containment locks, blind to values. The clinching
+evidence is that #208 moved *both* of this repo's published drift surfaces in one
+commit: the README's number was caught by its value lock and updated in that same
+commit, while the demo's moved in silence and stayed wrong for 36 commits.
+
+**Shipped.** `tests/test_demo_drift_published_values.py` pins the stdout scores,
+the HTML summary table, the most-distant-inputs rows in order, and an
+order-independence arm that is what makes the pinned literals a property rather
+than a snapshot of a coin flip. Everything derives from running the example
+itself, so editing the corpus or `cluster_k` also trips the lock.
+
+**Two things worth remembering.** First, the lock was falsified historically
+rather than only synthetically: run against the pre-#208 tree, 4 of its 7 arms
+go red and reproduce the issue's stale table exactly, while all 5 existing smoke
+tests are green there. Second, my first two perturbation cases passed against
+working code — JSD is invariant to candidate mass moving between buckets the
+golden set never occupies, so appending 400 characters to an input visibly
+changed the histogram and left the score bit-identical. Filed as #243.
+
+**Open.** PR #244 (ready). #243 filed, not worked.
