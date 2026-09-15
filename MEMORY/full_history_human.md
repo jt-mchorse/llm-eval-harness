@@ -2704,3 +2704,61 @@ golden set never occupies, so appending 400 characters to an input visibly
 changed the histogram and left the score bit-identical. Filed as #243.
 
 **Open.** PR #244 (ready). #243 filed, not worked.
+
+## 2026-09-15 — Issue #243: the mass the drift axes cannot see move
+**Duration:** 9 min (measured) · **Branch:** `session/2026-09-15-0725-issue-243`
+
+**Re-checking my own premise first.** I filed #243 yesterday with one
+perturbation as evidence. One example is consistent with the axis merely being
+coarse, so I enumerated the space instead: all 28 ways to redistribute the demo
+corpus's 6 out-of-support candidate inputs across the empty buckets give the
+identical `0.5689626904850149`. The invariance is total, not approximate.
+
+**The issue's suggested scope was overcautious, and the repo said so.** I had
+written that a companion signal "is a design question, not an obvious yes."
+D-017 had already answered the general question: `n_uncomparable` reports the
+inputs the *embedding* axis structurally cannot see, on the argument written
+into its own comment — such a count "is itself a drift finding, and often a more
+actionable one than the JSD on the axis it was corrupting." This is the same
+shape a second time, so it is an application of a recorded decision rather than
+a new one.
+
+**A guess I had to throw away.** I predicted the score decomposes as
+`f/2 + (1-f)·JSD(on-support part)`. Tested, it is false on every trial — the
+golden side doesn't renormalize the same way. The identity that *is* true is the
+per-bucket one: the off-support buckets contribute exactly half the
+out-of-support fraction. Checked against a from-definition decomposition over
+400 random histogram pairs, with an assertion that the decomposition reproduces
+the shipped function first, so the identity isn't being checked against the
+wrong quantity.
+
+**The thing I nearly got wrong.** I planned a test where the JSD is bit-identical
+and the new count moves. Halfway through writing it I realised the count is
+invariant to *exactly the same* redistribution — moving mass between
+out-of-support buckets changes neither. A companion metric can share the very
+blind spot it was meant to expose. What the count actually discriminates is two
+*reports*: found by exhaustive search, against a golden histogram of
+`(4,4,0,0,0)` the candidates `(0,8,0,0,0)` and `(2,2,0,0,4)` both score
+`0.311278124459`, with 0% and 80% of that identical number frozen. That is the
+honest claim, and it's what the docs and the test now say.
+
+**Shipped.** `DriftReport.n_length_off_support` and `n_judge_off_support`
+(`None` when the judge axis is skipped, not `0`, which would claim a clean
+result for an axis that never ran). Surfaced in the two axes' detail strings and
+in the HTML report, all three only when non-zero, so an ordinary report is
+byte-unchanged and no axis score moves. The invariance is documented in
+`jensen_shannon`, in `compute_drift`, in the README and in `architecture.md` —
+including the part the count does *not* answer.
+
+**The number worth remembering:** 6 of 8 demo candidate inputs are off support on
+*both* histogram axes. Three quarters of that traffic sits where neither axis can
+see it move, and 66% of the published length score is frozen.
+
+**Anti-vacuity.** Against the pre-change tree with only the helper grafted in,
+5 feature arms go red and 6 math arms stay green — the correct split, since the
+invariance predates this change. Three wrong-unit neighbours built and run:
+counting buckets instead of inputs (6 red), operands swapped (7 red), the wrong
+side of the `g == 0` test (7 red).
+
+**Decision.** D-023. **Suite:** 1580 → 1592 green; ruff, `ruff format --check`
+and mypy clean.

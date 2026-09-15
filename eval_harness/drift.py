@@ -118,6 +118,36 @@ class DriftReport:
     #: actionable one than the JSD on the axis it was corrupting.
     n_uncomparable: tuple[int, int]
 
+    #: Candidate inputs falling in a histogram bucket the *golden* histogram
+    #: never occupies, per histogram axis. `n_judge_off_support` is ``None``
+    #: exactly when the judge axis was skipped, mirroring ``judge``/``judge_stats``.
+    #:
+    #: These count the mass the axis is structurally blind to. Jensen-Shannon
+    #: divergence over a histogram is *invariant* to how candidate mass
+    #: redistributes among buckets where ``P_i == 0``: each such bucket
+    #: contributes exactly ``Q_i / 2`` to the divergence regardless of which
+    #: one it lands in. So an input can move several buckets further from the
+    #: golden distribution and not move the axis by a single bit. That is
+    #: correct for a categorical divergence over unordered buckets -- the price
+    #: of D-014's bounded symmetric choice -- but it is invisible, and it is
+    #: the shape of drift a detector exists to catch: traffic that has moved
+    #: entirely off the golden support registers no *further* drift as it keeps
+    #: moving. (D-023, #243)
+    #:
+    #: Same posture as ``n_uncomparable`` (D-017): report what the axis cannot
+    #: see as a first-class count, rather than leaving the blindness implicit.
+    #:
+    #: Deliberately *not* defined for the embedding axis, whose structure is
+    #: cluster assignment rather than a histogram over a fixed domain -- every
+    #: comparable candidate is assigned to some golden centroid, so "outside
+    #: the support" has no counterpart there.
+    #:
+    #: Two named fields rather than one ``tuple[int, int | None]``: every other
+    #: tuple field on this dataclass reads ``(golden, candidate)``, and a tuple
+    #: whose slots were *axes* would invite exactly that misreading.
+    n_length_off_support: int = 0
+    n_judge_off_support: int | None = None
+
 
 # ----------------------------------------------------------------------
 # Math primitives
@@ -166,6 +196,29 @@ def jensen_shannon(p: Sequence[float], q: Sequence[float]) -> float:
     axis thresholds, and ``_clamp01`` (#96). No internal caller can reach
     either branch -- the three call sites pass non-negative ``int`` histograms
     -- but the name is exported in ``__all__``.
+
+    Out-of-support invariance (#243, D-023). This function is invariant to how
+    ``q`` redistributes mass among buckets where ``p`` is zero. For any bucket
+    with ``p_i == 0`` the per-bucket term ``H(m_i) - (H(p_i) + H(q_i))/2``
+    reduces to exactly ``q_i / 2``, which depends on the mass but not on which
+    zero-``p`` bucket holds it. Two consequences worth knowing before reading a
+    score:
+
+    - An input can move several buckets *further* from ``p`` and not move the
+      result by a single bit. Measured on the demo corpus, whose golden length
+      histogram is ``(2, 6, 0, ...)``: all 28 redistributions of the 6
+      out-of-support candidate inputs give the identical
+      ``0.5689626904850149``.
+    - The total contribution of those buckets is exactly half the out-of-support
+      *fraction*, so on that corpus ``0.375`` of the ``0.5690`` -- about 66% --
+      is frozen. ``DriftReport.n_length_off_support`` /
+      ``n_judge_off_support`` report the count this is computed from.
+
+    This is correct for a categorical divergence over unordered buckets, not a
+    defect: there is no "further outside the support" for a bucket that carries
+    no order. It is the price of D-014's bounded symmetric choice, and KL and KS
+    were rejected for reasons that still hold. It is documented rather than
+    changed, and reported rather than left implicit.
     """
     if len(p) != len(q):
         raise ValueError(f"distributions must have equal length; got {len(p)} vs {len(q)}")
@@ -460,6 +513,18 @@ def _length_stats(inputs: Sequence[str]) -> LengthStats:
     )
 
 
+def _off_support_count(golden_hist: Sequence[int], candidate_hist: Sequence[int]) -> int:
+    """Candidate mass sitting in buckets the golden histogram never occupies.
+
+    The companion to a Jensen-Shannon score, not a correction to it. JSD is
+    invariant to how this mass redistributes among such buckets (each
+    contributes exactly ``Q_i / 2``), so the axis cannot distinguish "just
+    outside the golden support" from "far outside it". This count is what
+    changes when the JSD cannot. (D-023, #243)
+    """
+    return sum(c for g, c in zip(golden_hist, candidate_hist, strict=True) if g == 0)
+
+
 def _judge_histogram(scores: Sequence[float]) -> tuple[int, ...]:
     """10 buckets over ``[0.0, 1.0]``."""
     buckets = [0] * 10
@@ -504,6 +569,17 @@ def compute_drift(
     ``representative_examples`` is the list of candidate inputs whose
     nearest-golden-centroid cosine distance is largest — the inputs
     that look least like anything in the golden set.
+
+    Read the two histogram axes' scores alongside
+    ``n_length_off_support`` / ``n_judge_off_support`` (#243, D-023). Candidate
+    mass in a bucket the golden histogram never occupies contributes a fixed
+    ``q_i / 2`` to the JSD regardless of *which* such bucket it lands in, so
+    that portion of the score cannot respond as the mass moves further out —
+    exactly the shape of drift a detector exists to catch. The counts say how
+    much of the score is in that frozen regime; half the out-of-support fraction
+    is its exact contribution. They do not say how far out it has gone: nothing
+    here does, and ``jensen_shannon``'s docstring explains why that is a
+    property of the chosen divergence rather than an omission.
 
     Inputs with no embeddable content (``has_embeddable_content`` is
     ``False``) take part in the length and judge axes but not in
@@ -668,12 +744,27 @@ def compute_drift(
     g_len_hist = _length_histogram(golden_inputs)
     c_len_hist = _length_histogram(candidate_inputs)
     length_drift = jensen_shannon(g_len_hist, c_len_hist)
+    n_length_off_support = _off_support_count(g_len_hist, c_len_hist)
+    # Appended only when non-zero, so an ordinary report's detail string is
+    # byte-unchanged. Same rule as `uncomparable_note` below (D-017).
+    length_off_support_note = (
+        ""
+        if n_length_off_support == 0
+        else (
+            f"; {n_length_off_support}/{len(candidate_inputs)} candidate inputs fall in "
+            f"buckets the golden histogram never occupies, where the JSD is invariant to "
+            f"which of those buckets they land in"
+        )
+    )
     length_report = AxisReport(
         name="length",
         drift_score=length_drift,
         status="drifted" if length_drift > length_threshold else "ok",
         threshold=length_threshold,
-        detail=f"JSD over char-length histogram across {len(_LENGTH_BUCKETS) - 1} buckets",
+        detail=(
+            f"JSD over char-length histogram across {len(_LENGTH_BUCKETS) - 1} buckets"
+            f"{length_off_support_note}"
+        ),
     )
 
     # --- Embedding axis -------------------------------------------------
@@ -743,18 +834,35 @@ def compute_drift(
     # --- Judge axis (optional) -----------------------------------------
     judge_report: AxisReport | None = None
     judge_stats: tuple[JudgeStats, JudgeStats] | None = None
+    # `None` exactly when the judge axis is skipped -- not 0, which would claim
+    # "measured, and nothing was off support". Same distinction `judge_stats`
+    # already draws (D-023, #243).
+    n_judge_off_support: int | None = None
     if judge_score_fn is not None:
         g_scores = [_clamp01(judge_score_fn(s)) for s in golden_inputs]
         c_scores = [_clamp01(judge_score_fn(s)) for s in candidate_inputs]
         g_hist = _judge_histogram(g_scores)
         c_hist = _judge_histogram(c_scores)
         judge_drift = jensen_shannon(g_hist, c_hist)
+        n_judge_off_support = _off_support_count(g_hist, c_hist)
+        judge_off_support_note = (
+            ""
+            if n_judge_off_support == 0
+            else (
+                f"; {n_judge_off_support}/{len(c_scores)} candidate scores fall in "
+                f"buckets the golden histogram never occupies, where the JSD is "
+                f"invariant to which of those buckets they land in"
+            )
+        )
         judge_report = AxisReport(
             name="judge",
             drift_score=judge_drift,
             status="drifted" if judge_drift > judge_threshold else "ok",
             threshold=judge_threshold,
-            detail="JSD over 10-bucket histogram of judge_score_fn(input) in [0, 1]",
+            detail=(
+                "JSD over 10-bucket histogram of judge_score_fn(input) in [0, 1]"
+                f"{judge_off_support_note}"
+            ),
         )
         judge_stats = (
             JudgeStats(
@@ -835,6 +943,8 @@ def compute_drift(
         representative_examples=tuple(examples),
         cluster_k=len(centroids),
         n_uncomparable=n_uncomparable,
+        n_length_off_support=n_length_off_support,
+        n_judge_off_support=n_judge_off_support,
     )
 
 
@@ -1058,6 +1168,36 @@ def render_html(report: DriftReport) -> str:
             "angle to any centroid.</p>"
         )
     )
+    # The blind spot, surfaced to the operator reading the document rather than
+    # left on the dataclass. An axis that cannot distinguish "just outside the
+    # golden support" from "far outside it" is exactly what an operator needs
+    # told, because the JSD above will look reassuringly stable while traffic
+    # keeps moving away. Rendered only when non-zero, so an ordinary report is
+    # byte-unchanged (D-023, #243; same rule as the block above).
+    off_support_bits: list[str] = []
+    if report.n_length_off_support:
+        off_support_bits.append(
+            f"<strong>{report.n_length_off_support} of {report.n_candidate}</strong> "
+            "on the length axis"
+        )
+    if report.n_judge_off_support:
+        off_support_bits.append(
+            f"<strong>{report.n_judge_off_support} of {report.n_candidate}</strong> "
+            "on the judge axis"
+        )
+    off_support_block = (
+        ""
+        if not off_support_bits
+        else (
+            '<p style="color:#8a6d1f;font-size:12px;margin-top:8px">'
+            + " and ".join(off_support_bits)
+            + " candidate inputs fall in histogram buckets the golden set never "
+            "occupies. The Jensen-Shannon score is invariant to how that mass "
+            "redistributes among such buckets, so those inputs can move further from "
+            "the golden distribution without moving the axis. Read this count "
+            "alongside the score, not instead of it.</p>"
+        )
+    )
     return (
         '<!doctype html><html lang="en"><head><meta charset="utf-8">'
         "<title>eval-harness drift report</title>"
@@ -1087,6 +1227,7 @@ def render_html(report: DriftReport) -> str:
         f"<h2>Length axis</h2>{length_svg}"
         f"<h2>Embedding cluster axis</h2>{cluster_svg}"
         f"{uncomparable_block}"
+        f"{off_support_block}"
         f"{judge_block}"
         "<h2>Most distant candidate inputs from any golden cluster centroid</h2>"
         "<table><thead><tr><th>Distance</th><th>Text</th></tr></thead><tbody>"

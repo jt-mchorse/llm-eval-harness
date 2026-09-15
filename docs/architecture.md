@@ -104,6 +104,25 @@ axis doesn't mask stability on the others. `eval-harness drift`
 renders a single-file HTML report (no JS, no external CSS) so
 operators can attach it to a ticket.
 
+The two *histogram* axes have a blind spot D-014's choice creates and
+D-023 reports. A JSD over a histogram is invariant to how candidate
+mass redistributes among buckets the golden set never occupies: each
+such bucket contributes exactly `q_i / 2` regardless of which one holds
+the mass, so an input can move several buckets further out without
+moving the score by a bit. All 28 redistributions of the demo corpus's
+6 out-of-support inputs give the identical `0.5689626904850149`, and
+their total contribution is exactly half the out-of-support fraction —
+`0.375` of that `0.5690`, about 66%, frozen. This is correct for a
+categorical divergence over unordered buckets rather than a defect, so
+it is documented and counted instead of changed:
+`n_length_off_support` and `n_judge_off_support` carry the mass in that
+frozen regime, with `None` on the judge slot when the axis is skipped.
+Same posture as D-017 below — what an axis cannot see is a first-class
+count. The counts say how much of a score is frozen, not how far the
+mass has gone; nothing here says the latter. The embedding axis is
+excluded because it assigns every comparable candidate to some golden
+centroid rather than bucketing over a fixed domain (#243).
+
 The embedding axis has a domain the other two don't: `hash_embed`
 returns the all-zero vector for an input with no alphanumeric tokens,
 and the zero vector has no angle to any centroid. Per D-017 such an

@@ -508,3 +508,72 @@ files" — and leaves the caller to state which version they meant.
 
 Scope is the write path only. `load_jsonl` is unchanged: it already derives the
 file version from the rows and rejects rows that disagree with each other.
+
+---
+
+## D-023 — Report out-of-support candidate mass; document the invariance that causes it
+**Date:** 2026-09-15 · **Reversibility:** cheap
+
+**Decision.** `DriftReport` gains `n_length_off_support: int` and
+`n_judge_off_support: int | None` — candidate inputs sitting in a histogram
+bucket the golden set never occupies. The two histogram axes' `detail` strings
+and the HTML report surface them, all three only when non-zero, so an ordinary
+report is byte-unchanged. No axis score changes and no existing number moves.
+
+**The property.** Jensen-Shannon divergence over a histogram is invariant to how
+the candidate distribution redistributes mass among buckets where `P_i == 0`.
+The per-bucket term reduces to exactly `Q_i / 2` — a function of the mass, not
+of which zero-`P` bucket holds it. So an input can move several buckets further
+from the golden distribution without moving the axis by a single bit.
+
+This was verified rather than asserted. All 28 redistributions of the demo
+corpus's 6 out-of-support inputs produce the identical `0.5689626904850149`, and
+the exact contribution identity — off-support buckets sum to half the
+out-of-support fraction — was checked against a from-definition decomposition
+over 400 random histogram pairs. On the demo corpus that means 6 of 8 candidate
+inputs are off support on *both* histogram axes, so `0.375` of the `0.5690`
+length score, about 66%, is frozen.
+
+**This is not a defect and is not being fixed.** A categorical divergence over
+unordered buckets has no notion of "further outside the support" — a bucket
+carries no order. That is the price of D-014's bounded, symmetric choice, and
+the alternatives it rejected (KL: unbounded and asymmetric; KS: ordered scalars
+only) are still rejected for the same reasons. The invariance is documented and
+reported, not removed.
+
+**Why a count is the right companion.** This is the second instance of a shape
+D-017 already decided. `n_uncomparable` reports the inputs the *embedding* axis
+structurally cannot see, with the argument written into its own comment: such a
+count "is itself a drift finding, and often a more actionable one than the JSD
+on the axis it was corrupting." Issue #243 called this "a design question, not
+an obvious yes" — that was overcautious. The repo had already answered the
+general question; this applies it to a second blind spot in the same report.
+
+**What the count does not do.** It is invariant to exactly the same
+redistribution the JSD is, so it does *not* distinguish "just outside the
+support" from "far outside it" — and nothing here does. It answers how much of
+the score is frozen, which is a different and cheaper question. What it does
+discriminate is two *reports*: against a golden histogram of `(4,4,0,0,0)`, the
+candidates `(0,8,0,0,0)` and `(2,2,0,0,4)` both score `0.311278124459`, with 0%
+and 80% of that identical number frozen respectively. That pair was found by
+exhaustive search, not constructed.
+
+**Alternatives considered:**
+- Change the divergence to something order-aware — rejected; D-014's reasons
+  hold, and reporting a blind spot is not the same as removing it.
+- A fraction rather than a count — rejected; `n_candidate` is on the report so
+  the fraction is derivable, and a count matches `n_uncomparable` and
+  `bucket_counts`.
+- Put the field on `AxisReport` so all three axes carry it — rejected; it would
+  force a meaningless value on the embedding axis, whose structure is cluster
+  assignment rather than a histogram over a fixed domain.
+- Documentation only — rejected; a documented property with no field and no test
+  is a claim, and the operator reading an HTML report never sees the docstring.
+
+**Two named fields, not one tuple.** Every other tuple field on `DriftReport`
+reads `(golden, candidate)`. A tuple whose slots were *axes* would invite
+exactly the wrong-unit misreading; two plain fields cannot be misindexed. And
+`None` rather than `0` on the judge slot, because `0` would claim a clean result
+for an axis that never ran.
+
+**Related issues:** #243, #241, #210

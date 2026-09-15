@@ -97,7 +97,7 @@ pretending to be a multi-rater gold standard.
 ## Architecture
 
 See [`docs/architecture.md`](docs/architecture.md) for the integrated flow,
-per-layer detail, and the design decisions behind each one (D-002…D-022).
+per-layer detail, and the design decisions behind each one (D-002…D-023).
 The shape:
 
 ```mermaid
@@ -466,7 +466,8 @@ eval-harness drift \
 
 Three axes are scored:
 
-- **Length** — char-count histogram of inputs.
+- **Length** — char-count histogram of inputs. See the out-of-support
+  note below: a large length change does not always move this axis.
 - **Embedding cluster** — a dep-free hash embedder (lexical-overlap
   pattern, deterministic, no API key) builds k=8 cluster centroids
   from the golden set; each candidate input is assigned to its
@@ -488,6 +489,38 @@ symmetric — the choice is recorded as D-014: KL is unbounded and
 asymmetric; KS only works for ordered scalars (it doesn't generalize
 to the cluster-id axis); JSD does both with one formula and one
 threshold per axis.
+
+**Read the two histogram axes with their out-of-support counts** (D-023,
+#243). JSD over a histogram is invariant to how candidate mass
+redistributes among buckets the golden set never occupies: any such
+bucket contributes exactly `q_i / 2` regardless of *which* one holds
+the mass. So an input can move several buckets further from the golden
+distribution and not move the axis by a single bit — measured on the
+demo corpus, all 28 redistributions of its 6 out-of-support inputs give
+the identical `0.5689626904850149`. Their total contribution is exactly
+half the out-of-support fraction, which on that corpus is `0.375` of
+the `0.5690`, about 66% of the score, frozen.
+
+This is correct for a categorical divergence over unordered buckets, not
+a defect — a bucket carries no order, so there is no "further outside
+the support" for it to express, and that is the price of D-014's
+choice. But it is the shape of drift a detector exists to catch:
+traffic that has moved entirely off the golden support registers no
+*additional* drift as it keeps moving. So `DriftReport` reports
+`n_length_off_support` and `n_judge_off_support` — the candidate inputs
+in that frozen regime, `None` on the judge slot when the axis is
+skipped. Same posture as `n_uncomparable` (D-017): what an axis cannot
+see is a first-class count, not an implicit gap. Both are surfaced in
+the HTML report when non-zero.
+
+The counts say how much of the score is frozen, not how far the mass
+has travelled — they are invariant to the same redistribution the JSD
+is. What they do discriminate is two reports with the *same* score: a
+candidate set fully inside the golden support and one with half its
+mass outside can both score `0.311278`, with 0% and 80% of that
+identical number frozen respectively. The embedding axis has no
+equivalent, because it assigns every comparable candidate to some
+golden centroid rather than bucketing over a fixed domain.
 
 The output HTML report is single-file (inline SVG, no external CDN)
 and lists the most-distant candidate inputs from any golden centroid
