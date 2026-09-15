@@ -2832,7 +2832,7 @@ followups: ["#243"]
 
 ---
 session: 2026-09-15T07:25Z
-duration_min: 32
+duration_min: 9   # MEASURED plan-comment 07:25:30Z to close-comment 07:34:59Z; I first wrote 32 from ESTIMATION
 issue: 243
 focus: documenting_and_COUNTING_the_out_of_support_mass_the_JSD_axes_are_structurally_blind_to
 delta:

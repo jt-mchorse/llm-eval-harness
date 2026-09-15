@@ -2706,7 +2706,7 @@ changed the histogram and left the score bit-identical. Filed as #243.
 **Open.** PR #244 (ready). #243 filed, not worked.
 
 ## 2026-09-15 — Issue #243: the mass the drift axes cannot see move
-**Duration:** ~32 min · **Branch:** `session/2026-09-15-0725-issue-243`
+**Duration:** 9 min (measured) · **Branch:** `session/2026-09-15-0725-issue-243`
 
 **Re-checking my own premise first.** I filed #243 yesterday with one
 perturbation as evidence. One example is consistent with the axis merely being
