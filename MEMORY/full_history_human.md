@@ -2762,3 +2762,71 @@ side of the `g == 0` test (7 red).
 
 **Decision.** D-023. **Suite:** 1580 → 1592 green; ruff, `ruff format --check`
 and mypy clean.
+
+## 2026-09-21 — Issue #246: D-023 excluded the embedding axis on a false premise
+**Duration:** 13 min (measured) · **Branch:** `session/2026-09-21-0710-issue-246`
+
+**How it was found.** leh had no pickable issue — both open ones genuinely need
+a maintainer's input — so this was hunted, and the freshest surface in the repo
+was the PR this same session had merged twelve minutes earlier. D-023 added an
+off-support count to two of the three drift axes and wrote down why the third
+was excluded: "every comparable candidate is assigned to some golden centroid,
+so 'outside the support' has no counterpart there."
+
+That sentence is true, and it is about centroids. *The support* is the set of
+buckets the **golden histogram** occupies. `_kmeans` retains a centroid whose
+cluster went empty rather than dropping it, so a cluster carrying no golden mass
+is reachable, candidates get assigned to it, and the embedding score is the same
+`jensen_shannon` over a histogram with the same `q_i / 2` invariance. The claim
+was not wrong — it walked the wrong population.
+
+**Measured rather than argued.** 70 of 20,000 random corpora put candidate mass
+in such a cluster; 1,531 had a golden-empty cluster at all. Reproduced at a
+second seed with different vocabularies, through the public `compute_drift`
+rather than the internals. On golden `(3,0,0,1)` against candidate `(1,2,0,0)`,
+all three redistributions of the off-support mass among the two empty clusters
+give the identical `0.5176503615477757`, with 64.4% of that score frozen.
+
+**Real English didn't reproduce it.** Sentences drawn from two disjoint topical
+vocabularies gave zero hits in 60,000 trials; random word salad gave 79 in
+20,000. The property needs repetition to collapse vectors, which is why the
+corpus that shipped carries five copies of `"rollback"` — the duplicates are
+load-bearing, and greedy delta-debugging (drop each item, then each word, while
+the property holds) could not remove them. It took 10 golden + 13 candidate
+inputs down to 4 + 3.
+
+**The denominator was part of the finding.** The two sibling axes count against
+`n_candidate`, and copying that would have been measurably wrong: the embedding
+axis drops uncomparable inputs, and the JSD normalizes the histogram it is
+actually handed. On a report with one uncomparable candidate the true frozen
+contribution is `(1/2)/2 = 0.25` of a `0.4733` score; an `n_candidate` base
+claims `0.1667`.
+
+**A correction to my own test.** The arm *named* for the denominator recomputed
+the base from `cluster_stats[1].n` — so when I patched the shipped code to emit
+`n_candidate` instead, the arm passed. It was pinning this test's arithmetic,
+not the code's choice of unit. It now reads the published base back off the
+detail string and computes the identity from that. I only found it by building
+and running the neighbour; the test name had claimed more than the test pinned.
+
+**Shipped.** `n_embedding_off_support`, in the axis detail string and the HTML
+block, both only when non-zero so an ordinary report is byte-unchanged and no
+axis score moves. Thirteen tests. D-024 records the amendment, including the
+fact that it also falsifies one of D-023's rejected alternatives — "it would
+force a meaningless value on the embedding axis" — which stays rejected on its
+other ground but not for that reason.
+
+**Deliberately not changed.** The divergence (D-014 holds) and `_kmeans`'
+empty-centroid retention. Dropping a retained centroid would move every
+published embedding number, and it repairs the documentation by changing the
+measurement.
+
+**Anti-vacuity.** A worktree at the pre-change sha with only the new test file
+grafted in: 9 feature arms red, 4 math/mechanism arms green — the correct split,
+since both the invariance and the empty-centroid retention predate the change.
+Five wrong neighbours built and run, each caught.
+
+**Suite:** 1592 → 1606 green — 13 new tests plus one auto-parametrized case,
+because `test_source_representability` parametrizes over every test *file* and a
+new file joins it. Verified by diffing collected node ids rather than trusting
+the arithmetic. ruff, `ruff format --check` and mypy clean.
