@@ -137,16 +137,36 @@ class DriftReport:
     #: Same posture as ``n_uncomparable`` (D-017): report what the axis cannot
     #: see as a first-class count, rather than leaving the blindness implicit.
     #:
-    #: Deliberately *not* defined for the embedding axis, whose structure is
-    #: cluster assignment rather than a histogram over a fixed domain -- every
-    #: comparable candidate is assigned to some golden centroid, so "outside
-    #: the support" has no counterpart there.
+    #: D-023 originally excluded the embedding axis, on the grounds that "every
+    #: comparable candidate is assigned to some golden centroid, so 'outside the
+    #: support' has no counterpart there". The premise is true and the
+    #: conclusion does not follow (D-024, #246): *the support* is the set of
+    #: buckets the golden histogram occupies, not the set of centroids that
+    #: exist. ``_kmeans`` **retains** a centroid whose cluster went empty rather
+    #: than dropping it, so ``g_cluster_counts[i] == 0`` is reachable, ``_assign``
+    #: will route a candidate to that centroid, and the embedding JSD is the same
+    #: ``jensen_shannon`` over a histogram with the same ``Q_i / 2`` invariance.
+    #: Measured: 70 of 20,000 random corpora put candidate mass in such a bucket,
+    #: and on one of them 55.8% of the published score was frozen there.
     #:
-    #: Two named fields rather than one ``tuple[int, int | None]``: every other
-    #: tuple field on this dataclass reads ``(golden, candidate)``, and a tuple
-    #: whose slots were *axes* would invite exactly that misreading.
+    #: Three named fields rather than one tuple: every other tuple field on this
+    #: dataclass reads ``(golden, candidate)``, and a tuple whose slots were
+    #: *axes* would invite exactly that misreading.
     n_length_off_support: int = 0
     n_judge_off_support: int | None = None
+
+    #: The same count on the embedding cluster axis (D-024, #246).
+    #:
+    #: Its denominator is **not** ``n_candidate``. The embedding axis excludes
+    #: inputs with no embeddable content, so the base is the number of
+    #: *clustered* candidates -- ``cluster_stats[1].n``, which is exactly
+    #: ``sum(cluster_stats[1].cluster_counts)``. This matters numerically, not
+    #: just presentationally: the frozen contribution is half the off-support
+    #: fraction *of the histogram the JSD normalises*, so on a measured corpus
+    #: with ``gh=(4, 7, 0)``, ``ch=(0, 4, 4)`` and 2 uncomparable candidates the
+    #: true frozen contribution is ``(4/8)/2 = 0.25`` of a 0.4377 score, while
+    #: ``n_candidate`` as the base would claim ``(4/10)/2 = 0.20``.
+    n_embedding_off_support: int = 0
 
 
 # ----------------------------------------------------------------------
@@ -211,8 +231,11 @@ def jensen_shannon(p: Sequence[float], q: Sequence[float]) -> float:
       ``0.5689626904850149``.
     - The total contribution of those buckets is exactly half the out-of-support
       *fraction*, so on that corpus ``0.375`` of the ``0.5690`` -- about 66% --
-      is frozen. ``DriftReport.n_length_off_support`` /
-      ``n_judge_off_support`` report the count this is computed from.
+      is frozen. ``DriftReport.n_length_off_support``,
+      ``n_embedding_off_support`` and ``n_judge_off_support`` report the count
+      this is computed from, one per axis -- the fraction is taken over the
+      histogram *that axis* normalises, which is not the same base on all three
+      (D-024, #246).
 
     This is correct for a categorical divergence over unordered buckets, not a
     defect: there is no "further outside the support" for a bucket that carries
@@ -521,6 +544,14 @@ def _off_support_count(golden_hist: Sequence[int], candidate_hist: Sequence[int]
     contributes exactly ``Q_i / 2``), so the axis cannot distinguish "just
     outside the golden support" from "far outside it". This count is what
     changes when the JSD cannot. (D-023, #243)
+
+    Used on all three axes. The two histograms are over a fixed domain on the
+    length and judge axes and over cluster ids on the embedding axis, but a
+    cluster the golden side never occupies is an empty bucket in exactly the
+    same sense -- ``_kmeans`` retains a centroid whose cluster went empty, so
+    ``golden_hist[i] == 0`` is reachable there too (D-024, #246). What differs
+    per axis is the *denominator* the caller pairs this with, not this
+    computation.
     """
     return sum(c for g, c in zip(golden_hist, candidate_hist, strict=True) if g == 0)
 
@@ -570,16 +601,26 @@ def compute_drift(
     nearest-golden-centroid cosine distance is largest — the inputs
     that look least like anything in the golden set.
 
-    Read the two histogram axes' scores alongside
-    ``n_length_off_support`` / ``n_judge_off_support`` (#243, D-023). Candidate
-    mass in a bucket the golden histogram never occupies contributes a fixed
-    ``q_i / 2`` to the JSD regardless of *which* such bucket it lands in, so
-    that portion of the score cannot respond as the mass moves further out —
-    exactly the shape of drift a detector exists to catch. The counts say how
-    much of the score is in that frozen regime; half the out-of-support fraction
-    is its exact contribution. They do not say how far out it has gone: nothing
-    here does, and ``jensen_shannon``'s docstring explains why that is a
-    property of the chosen divergence rather than an omission.
+    Read every axis score alongside its off-support count —
+    ``n_length_off_support``, ``n_embedding_off_support`` and
+    ``n_judge_off_support`` (#243/D-023, #246/D-024). Candidate mass in a bucket
+    the golden histogram never occupies contributes a fixed ``q_i / 2`` to the
+    JSD regardless of *which* such bucket it lands in, so that portion of the
+    score cannot respond as the mass moves further out — exactly the shape of
+    drift a detector exists to catch. The counts say how much of the score is in
+    that frozen regime; half the out-of-support fraction is its exact
+    contribution. They do not say how far out it has gone: nothing here does,
+    and ``jensen_shannon``'s docstring explains why that is a property of the
+    chosen divergence rather than an omission.
+
+    All three axes, not two. D-023 excluded the embedding axis because "every
+    comparable candidate is assigned to some golden centroid" — true, and beside
+    the point, because the support is the set of buckets the *golden* histogram
+    occupies and ``_kmeans`` retains a centroid whose cluster went empty. The
+    embedding count's denominator is the *clustered* candidate count
+    (``cluster_stats[1].n``), not ``n_candidate``, because this axis drops
+    uncomparable inputs and the JSD normalises the histogram it is actually
+    given (D-024, #246).
 
     Inputs with no embeddable content (``has_embeddable_content`` is
     ``False``) take part in the length and judge axes but not in
@@ -810,6 +851,26 @@ def compute_drift(
         g_cluster_counts = ()
         c_cluster_counts = ()
         emb_drift = 0.0
+    # Computed from the histograms rather than inside the `if centroids:` branch,
+    # so the degenerate no-centroid case yields 0 from the same expression
+    # instead of from a separately-maintained default. `_off_support_count` over
+    # two empty tuples is 0 (D-024, #246).
+    n_embedding_off_support = _off_support_count(g_cluster_counts, c_cluster_counts)
+    # The base is the *clustered* candidate count, not `n_candidate`: this axis
+    # excludes uncomparable inputs, and the JSD normalises the histogram it is
+    # given. Using `n_candidate` would understate the frozen fraction whenever
+    # any candidate is uncomparable -- measured, (4/8)/2 = 0.25 against a
+    # `n_candidate`-based (4/10)/2 = 0.20 on the same report.
+    n_clustered_candidates = sum(c_cluster_counts)
+    embedding_off_support_note = (
+        ""
+        if n_embedding_off_support == 0
+        else (
+            f"; {n_embedding_off_support}/{n_clustered_candidates} clustered candidate "
+            f"inputs fall in clusters no golden input occupies, where the JSD is "
+            f"invariant to which of those clusters they land in"
+        )
+    )
     n_uncomparable = (g_comparable.count(False), c_comparable.count(False))
     uncomparable_note = (
         ""
@@ -828,6 +889,7 @@ def compute_drift(
         detail=(
             f"JSD over k={len(centroids)} cluster-id histogram from "
             f"{embedding_dim}-dim hash-embedded inputs{uncomparable_note}"
+            f"{embedding_off_support_note}"
         ),
     )
 
@@ -945,6 +1007,7 @@ def compute_drift(
         n_uncomparable=n_uncomparable,
         n_length_off_support=n_length_off_support,
         n_judge_off_support=n_judge_off_support,
+        n_embedding_off_support=n_embedding_off_support,
     )
 
 
@@ -1180,17 +1243,33 @@ def render_html(report: DriftReport) -> str:
             f"<strong>{report.n_length_off_support} of {report.n_candidate}</strong> "
             "on the length axis"
         )
+    if report.n_embedding_off_support:
+        # Denominator is the *clustered* candidate count, not `n_candidate`:
+        # this axis excludes uncomparable inputs, and the frozen fraction is
+        # taken over the histogram the JSD actually normalises (D-024, #246).
+        off_support_bits.append(
+            f"<strong>{report.n_embedding_off_support} of "
+            f"{report.cluster_stats[1].n}</strong> on the embedding axis"
+        )
     if report.n_judge_off_support:
         off_support_bits.append(
             f"<strong>{report.n_judge_off_support} of {report.n_candidate}</strong> "
             "on the judge axis"
         )
+    # One bit renders alone and two join with " and ", byte-identical to the
+    # two-axis rendering D-023 shipped; three read as "A, B and C" rather than
+    # "A and B and C".
+    off_support_joined = (
+        " and ".join(off_support_bits)
+        if len(off_support_bits) < 3
+        else ", ".join(off_support_bits[:-1]) + " and " + off_support_bits[-1]
+    )
     off_support_block = (
         ""
         if not off_support_bits
         else (
             '<p style="color:#8a6d1f;font-size:12px;margin-top:8px">'
-            + " and ".join(off_support_bits)
+            + off_support_joined
             + " candidate inputs fall in histogram buckets the golden set never "
             "occupies. The Jensen-Shannon score is invariant to how that mass "
             "redistributes among such buckets, so those inputs can move further from "

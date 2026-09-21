@@ -104,8 +104,8 @@ axis doesn't mask stability on the others. `eval-harness drift`
 renders a single-file HTML report (no JS, no external CSS) so
 operators can attach it to a ticket.
 
-The two *histogram* axes have a blind spot D-014's choice creates and
-D-023 reports. A JSD over a histogram is invariant to how candidate
+All three axes have a blind spot D-014's choice creates, reported by
+D-023 and D-024. A JSD over a histogram is invariant to how candidate
 mass redistributes among buckets the golden set never occupies: each
 such bucket contributes exactly `q_i / 2` regardless of which one holds
 the mass, so an input can move several buckets further out without
@@ -115,13 +115,23 @@ their total contribution is exactly half the out-of-support fraction —
 `0.375` of that `0.5690`, about 66%, frozen. This is correct for a
 categorical divergence over unordered buckets rather than a defect, so
 it is documented and counted instead of changed:
-`n_length_off_support` and `n_judge_off_support` carry the mass in that
-frozen regime, with `None` on the judge slot when the axis is skipped.
-Same posture as D-017 below — what an axis cannot see is a first-class
-count. The counts say how much of a score is frozen, not how far the
-mass has gone; nothing here says the latter. The embedding axis is
-excluded because it assigns every comparable candidate to some golden
-centroid rather than bucketing over a fixed domain (#243).
+`n_length_off_support`, `n_embedding_off_support` and
+`n_judge_off_support` carry the mass in that frozen regime, with `None`
+on the judge slot when the axis is skipped. Same posture as D-017 below
+— what an axis cannot see is a first-class count. The counts say how
+much of a score is frozen, not how far the mass has gone; nothing here
+says the latter.
+
+D-023 first excluded the embedding axis, reasoning that it assigns
+every comparable candidate to *some* golden centroid rather than
+bucketing over a fixed domain. True, and beside the point: the support
+is the set of buckets the **golden** histogram occupies, and `_kmeans`
+retains a centroid whose cluster went empty rather than dropping it, so
+a cluster carrying no golden mass is reachable and candidates land in
+it (D-024, #246). The embedding count's denominator is the *clustered*
+candidate count rather than `n_candidate`, because this axis excludes
+uncomparable inputs and the frozen fraction is taken over the histogram
+the JSD normalizes.
 
 The embedding axis has a domain the other two don't: `hash_embed`
 returns the all-zero vector for an input with no alphanumeric tokens,

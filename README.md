@@ -97,7 +97,7 @@ pretending to be a multi-rater gold standard.
 ## Architecture
 
 See [`docs/architecture.md`](docs/architecture.md) for the integrated flow,
-per-layer detail, and the design decisions behind each one (D-002…D-023).
+per-layer detail, and the design decisions behind each one (D-002…D-024).
 The shape:
 
 ```mermaid
@@ -490,8 +490,8 @@ asymmetric; KS only works for ordered scalars (it doesn't generalize
 to the cluster-id axis); JSD does both with one formula and one
 threshold per axis.
 
-**Read the two histogram axes with their out-of-support counts** (D-023,
-#243). JSD over a histogram is invariant to how candidate mass
+**Read every axis with its out-of-support count** (D-023 #243, D-024
+#246). JSD over a histogram is invariant to how candidate mass
 redistributes among buckets the golden set never occupies: any such
 bucket contributes exactly `q_i / 2` regardless of *which* one holds
 the mass. So an input can move several buckets further from the golden
@@ -507,20 +507,36 @@ the support" for it to express, and that is the price of D-014's
 choice. But it is the shape of drift a detector exists to catch:
 traffic that has moved entirely off the golden support registers no
 *additional* drift as it keeps moving. So `DriftReport` reports
-`n_length_off_support` and `n_judge_off_support` — the candidate inputs
-in that frozen regime, `None` on the judge slot when the axis is
-skipped. Same posture as `n_uncomparable` (D-017): what an axis cannot
-see is a first-class count, not an implicit gap. Both are surfaced in
-the HTML report when non-zero.
+`n_length_off_support`, `n_embedding_off_support` and
+`n_judge_off_support` — the candidate inputs in that frozen regime,
+`None` on the judge slot when the axis is skipped. Same posture as
+`n_uncomparable` (D-017): what an axis cannot see is a first-class
+count, not an implicit gap. All three are surfaced in the HTML report
+when non-zero.
 
 The counts say how much of the score is frozen, not how far the mass
 has travelled — they are invariant to the same redistribution the JSD
 is. What they do discriminate is two reports with the *same* score: a
 candidate set fully inside the golden support and one with half its
 mass outside can both score `0.311278`, with 0% and 80% of that
-identical number frozen respectively. The embedding axis has no
-equivalent, because it assigns every comparable candidate to some
-golden centroid rather than bucketing over a fixed domain.
+identical number frozen respectively.
+
+D-023 originally excluded the embedding axis, on the grounds that it
+assigns every comparable candidate to some golden centroid rather than
+bucketing over a fixed domain. That premise is true and the conclusion
+does not follow (D-024, #246): *the support* is the set of buckets the
+golden histogram occupies, and `_kmeans` **retains** a centroid whose
+cluster went empty instead of dropping it, so a cluster no golden input
+occupies is reachable and a candidate can be assigned to it. Measured:
+70 of 20,000 random corpora put candidate mass in such a cluster, and
+on one of them 55.8% of the published score sat in the frozen regime.
+
+The embedding count's denominator is the **clustered** candidate count
+(`cluster_stats[1].n`), not `n_candidate` — this axis drops uncomparable
+inputs, and the frozen fraction is taken over the histogram the JSD
+actually normalizes. On a measured report with one uncomparable
+candidate the true frozen contribution is `(1/2)/2 = 0.25` of a `0.4733`
+score, where an `n_candidate` base would claim `0.1667`.
 
 The output HTML report is single-file (inline SVG, no external CDN)
 and lists the most-distant candidate inputs from any golden centroid
