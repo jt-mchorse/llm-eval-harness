@@ -2830,3 +2830,60 @@ Five wrong neighbours built and run, each caught.
 because `test_source_representability` parametrizes over every test *file* and a
 new file joins it. Verified by diffing collected node ids rather than trusting
 the arithmetic. ruff, `ruff format --check` and mypy clean.
+
+## 2026-09-22 — Issue #248: D-024's own sentence, applied one field over
+**Duration:** see the issue's plan/close comment timestamps · **Branch:** `session/2026-09-22-0800-issue-248`
+
+This one came out of a PR this session had merged twenty minutes earlier.
+D-024's load-bearing sentence is "the support is the set of buckets the *golden*
+histogram occupies, not the set of centroids that exist" — a claim about a
+population. So I grepped for every other place that iterates `centroids`, and
+found the representative-example ranking still doing
+`max(_cosine(v, c) for c in centroids)` under a field named
+`distance_to_nearest_golden_cluster`. D-024 fixed the count; the ranking was
+still walking the set of centroids that exist.
+
+Two hypotheses died first and cheaply. I thought the judge axis's off-support
+denominator differed between the HTML sink (`n_candidate`) and the axis note
+(`len(c_scores)`) — but `c_scores` is one score per candidate input, so they are
+equal. And I thought the CLI's stdout summary omitting the off-support counts
+was a sink-parity gap — but the README explicitly scopes them to the HTML
+report. Read the doc before calling a scope a gap.
+
+The defect is an understatement *by construction*, which is a stronger claim
+than a measured one: a candidate is assigned to the cluster whose centroid it is
+nearest, so one sitting in a golden-empty cluster is necessarily closer to that
+empty centroid than to any occupied one. I did not have to search for the
+direction — the assignment rule gives it. The consequence still had to be
+searched for, and it is the truncation. #210's own sentence applies verbatim:
+"because the list is truncated, it did not merely rank wrongly, it evicted the
+inputs the operator needs to see." Over 60,000 random corpora, 677 had a
+golden-empty centroid, and one of those pushed `kappa lam theta` — the candidate
+genuinely in the golden-empty cluster — out of the top five in favour of an
+input that sits inside the golden support.
+
+The sharpest thing I learned was about my own test. My property arm guarded its
+non-vacuity with "the search found a golden-empty centroid", and it passed
+against the unfixed code — because that is the wrong population. The property
+differs only when a candidate is actually *assigned* to such a cluster. Of 400
+random corpora at that seed, six had a golden-empty centroid and **zero** had
+candidate mass in one; the rate is about 1 in 4,000 for that vocabulary. The
+non-vacuity guard has to walk the population the property discriminates, not the
+nearest available proxy. That is the same lens I have been applying to other
+people's docstrings, turned on my own arm.
+
+Two smaller notes. Restricting a `max` turns a wrong number into a possible
+crash, so the totality argument got two arms — the occupied set over 200 random
+shapes, and the D-017 rejection that is the precondition it rests on. And I
+wrote a false claim into one of my own docstrings ("pinned as the repr of the
+shipped floats") while the code correctly used `pytest.approx`; the code was
+right, given this morning's host-float lesson in `rag-production-kit`, and the
+prose was wrong. A docstring that claims more than its assert is the same defect
+as a test name that does.
+
+Suite 1606 → 1616, with no pre-existing test modified. Nothing shipped moves:
+the drift fixtures leave no cluster golden-empty, so the README's pinned stdout
+line and the demo's published rows are untouched — the same posture as D-024.
+
+**Open questions:** none. `_kmeans`' empty-centroid retention stays as D-024
+left it, for the reason D-024 gave.
