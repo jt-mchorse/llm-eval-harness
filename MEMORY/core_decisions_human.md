@@ -577,3 +577,71 @@ exactly the wrong-unit misreading; two plain fields cannot be misindexed. And
 for an axis that never ran.
 
 **Related issues:** #243, #241, #210
+
+---
+
+## D-024 — the embedding axis carries the off-support count too
+**Date:** 2026-09-21 · **Amends:** D-023 · **Reversibility:** cheap
+
+**Decision.** `DriftReport` gains `n_embedding_off_support`, the third member of
+the family D-023 introduced. D-023 deliberately left the embedding axis out; the
+reason it gave is a true premise with a false conclusion, and this corrects it.
+
+**Why.** D-023 wrote that the embedding axis has no counterpart for "outside the
+support" because "every comparable candidate is assigned to some golden
+centroid". Every candidate is indeed assigned to *some* centroid. But the
+support is the set of buckets the **golden histogram occupies**, not the set of
+centroids that exist, and `_kmeans` *retains* a centroid whose cluster went
+empty rather than dropping it:
+
+```python
+for ci in range(k):
+    if counts[ci] == 0:
+        new_centroids[ci] = list(centroids[ci])   # retained, not dropped
+        continue
+```
+
+So a cluster carrying no golden mass is reachable, `_assign` will route a
+candidate to it, and the embedding score is the same `jensen_shannon` over a
+histogram with the same `q_i / 2` invariance. The claim was about the wrong
+population.
+
+**Measured, not argued.** 70 of 20,000 random corpora put candidate mass in such
+a cluster; 1,531 of 20,000 had a golden-empty cluster at all. Reproduced at a
+second seed with different vocabularies through the public `compute_drift`. On
+one case — golden `(3, 0, 0, 1)`, candidate `(1, 2, 0, 0)` — all three
+redistributions of the off-support mass among the two empty clusters give the
+identical `0.5176503615477757`, and a from-definition decomposition puts 64.4%
+of that score in the frozen regime.
+
+**The one thing this axis does not share with its siblings: the denominator.**
+The embedding axis excludes uncomparable inputs (D-017), so the count's base is
+the *clustered* candidate count, not `n_candidate`. That is numerical, not
+presentational — the frozen contribution is half the off-support fraction *of
+the histogram the JSD normalizes*. On a measured report with one uncomparable
+candidate the true frozen contribution is `(1/2)/2 = 0.25` of a `0.4733` score,
+where an `n_candidate` base would claim `0.1667`.
+
+**Alternatives considered:**
+- Leave it as D-023 shipped — rejected; the exclusion rests on a premise this
+  session falsified by measurement, and a documented false reason is worse than
+  no documentation.
+- Base the count on `n_candidate` for uniformity — rejected, and measured wrong:
+  it understates the frozen fraction whenever any candidate is uncomparable.
+  Uniformity of unit is not uniformity of meaning.
+- Drop empty centroids in `_kmeans` so D-023's original claim becomes true —
+  rejected; it would move every published embedding number including the
+  README's pinned `# stdout:` example, and it repairs the documentation by
+  changing the measurement.
+
+**What this does not change.** D-014's divergence stands, and `_kmeans`'
+empty-centroid retention is untouched. This reports a blind spot; it does not
+remove one — exactly how D-023 framed itself.
+
+**It also falsifies one of D-023's rejected alternatives.** "Put the field on
+`AxisReport` so all three axes carry it — rejected; it would force a meaningless
+value on the embedding axis." The value is not meaningless there. That
+alternative stays rejected on its other ground (the shape of hanging a count off
+`AxisReport`), but its stated reason was wrong.
+
+**Related issues:** #246, #243, #210, #207
