@@ -2887,3 +2887,16 @@ line and the demo's published rows are untouched — the same posture as D-024.
 
 **Open questions:** none. `_kmeans`' empty-centroid retention stays as D-024
 left it, for the reason D-024 gave.
+
+## 2026-09-23 — Issue #250: the report heading named the measurement D-025 replaced
+**Duration:** ~5 min (measured) · **Branch:** session/2026-09-23-0722-issue-250
+
+- D-025 changed `distance_to_nearest_golden_cluster` from "distance to the nearest centroid that exists" to "distance to the nearest cluster the golden set occupies", and updated the field docstring, the `compute_drift` docstring and `docs/architecture.md`. It left the HTML report's column heading and the README sentence describing it, both of which said "from any golden cluster centroid" — the replaced expression spelled in English.
+- Found the one corpus in 300,000 where the two readings render differently: `'tau omicron eta'` reads `0.603` under the old wording and `0.667` in the column. They differ at the three decimal places the cell shows.
+- Added a lock that runs in both directions — revert the measurement and the rendered cell stops matching; revert the heading and it stops stating the restriction. The heading arm checks that the restriction is *stated* rather than pinning the exact sentence, so it also rejects a heading that drops only the word "golden".
+
+**Why this work, this session:** the freshest surface in the repo is the diff merged twenty minutes earlier, and a semantic fix that updates three docstrings and no rendered label is the shape that keeps recurring.
+
+**Open questions / blockers:** the CLI's stdout summary carries no off-support counts, and `eval-harness drift` exits 0 even when every axis is `drifted`. The first is a small observability gap; the second would change a shipped exit code and needs JT.
+
+**Next session:** the drift module has now been worked three sessions running (D-024, D-025, #250) — the vein is close to worked out; prefer a different module.
