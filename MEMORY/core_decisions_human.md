@@ -645,3 +645,84 @@ alternative stays rejected on its other ground (the shape of hanging a count off
 `AxisReport`), but its stated reason was wrong.
 
 **Related issues:** #246, #243, #210, #207
+
+---
+
+## D-025 — Representative examples rank against the clusters golden *occupies*, not every retained centroid
+
+**Date:** 2026-09-22 · **Reversibility:** cheap · **Issue:** #248 (applies D-024)
+
+**Decision.** `representative_examples` ranks candidates by their distance to
+the nearest cluster the *golden set occupies*, rather than to the nearest
+centroid that exists. This is D-024's population rule applied one field over;
+it introduces no new rule of its own.
+
+**Why.** D-024 established that the support is the set of buckets the *golden*
+histogram occupies, not the set of centroids that exist — `_kmeans` retains a
+centroid whose cluster went empty rather than dropping it. It applied that to
+the count. The ranking one block down still walked every centroid:
+
+```python
+nearest_sim = max(_cosine(v, c) for c in centroids)
+```
+
+So a field named `distance_to_nearest_golden_cluster` reported the distance to
+a centroid no golden input occupies. A fix's own wording pointing at the site it
+missed, one field over.
+
+**It is an understatement by construction, never a coin flip.** A candidate is
+assigned to the cluster whose centroid it is nearest, so one sitting in a
+golden-empty cluster is necessarily closer to that empty centroid than to any
+occupied one. The reported distance was strictly smaller than the truth for
+precisely the inputs the list exists to surface — the ones `compute_drift`'s
+docstring calls "the inputs that look least like anything in the golden set".
+Measured on a 7/4 corpus: 0.602640 published against a true 0.666667, with every
+candidate in an occupied cluster unchanged to the bit.
+
+**And the list is truncated, which is the consequence that matters.** #210's own
+reasoning applies verbatim: "because the list is *truncated*, it did not merely
+rank wrongly, it evicted the inputs the operator needs to see." Over 60,000
+random corpora, 677 had a golden-empty centroid and one of those changed the
+top-5 *set* — `kappa lam theta`, the candidate actually in the golden-empty
+cluster, was evicted by `theta gamma epsilon`, which does sit in the golden
+support.
+
+**Totality.** `centroids` is seeded from the comparable golden vectors, and a
+golden set in which nothing is comparable is rejected outright (D-017). So every
+centroid list reaching this line has at least one occupied cluster, and the
+restricted `max` is never over an empty sequence. Pinned as two arms — the
+occupied set over 200 random shapes, and the D-017 rejection itself — because an
+empty `max()` is a crash rather than a wrong number.
+
+**Reachability.** Nothing shipped moves. The drift fixtures give golden cluster
+counts `(2, 7, 6, 5)` with no empty cluster, so the README's pinned stdout line
+and the demo's published rows are unaffected, and no pre-existing test was
+touched. Same posture as D-024.
+
+**Not changed:** `_kmeans`' empty-centroid retention. D-024 declined to revisit
+it because dropping a retained centroid would move every published embedding
+number and repairs the documentation by changing the measurement. That reasoning
+still holds; this ranks *around* the blind spot rather than removing it.
+
+**A vacuous arm I caught in myself.** My first property arm asserted only that
+the search had found a golden-empty centroid — and it passed against the unfixed
+code, because that is the wrong population. The property differs only when a
+candidate is *actually assigned* to such a cluster. Measured: of 400 random
+corpora at that seed, six had a golden-empty centroid and **zero** had candidate
+mass in one; the rate is roughly 1 in 4,000 for that vocabulary. So the
+discriminating corpora are supplied rather than hoped for, and the non-vacuity
+guard is on `n_embedding_off_support`, not on golden emptiness.
+
+**Alternatives considered:**
+- Drop golden-empty centroids in `_kmeans` — rejected; the same call D-024
+  declined, and it moves every published embedding score.
+- Rank against the clusters the *candidate* occupies — rejected; built and run,
+  three arms red. The support is a property of the golden side by definition,
+  and this is the wrong side of exactly the distinction D-024 drew.
+- Test `n >= 0` instead of `n > 0` — rejected; built and run, three arms red. It
+  keeps every centroid, i.e. it is the unfixed behaviour spelled differently.
+- Correct the distance and leave the sort key alone — rejected; the eviction is
+  the consequence that matters, and a distance-only fix would pass a
+  distance-only test.
+
+**Related issues:** #248, #246, #210, #207

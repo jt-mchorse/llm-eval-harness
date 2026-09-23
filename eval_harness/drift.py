@@ -90,6 +90,12 @@ class AxisReport:
 @dataclass(frozen=True)
 class RepresentativeExample:
     text: str
+    #: Cosine distance to the nearest cluster the *golden* set actually
+    #: occupies -- not to the nearest centroid that exists. `_kmeans` retains a
+    #: centroid whose cluster went empty, so those differ, and ranking against
+    #: all centroids understated exactly the candidates in the frozen regime
+    #: D-024 reports (#248, D-025). The name was always this; the measurement
+    #: caught up.
     distance_to_nearest_golden_cluster: float
 
 
@@ -599,7 +605,12 @@ def compute_drift(
 
     ``representative_examples`` is the list of candidate inputs whose
     nearest-golden-centroid cosine distance is largest — the inputs
-    that look least like anything in the golden set.
+    that look least like anything in the golden set. "Golden centroid"
+    means a cluster the golden set *occupies*: ``_kmeans`` retains a centroid
+    whose cluster went empty, and ranking against those understated the
+    candidates assigned to them — by construction, since a candidate is
+    assigned to the centroid it is nearest. Because the list is truncated,
+    that could evict the very inputs it exists to surface (#248, D-025).
 
     Read every axis score alongside its off-support count —
     ``n_length_off_support``, ``n_embedding_off_support`` and
@@ -942,6 +953,37 @@ def compute_drift(
     # --- Representative examples ---------------------------------------
     examples: list[RepresentativeExample] = []
     if centroids:
+        # Rank against the clusters golden actually *occupies*, not every
+        # centroid that exists (#248). This is D-024's sentence applied one
+        # field over: `_kmeans` retains a centroid whose cluster went empty
+        # rather than dropping it, so `g_cluster_counts[i] == 0` is reachable
+        # and `_assign` routes candidates there. Ranking over all `centroids`
+        # measured the distance to a centroid **no golden input occupies**,
+        # under a field literally named `distance_to_nearest_golden_cluster`.
+        #
+        # It is strictly an understatement, not a coin flip: a candidate is
+        # assigned to the cluster whose centroid it is nearest, so one sitting
+        # in a golden-empty cluster is *by construction* closer to that empty
+        # centroid than to any occupied one. The inputs the list exists to
+        # surface -- "the inputs that look least like anything in the golden
+        # set" -- were the exact ones reported as more golden-like than they
+        # are. Measured on a 7/4 corpus: 0.602640 published against a true
+        # 0.666667, with every candidate in an occupied cluster unchanged to
+        # the bit.
+        #
+        # And the list is *truncated*, so this is #210's shape again: not
+        # merely a wrong ordering but a wrong membership. Over 60,000 random
+        # corpora, 677 had a golden-empty centroid and one of those evicted
+        # the golden-empty-cluster candidate from the top 5 in favour of an
+        # input that does sit in the golden support.
+        #
+        # Total by construction: `centroids` is non-empty here, it is seeded
+        # from the comparable golden vectors, and a golden set in which
+        # nothing is comparable is rejected at the top of this function -- so
+        # every centroid list that reaches this line has at least one occupied
+        # cluster and the `max` below is never over an empty sequence. Pinned
+        # by `test_the_occupied_set_is_never_empty_when_centroids_exist`.
+        occupied_clusters = [i for i, n in enumerate(g_cluster_counts) if n > 0]
         for v, text, ok in zip(c_vecs, candidate_inputs, c_comparable, strict=True):
             # Skip uncomparable candidates. This list is documented as "the
             # inputs that look least like anything in the golden set", and a
@@ -957,7 +999,7 @@ def compute_drift(
             # `n_uncomparable`.
             if not ok:
                 continue
-            nearest_sim = max(_cosine(v, c) for c in centroids)
+            nearest_sim = max(_cosine(v, centroids[i]) for i in occupied_clusters)
             examples.append(
                 RepresentativeExample(
                     text=text, distance_to_nearest_golden_cluster=1.0 - nearest_sim

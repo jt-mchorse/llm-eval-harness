@@ -133,6 +133,26 @@ candidate count rather than `n_candidate`, because this axis excludes
 uncomparable inputs and the frozen fraction is taken over the histogram
 the JSD normalizes.
 
+That same population rule governs the *ranking*, not only the count
+(D-025, #248). `representative_examples` scored each candidate by its
+distance to the nearest centroid that exists, under a field named
+`distance_to_nearest_golden_cluster` — so for exactly the candidates
+D-024 proved reachable, it measured the distance to a centroid no
+golden input occupies. It is an understatement by construction rather
+than a coin flip: a candidate is assigned to the cluster whose centroid
+it is nearest, so one in a golden-empty cluster is necessarily closer
+to that empty centroid than to any occupied one, and the inputs the
+list exists to surface were reported as more golden-like than they
+are. Because the list is *truncated*, this is #210's shape again — not
+merely a wrong ordering but a wrong membership: over 60,000 random
+corpora, 677 had a golden-empty centroid and one of those evicted the
+golden-empty-cluster candidate from the top 5 in favour of an input
+inside the golden support. The ranking now runs over the occupied
+clusters only, which is total because `centroids` is seeded from the
+comparable golden vectors and a golden set with nothing comparable is
+rejected outright (D-017). Nothing shipped moves: the drift fixtures
+leave no cluster golden-empty.
+
 The embedding axis has a domain the other two don't: `hash_embed`
 returns the all-zero vector for an input with no alphanumeric tokens,
 and the zero vector has no angle to any centroid. Per D-017 such an
