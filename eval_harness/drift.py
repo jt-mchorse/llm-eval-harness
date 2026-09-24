@@ -1350,7 +1350,17 @@ def render_html(report: DriftReport) -> str:
         f"{uncomparable_block}"
         f"{off_support_block}"
         f"{judge_block}"
-        "<h2>Most distant candidate inputs from any golden cluster centroid</h2>"
+        # "a cluster the golden set occupies", not "any centroid" -- the
+        # heading names the quantity in the column below it. D-025 moved the
+        # measurement off `max(_cosine(v, c) for c in centroids)` and onto the
+        # occupied clusters only; this string was the pre-D-025 expression
+        # spelled in English, and it is the label the operator reads. On the
+        # separating corpus (golden cluster counts `(1, 0, 2, 4)`) the old
+        # wording names 0.6026402928804868 where the column holds
+        # 0.6666666666666665. Pinned by
+        # `tests/test_drift_report_heading_matches_measurement.py`.
+        "<h2>Most distant candidate inputs from any cluster the golden set "
+        "occupies</h2>"
         "<table><thead><tr><th>Distance</th><th>Text</th></tr></thead><tbody>"
         f"{examples_rows or empty_examples_row}"
         "</tbody></table>"

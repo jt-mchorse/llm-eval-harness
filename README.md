@@ -539,8 +539,15 @@ candidate the true frozen contribution is `(1/2)/2 = 0.25` of a `0.4733`
 score, where an `n_candidate` base would claim `0.1667`.
 
 The output HTML report is single-file (inline SVG, no external CDN)
-and lists the most-distant candidate inputs from any golden centroid
-so the operator can eyeball what the drift looks like. When either
+and lists the most-distant candidate inputs from any cluster the golden
+set *occupies* — the same population rule as the off-support count
+above, applied to the ranking rather than the count (D-025, #248). A
+centroid `_kmeans` retained after its cluster went empty is not a
+golden cluster, and ranking against one understates exactly the
+candidates assigned to it, because a candidate is assigned to the
+centroid it is nearest. The list is truncated, so that decided
+membership and not only order. The operator can eyeball what the drift
+looks like from the rows that survive. When either
 side contains inputs with nothing embeddable, the report names the
 counts ("6 of 10 candidate inputs have no embeddable content") — that
 is a drift finding in its own right, and often a more actionable one
