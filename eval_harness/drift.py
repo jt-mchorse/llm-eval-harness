@@ -42,6 +42,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from eval_harness.comparison import render_comparison
 from eval_harness.io_utils import atomic_write_text, find_unencodable
 from eval_harness.judge import clamp_judge_score
 
@@ -1239,9 +1240,18 @@ def render_html(report: DriftReport) -> str:
         for r in report.representative_examples
     )
     if report.judge is not None:
+        # The Drift/Threshold/Status columns are one comparison spread across
+        # three cells: `status` is `"drifted" if judge_drift > judge_threshold`,
+        # decided at full precision, while the score rendered at `.4f` against an
+        # *unformatted* threshold. At a near-threshold JSD that published
+        # `0.6000` beside `0.6` with a `drifted` status -- the mixed-precision
+        # half of #252, where the row reads as though the status were wrong.
+        judge_score_cell, judge_threshold_cell = render_comparison(
+            report.judge.drift_score, report.judge.threshold, places=4
+        )
         judge_row = (
-            f"<tr><td>judge</td><td>{report.judge.drift_score:.4f}</td>"
-            f"<td>{report.judge.threshold}</td>"
+            f"<tr><td>judge</td><td>{judge_score_cell}</td>"
+            f"<td>{judge_threshold_cell}</td>"
             f'<td class="status-{report.judge.status}">{report.judge.status}</td>'
             f"<td>{html.escape(report.judge.detail)}</td></tr>"
         )
@@ -1319,6 +1329,14 @@ def render_html(report: DriftReport) -> str:
             "alongside the score, not instead of it.</p>"
         )
     )
+    # Same three-cells-one-comparison shape as the judge row above, for the two
+    # axes that are always present (#252).
+    length_score_cell, length_threshold_cell = render_comparison(
+        report.length.drift_score, report.length.threshold, places=4
+    )
+    embedding_score_cell, embedding_threshold_cell = render_comparison(
+        report.embedding.drift_score, report.embedding.threshold, places=4
+    )
     return (
         '<!doctype html><html lang="en"><head><meta charset="utf-8">'
         "<title>eval-harness drift report</title>"
@@ -1335,12 +1353,12 @@ def render_html(report: DriftReport) -> str:
         "<table>"
         "<thead><tr><th>Axis</th><th>Drift (JSD)</th><th>Threshold</th><th>Status</th><th>Detail</th></tr></thead>"
         "<tbody>"
-        f"<tr><td>length</td><td>{report.length.drift_score:.4f}</td>"
-        f"<td>{report.length.threshold}</td>"
+        f"<tr><td>length</td><td>{length_score_cell}</td>"
+        f"<td>{length_threshold_cell}</td>"
         f'<td class="status-{report.length.status}">{report.length.status}</td>'
         f"<td>{html.escape(report.length.detail)}</td></tr>"
-        f"<tr><td>embedding</td><td>{report.embedding.drift_score:.4f}</td>"
-        f"<td>{report.embedding.threshold}</td>"
+        f"<tr><td>embedding</td><td>{embedding_score_cell}</td>"
+        f"<td>{embedding_threshold_cell}</td>"
         f'<td class="status-{report.embedding.status}">{report.embedding.status}</td>'
         f"<td>{html.escape(report.embedding.detail)}</td></tr>"
         f"{judge_row}"

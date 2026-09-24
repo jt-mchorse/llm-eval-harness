@@ -35,6 +35,7 @@ from eval_harness.comment import (
     render_delta_markdown,
     upsert_sticky_comment,
 )
+from eval_harness.comparison import render_comparison
 from eval_harness.dataset import DatasetLoadError, load_jsonl, validate_dataset
 from eval_harness.io_utils import atomic_write_text
 from eval_harness.judge import (
@@ -431,8 +432,17 @@ def _run_calibrate(args: argparse.Namespace) -> int:
     print(f"report written to {args.report}")
 
     if result.cohens_kappa < args.threshold_kappa:
+        # `.3f` on κ against an *unformatted* threshold made this annotation read
+        # as false rather than merely ambiguous: at κ=0.5996 against a threshold
+        # of 0.6 it printed "Cohen's κ 0.600 < threshold 0.6", and `0.600 < 0.6`
+        # is False as written. Mixed precision is the worse half of #252's class,
+        # and this string is a `::error::` annotation on the PR check -- the
+        # surface this repo's CI story is built on.
+        rendered_kappa, rendered_threshold = render_comparison(
+            result.cohens_kappa, args.threshold_kappa
+        )
         print(
-            f"::error::Cohen's κ {result.cohens_kappa:.3f} < threshold {args.threshold_kappa}; "
+            f"::error::Cohen's κ {rendered_kappa} < threshold {rendered_threshold}; "
             "judge is no longer calibrated to the human-labeled set",
             file=sys.stderr,
         )

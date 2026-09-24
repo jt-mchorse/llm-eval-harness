@@ -17,6 +17,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
+from eval_harness.comparison import render_comparison
 from eval_harness.dataset import ValidationFinding, ValidationReport
 from eval_harness.io_utils import UNENCODABLE, find_unrepresentable
 from eval_harness.judge import Judge, JudgeParseError, JudgeScore
@@ -544,18 +545,24 @@ def render_report(
         raise ValueError(f"threshold_kappa must be in [-1, 1]; got {threshold_kappa!r}")
     _require_correlation_range(result.cohens_kappa, "result.cohens_kappa")
     _require_correlation_range(result.pearson_r, "result.pearson_r")
+    # The verdict is decided here at full precision and the two numbers behind it
+    # are rendered further down -- κ in the table at `.3f`, the threshold in the
+    # bullet list unformatted. At a near-threshold κ that published a FAIL beside
+    # "0.600" and "0.6", so the report contradicted its own verdict (#252). Both
+    # go through `render_comparison`, which also matches their precision.
     pass_fail = "PASS" if result.cohens_kappa >= threshold_kappa else "FAIL"
+    rendered_kappa, rendered_threshold = render_comparison(result.cohens_kappa, threshold_kappa)
     lines = [
         "# Judge calibration report",
         "",
         f"- judge model: {md_code_span(judge_model)}",
         f"- calibration set: {result.n} rows",
-        f"- threshold for κ: {threshold_kappa}",
+        f"- threshold for κ: {rendered_threshold}",
         f"- result: **{pass_fail}**",
         "",
         "| metric | value | interpretation |",
         "|--------|-------|----------------|",
-        f"| Cohen's κ (binarized at 0.5) | {result.cohens_kappa:.3f} | {_interpret_kappa(result.cohens_kappa)} |",
+        f"| Cohen's κ (binarized at 0.5) | {rendered_kappa} | {_interpret_kappa(result.cohens_kappa)} |",
         f"| Pearson r (continuous)       | {result.pearson_r:.3f} | {_interpret_pearson(result.pearson_r)} |",
         "",
         "## Per-row scores",

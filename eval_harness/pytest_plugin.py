@@ -48,6 +48,7 @@ from typing import Any, cast
 
 import pytest
 
+from eval_harness.comparison import render_comparison
 from eval_harness.dataset import Example, load_jsonl
 from eval_harness.judge import FAITHFULNESS_RUBRIC, Backend, Judge, JudgeScore
 
@@ -269,9 +270,15 @@ def pytest_pyfunc_call(pyfuncitem: pytest.Function):
         # so a header spelled here would defeat any test asserting the header
         # is absent.)
         pyfuncitem._eval_threshold_reported = True  # type: ignore[attr-defined]
+        # Both sides through `render_comparison` (#252). The gate above is
+        # `score.score < spec.threshold` at full precision while this message was
+        # a fixed `.3f`, so a near-threshold result asserted `score=0.600 <
+        # threshold=0.600` -- a failure explanation that contradicts itself, in
+        # the one string a developer reads when CI goes red.
+        rendered_score, rendered_threshold = render_comparison(score.score, spec.threshold)
         raise AssertionError(
-            f"eval_row.id={row_id!r} score={score.score:.3f} "
-            f"< threshold={spec.threshold:.3f}\n"
+            f"eval_row.id={row_id!r} score={rendered_score} "
+            f"< threshold={rendered_threshold}\n"
             f"  expected outputs: {expected}\n"
             f"  actual response:  {response!r}\n"
             f"  judge reasoning:  {score.reasoning!r}"
