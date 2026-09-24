@@ -2957,3 +2957,21 @@ context_for_next_session:
 decisions_made: [D-026]
 followups: []
 ---
+
+---
+session: 2026-09-24T08:06:37Z
+issue: 252
+focus: CORRECTION_two_backticked_format_specs_were_EATEN_BY_COMMAND_SUBSTITUTION_in_the_block_above
+phase: correction_append
+delta: {}
+measured:
+  what_the_line_should_say: "V2 keyed off 'mentions a threshold AND has a fixed width anywhere': it matched comment.py:88, which renders 'threshold drop:' followed by an interpolation with a .3f spec, and runner.py:788, which renders 'threshold_drop=' followed by an interpolation with a .2f spec. Both are STANDALONE readouts of a configured parameter - one number, no ordering claimed, nothing to be inconsistent with. V3 requires the fixed-width spec on a DIFFERENT interpolation than the threshold."
+  what_actually_got_written: "matched comment.py's  and runner.py's , both STANDALONE readouts - the two backticked spans are GONE, replaced by empty strings, and the shell printed 'command not found: threshold' while doing it."
+context_for_next_session:
+  - AN_UNQUOTED_HEREDOC_EVALUATES_BACKTICKS_AS_COMMAND_SUBSTITUTION_AND_SILENTLY_REPLACES_THE_SPAN_WITH_ITS_EMPTY_OUTPUT_i_needed_the_heredoc_unquoted_to_interpolate_dollar_NOW_and_dollar_MINS_and_the_SAME_block_carried_backticked_format_specs_THE_PROSE_SURVIVED_IN_full_history_human_md_ONLY_BECAUSE_I_HAD_ESCAPED_EVERY_BACKTICK_THERE_and_i_did_not_in_the_ai_block
+  - THE_MECHANICAL_RULE_IS_NEVER_MIX_INTERPOLATION_AND_BACKTICKS_IN_ONE_HEREDOC_write_the_interpolated_fields_with_printf_FIRST_then_append_the_prose_from_a_QUOTED_heredoc_which_is_exactly_what_THIS_block_does_the_alternative_escape_every_backtick_is_a_rule_with_an_exception_on_every_line_and_i_missed_it_on_two
+  - THE_EXISTING_MEMORY_NOTE_ABOUT_BACKTICKS_WAS_SCOPED_TO_gh_ARGUMENTS_dash_dash_title_and_dash_dash_body_AND_THE_MECHANISM_IS_THE_SHELL_NOT_gh_so_it_covers_HEREDOCS_TOO_a_true_reason_for_an_under_broad_guard_read_my_own_note_as_a_claim_about_command_substitution_and_it_generalises_immediately
+  - THE_FAILURE_IS_LOUD_IF_YOU_LOOK_zsh_printed_command_not_found_threshold_in_the_SAME_output_as_the_commit_hashes_and_i_nearly_scrolled_past_it_READ_THE_STDERR_OF_A_MEMORY_APPEND_not_just_the_git_log_line
+decisions_made: []
+followups: []
+---
