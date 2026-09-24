@@ -726,3 +726,20 @@ guard is on `n_embedding_off_support`, not on golden emptiness.
   distance-only test.
 
 **Related issues:** #248, #246, #210, #207
+
+## D-026 — A decided comparison is rendered so the decision stays readable
+**Date:** 2026-09-24 · **Reversibility:** cheap · **Issues:** #252 (with #250, #204, #142)
+
+Every gate in this package decides at full float precision and then explains the decision in a string a human reads, at fixed precision. At a near-threshold margin the explanation contradicted the verdict it was explaining: `pytest_plugin.py` asserted `score=0.600 < threshold=0.600`. **No test in the suite could have caught it** — the verdict is correct in every colliding case, so an assertion about pass/fail can never fire. The only thing wrong was that the sentence disagreed with itself, and nothing asserted that a sentence is self-consistent.
+
+`eval_harness/comparison.py` holds `render_comparison`, which widens from the caller's width only while the two values render identically, always returns both sides at the same precision, and never narrows.
+
+**Six sites, not the three the issue named.** #252's body listed `pytest_plugin.py`, `cli.py` and `calibration.render_report`. The AST population arm found three more: the `length`, `embedding` and `judge` rows of `drift.py`'s report table, where the comparison is not spelled at all — it is spread across three adjacent cells, a score, a threshold, and a status that is `"drifted" if drift > threshold`. A row in a table and a sentence with the word "below" are the same defect; only one of them says so.
+
+**That arm had to be redefined twice before it walked the right population.** Keying off a comparison word or operator gave five false positives, because `<` and `>` match every HTML tag in `render_html`. Keying off "mentions a threshold and has a fixed width anywhere" matched two standalone readouts of a configured parameter — one number, no ordering claimed. The rule that works requires the fixed-width spec on a *different* interpolation than the threshold. The docstring also records what the arm structurally cannot see: a pair split across two f-strings, which `calibration.render_report` is, covered by its own arm instead.
+
+**The repo's own published-values lock caught a regression in this fix, and that is the sharpest lesson.** The first version hardcoded three places, which narrowed `drift.render_html`'s summary table from four to three and silently republished `0.5690` as `0.569`. `tests/test_demo_drift_published_values.py` went red with a message that is exactly right: "any committed GIF/video of the demo now shows numbers the code no longer produces." Widening to remove an invisible ordering and narrowing a published column are both changes to an artifact, and this fix is only allowed to do the first — hence the `places` parameter, with `drift.py` passing `places=4`.
+
+**The same-precision half is the easy one to miss, and `cli.py` was already the counter-example.** Widening only the side that needs it looks correct for as long as that side carries the long decimal expansion, which is what happens whenever the threshold is a round configured number. `cli.py`'s pre-existing form was κ at `.3f` against an unformatted threshold, rendering `Cohen's κ 0.600 < threshold 0.6` — and `0.600 < 0.6` is false as written. The annotation did not hide the ordering, it stated the reverse of it, in a `::error::` annotation on the PR check.
+
+**Duplicated from `prompt-regression-suite`'s D-012, not shared.** Two separate distributions with no dependency between them; manufacturing one so a six-line formatter could be imported would be the worse trade. The module cites `eval_harness/markdown.py` as the in-repo precedent, whose docstring says the GFM class "kept recurring" because the fix "was written inline at three call sites". This class reached three before anyone noticed, and was actually six.

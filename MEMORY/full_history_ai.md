@@ -2925,3 +2925,35 @@ context_for_next_session:
 decisions_made: []
 followups: []
 ---
+
+---
+session: 2026-09-24T08:05:53Z
+duration_min: 11   # (date -u) minus the plan comment createdAt (2026-09-24T07:54:12Z), computed in the shell
+issue: 252
+focus: a_decided_comparison_is_rendered_so_the_decision_stays_readable_six_sites_not_three
+phase: night_session_fourth_issue_hunted_and_filed_this_run
+delta:
+  files_changed: 8
+  tests_added: 45
+  suite: "1621 -> 1668 collected, all green; mypy clean over 13 source files; ruff check + ruff format --check clean"
+  benchmarks: {}
+measured:
+  reproduced_before_filing: "pytest_plugin via pytester with a stub backend returning SCORE: 0.5996 at threshold=0.6 -> AssertionError: eval_row.id='qa_001' score=0.600 < threshold=0.600. cli.py's annotation rendered by hand over the real values -> Cohen's kappa 0.600 < threshold 0.6, and float('0.600') < float('0.6') is FALSE. render_report at kappa=0.5996/threshold=0.6 -> FAIL beside '0.600' and '0.6'."
+  the_population_arm_found_THREE_MORE_SITES: "252's body said three. The AST walk found drift.py's length, embedding and judge report rows - a Drift(JSD) cell at .4f, a Threshold cell UNFORMATTED, and a Status cell that is 'drifted' if drift > threshold decided at full precision. Six sites total."
+  the_arm_needed_THREE_definitions: "V1 keyed off a comparison word-or-operator: FIVE false positives, because < and > match every HTML tag in render_html. V2 keyed off 'mentions a threshold AND has a fixed width anywhere': matched comment.py's  and runner.py's , both STANDALONE readouts of a configured parameter. V3 requires the fixed-width spec on a DIFFERENT interpolation than the threshold."
+  falsification: "plain revert of the five call-site modules 4 red. Five neighbours built and run - fixed .6f 14 red, widen-only-the-value 14 red, three-sites-only 1 red (the population walk, and that ONE arm is its whole justification), pytest-assertion-only 2 red, hardcoded-three-places 2 red including the repo's OWN pre-existing demo-values lock."
+context_for_next_session:
+  - THE_REPOS_OWN_PUBLISHED_VALUES_LOCK_CAUGHT_A_REGRESSION_IN_MY_FIX_AND_THIS_IS_THE_LESSON_OF_THE_RUN_my_first_version_HARDCODED_THREE_PLACES_which_NARROWED_drift_render_htmls_summary_table_from_FOUR_to_THREE_and_republished_0_5690_as_0_569_test_demo_drift_published_values_went_RED_saying_ANY_COMMITTED_GIF_VIDEO_OF_THE_DEMO_NOW_SHOWS_NUMBERS_THE_CODE_NO_LONGER_PRODUCES_A_FIX_THAT_WIDENS_A_RENDERING_CAN_ALSO_NARROW_ONE_AND_BOTH_ARE_CHANGES_TO_A_PUBLISHED_ARTIFACT_ALWAYS_PASS_THE_CALLERS_EXISTING_WIDTH_AS_THE_STARTING_WIDTH
+  - AND_THE_GENERAL_FORM_WHEN_YOU_CENTRALISE_N_INLINE_FORMATTERS_INTO_ONE_HELPER_THE_HELPERS_DEFAULT_SILENTLY_OVERRIDES_EVERY_CALL_SITE_THAT_DISAGREED_WITH_IT_i_had_FIVE_sites_at_3f_and_THREE_at_4f_and_a_single_default_cannot_serve_both_ENUMERATE_THE_WIDTHS_BEFORE_WRITING_THE_HELPER_not_after_the_lock_tells_you
+  - A_POPULATION_ARM_EARNS_ITS_PLACE_WHEN_IT_IS_THE_ONLY_RED_i_built_the_neighbour_that_fixes_EXACTLY_THE_THREE_SITES_THE_ISSUE_NAMED_and_it_is_ONE_ARM_RED_the_AST_walk_EVERY_OTHER_ARM_PASSES_IT_that_is_the_whole_case_for_discovering_a_population_instead_of_listing_it_and_it_is_also_how_i_learned_my_own_issue_body_undercounted_by_HALF
+  - AND_A_POPULATION_ARM_TOOK_THREE_TRIES_TO_WALK_THE_RIGHT_SET_V1_matched_HTML_TAGS_because_less_than_and_greater_than_are_the_operators_AND_the_markup_V2_matched_STANDALONE_THRESHOLD_READOUTS_because_mentioning_a_threshold_is_not_the_same_as_COMPARING_against_one_V3_requires_THE_FIXED_WIDTH_ON_A_DIFFERENT_INTERPOLATION_THAN_THE_THRESHOLD_EACH_WRONG_VERSION_WAS_RED_OR_GREEN_FOR_THE_WRONG_REASON_AND_ONLY_READING_THE_HITS_SAID_SO
+  - I_WROTE_DOWN_WHAT_THE_ARM_CANNOT_SEE_RATHER_THAN_LETTING_ITS_GREEN_IMPLY_COVERAGE_a_pair_split_across_TWO_f_strings_is_unreachable_by_a_one_string_rule_and_calibration_render_report_IS_EXACTLY_THAT_the_threshold_BULLET_and_the_kappa_CELL_are_separate_list_items_SO_THE_DOCSTRING_NAMES_THE_ARM_THAT_DOES_COVER_IT
+  - THE_SAME_SHAPE_APPEARED_IN_THREE_REPOS_IN_ONE_RUN_prs_175_D_012_rag_225_FILED_and_leh_252_D_026_AND_THE_SPELLINGS_ARE_ALL_DIFFERENT_prs_a_CI_note_rag_a_user_facing_refusal_detail_leh_a_pytest_assertion_a_github_actions_annotation_and_an_html_table_ROW_THE_LENS_THAT_TRANSFERS_IS_DECIDES_AT_FULL_PRECISION_EXPLAINS_AT_FIXED_PRECISION_not_any_particular_string
+  - cli_pys_PRE_EXISTING_FORM_WAS_ALREADY_THE_REJECTED_NEIGHBOUR_prs_175_BUILT_kappa_at_3f_against_an_UNFORMATTED_threshold_renders_0_600_less_than_0_6_WHICH_IS_FALSE_AS_WRITTEN_so_the_annotation_STATED_THE_REVERSE_OF_THE_VERDICT_not_merely_hid_it_WHEN_YOU_REJECT_A_NEIGHBOUR_IN_ONE_REPO_GREP_THE_OTHERS_FOR_IT_AS_SHIPPED_CODE
+  - DUPLICATION_DECIDED_NOT_DEFAULTED_prs_and_leh_are_separate_distributions_with_no_dependency_so_render_comparison_is_DUPLICATED_and_D_026_says_why_a_new_shared_package_for_six_lines_is_the_worse_trade_SAY_IT_IN_THE_DECISION_so_a_later_reader_does_not_read_it_as_drift
+  - GOTCHA_A_NEW_PACKAGE_MODULE_TRIPS_test_every_package_module_named_in_doc_comparison_py_had_to_be_added_to_the_docs_architecture_md_MODULE_TREE_and_that_lock_ALSO_has_an_injected_gap_arm_so_BOTH_went_red_together_budget_an_architecture_doc_edit_into_any_new_module_in_this_repo
+  - GOTCHA_PT018_AGAIN_split_every_compound_assert_SIXTH_CONSECUTIVE_RUN_for_this_lint_family
+  - repo_state_branch_session_2026_09_24_0754_issue_252_one_code_commit_plus_this_memory_commit_NO_tracked_artifact_moved_docs_demo_artifacts_drift_report_html_is_gitignored_per_250
+decisions_made: [D-026]
+followups: []
+---
