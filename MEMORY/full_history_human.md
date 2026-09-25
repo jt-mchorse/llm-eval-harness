@@ -2914,3 +2914,37 @@ left it, for the reason D-024 gave.
 **Open questions / blockers:** none. Nothing tracked moved; the drift demo artifact is gitignored.
 
 **Next session:** the transferable lesson is about centralising formatters. Five sites were at three places and three at four; a single default silently overrides every call site that disagreed with it. Enumerate the widths before writing the helper, not after a lock tells you.
+
+---
+
+### 2026-09-25 — #254: the copy was there, it was just one level deep
+
+`Example` is this repo's best-defended record on the frozen-dataclass-aliasing
+axis. It copies `provenance` on the way in and on the way out, and
+`dump_jsonl`'s docstring calls the second copy load-bearing. Both copies were
+`dict(...)`, and `provenance` is documented free-form JSON — so the protection
+held for the mapping and for nothing inside it. Read `ex.to_dict()`, edit a
+nested value in what comes back, and the frozen record changes; the next
+`dump_jsonl` writes it to the file. No exception anywhere, because nothing is
+ever rebound.
+
+The right anti-vacuity probe here was not "take the fix out" — it was "put a
+*shallow* copy in", since a shallow copy is what the defect was. That probe
+turns more arms red than a plain revert does. A test that only proved a copy
+happened would have been satisfied by the bug.
+
+Two smaller things worth keeping. The first draft of the copy helper also
+recursed into tuples, which rebuilds a namedtuple as a plain tuple and makes the
+repo's rejection message name the wrong type — caught by a test that was already
+there. And `copy.deepcopy`, the obvious lazy alternative, turns eight arms red
+because it deep-copies exactly the types this package refuses to serialize; the
+objection to it is measured rather than argued.
+
+One existing test had to change. It asserted that a list `provenance` came out
+of `to_dict()` as an empty object — and its own docstring called that "silently
+coerced, losing or reshaping the caller's data". It was pinning a symptom, so it
+was updated rather than worked around.
+
+Four of the six candidates the portfolio-wide sweep listed for this package are
+not defects. They are now pinned by name with their measurements, so the next
+person to run that sweep does not have to re-derive them.
