@@ -370,3 +370,63 @@ def atomic_write_text(path: str | Path, text: str, encoding: str = "utf-8") -> N
         if tmp_path is not None:
             with contextlib.suppress(FileNotFoundError):
                 tmp_path.unlink()
+
+
+def copy_json_value(value: Any) -> Any:
+    """Copy a JSON value deeply over *containers*, leaving everything else alone.
+
+    The copy a frozen record needs for a free-form JSON field, and the one
+    `dict(...)` is not (#254).
+
+    `dataset.Example.provenance` and `calibration.CalibrationRow.provenance`
+    are both documented free-form JSON objects held by `frozen=True`
+    dataclasses. `frozen` prevents *rebinding* an attribute; it says nothing
+    about the object the attribute points at. So a `dict(...)` at the boundary
+    stops a caller swapping the whole mapping and lets them edit anything
+    nested inside it — measured through `load_jsonl` → `to_dict` →
+    `dump_jsonl`, where a nested edit to `to_dict()`'s return reached the
+    frozen `Example` and then the file on disk, with no `FrozenInstanceError`
+    anywhere, because nothing was ever rebound.
+
+    **Deep over containers rather than `copy.deepcopy`**, on purpose. The
+    contract on these fields is JSON, and every non-container JSON value —
+    `str`, `int`, `float`, `bool`, `None` — is already immutable, so copying
+    them buys nothing. `deepcopy` would additionally recurse into whatever a
+    direct constructor happened to store there, which changes the failure mode
+    for out-of-contract input (a `deepcopy` of an open file handle raises, at a
+    boundary whose job is to copy metadata) without making any in-contract case
+    safer.
+
+    **Not `dict(...)` at a new site**, which is the trap this function exists
+    to avoid: the defect here *is* a shallow copy, so a fix that re-spells one
+    somewhere else would pass any test that only checks "was it copied at all".
+    `embedding-model-shootout#133` recorded the general form on
+    `portfolio-ops#71` — a shallow copy is only complete when the element type
+    is proved immutable, and `dict[str, Any]` proves nothing about its values.
+
+    **`dict` and `list` only, and that is a decision rather than an oversight.**
+    The recursion covers exactly the two mutable containers
+    `Dataset.dump_jsonl`'s faithfulness table *accepts*. Everything else it
+    lists is rejected at the write seam with its own type named —
+    ``tuple``/``namedtuple``, ``set``, ``frozenset``, ``bytes``,
+    ``bytearray``, ``mappingproxy``, ``Decimal``, ``date``. Copying those would
+    be actively wrong on two counts. A `namedtuple` rebuilt through
+    ``tuple(...)`` loses its class, so the guard that must name ``_Point``
+    reports ``tuple`` instead — measured, one red arm. And `bytearray`/`set`
+    are mutable but unreachable as *harm*, because no artifact can carry them:
+    `find_unrepresentable` refuses the record on the way in and `dump_jsonl`
+    refuses it on the way out, so an aliased one has no writer to corrupt.
+
+    A `dict` or `list` **subclass** is normalised to its base type. `Counter`,
+    `OrderedDict` and a `list` subclass are all on the accept table, and all
+    three compare equal to their base and serialize to identical JSON, so
+    nothing a caller can observe through this package changes. Rebuilding via
+    ``type(value)(...)`` instead would preserve the class for those three and
+    raise for any subclass with a different ``__init__`` signature — a
+    strictly worse trade at a boundary whose contract is JSON.
+    """
+    if isinstance(value, dict):
+        return {k: copy_json_value(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [copy_json_value(v) for v in value]
+    return value
