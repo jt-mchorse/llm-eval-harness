@@ -20,12 +20,49 @@ eval_harness/
 ├── cli.py              ← #7: argparse entry point binding every layer
 ├── io_utils.py         ← cross-cutting: atomic_write_text (D-015)
 ├── markdown.py         ← cross-cutting: md_table_cell GFM escaper (#130/#134/#142)
+├── comparison.py       ← cross-cutting: render_comparison, so a decided
+│                          ordering stays readable (#252, D-026)
 └── __init__.py         ← public surface (#24)
 ```
 
 Tests in `tests/`; goldens and calibration in `fixtures/`; reports in
 `docs/`; runnable examples in `examples/`; the sticky-comment GitHub
 Action in `.github/workflows/eval.yml`.
+
+## Cross-cutting — rendering a decided comparison (#252, D-026)
+
+Every gate in this package decides at full float precision and then
+explains the decision in a string a human reads. Rendering both sides of
+that explanation at a fixed three places made the explanation contradict
+itself at a near-threshold margin — the ordinary shape of a marginal eval
+result, and exactly when someone reads the message most carefully.
+
+Three independent spellings existed before `comparison.py`:
+`pytest_plugin.py` asserted `score=0.600 < threshold=0.600` with both
+sides at `.3f`; `cli.py` emitted `Cohen's κ 0.600 < threshold 0.6` as a
+`::error::` annotation, mixing `.3f` against an unformatted float so the
+claim reads **false** rather than merely ambiguous; and
+`calibration.render_report` published a `FAIL` beside a `.3f` κ cell and
+an unformatted threshold bullet. No test could catch any of them, because
+the verdict is correct in every colliding case.
+
+`render_comparison` widens from three places only while the two values
+render identically, and always returns both sides at the same precision.
+The rule is on the rendered strings rather than on a width, because a
+wider fixed width relocates the collision instead of removing it. The
+same-precision half is the one that is easy to miss: widening only the
+side that needs it looks right for as long as that side carries the long
+decimal expansion, which is what happens whenever the threshold is a
+round configured number — and `cli.py` was already the counter-example.
+
+Duplicated from `prompt-regression-suite`'s D-012 rather than shared.
+The two are separate distributions with no dependency between them, and
+manufacturing one so a six-line formatter could be imported would be a
+worse trade than the duplication.
+
+This module has the same justification `markdown.py` gives for existing:
+that class "kept recurring" because the fix "was written inline at three
+call sites". This one also reached three.
 
 ## Layer 1 — Dataset (#1)
 

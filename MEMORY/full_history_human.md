@@ -2900,3 +2900,17 @@ left it, for the reason D-024 gave.
 **Open questions / blockers:** the CLI's stdout summary carries no off-support counts, and `eval-harness drift` exits 0 even when every axis is `drifted`. The first is a small observability gap; the second would change a shipped exit code and needs JT.
 
 **Next session:** the drift module has now been worked three sessions running (D-024, D-025, #250) — the vein is close to worked out; prefer a different module.
+
+## 2026-09-24 — Issue #252: six gates decided at full precision and explained at fixed
+**Duration:** ~11 min · **Branch:** `session/2026-09-24-0754-issue-252` · **Decision:** D-026
+
+- `pytest_plugin.py` asserted `score=0.600 < threshold=0.600`; `cli.py`'s `::error::` annotation printed `Cohen's κ 0.600 < threshold 0.6`, which read as written is *false*; `calibration.render_report` published a FAIL beside numbers that read as equal. No test could catch any of it, because the verdict is correct in every colliding case.
+- New `eval_harness/comparison.py`, following the posture `markdown.py` already sets in this package for a class that kept recurring because the fix was written inline at three call sites.
+- **The issue said three sites; there were six.** The AST population arm found `drift.py`'s length, embedding and judge report rows, where the comparison is not spelled at all — it is a score cell, a threshold cell, and a status decided at full precision. The neighbour that fixes exactly the three named sites is caught by that one arm and nothing else.
+- **The repo's own demo-values lock caught a regression in the fix.** The first version hardcoded three places, which narrowed the drift table from four and republished `0.5690` as `0.569`. Widening to remove an invisible ordering and narrowing a published column are both changes to an artifact, so the helper takes the caller's width as its starting point.
+
+**Why this work, this session:** hunted. The portfolio's non-gated backlog was cleared earlier in the same run, and this came out of sweeping for the shape `prompt-regression-suite#175` generalises to — which also produced `rag-production-kit#225`, filed not worked.
+
+**Open questions / blockers:** none. Nothing tracked moved; the drift demo artifact is gitignored.
+
+**Next session:** the transferable lesson is about centralising formatters. Five sites were at three places and three at four; a single default silently overrides every call site that disagreed with it. Enumerate the widths before writing the helper, not after a lock tells you.
