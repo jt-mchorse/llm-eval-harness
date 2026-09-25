@@ -64,6 +64,49 @@ This module has the same justification `markdown.py` gives for existing:
 that class "kept recurring" because the fix "was written inline at three
 call sites". This one also reached three.
 
+## Cross-cutting — copying a free-form JSON field (#254, D-027)
+
+`frozen=True` prevents *rebinding* an attribute. It says nothing about the
+object the attribute points at, so a `dict` field on a frozen record stays
+editable in place through any reference a caller still holds — and no
+`dataclasses.FrozenInstanceError` ever fires, because nothing is rebound.
+
+The defect this fixed was not a *missing* copy. `dataset.Example` was the
+repo's best-defended record on this axis: it copied `provenance` on the way
+in (`_parse_example`) and on the way out (`to_dict`), and `Dataset.dump_jsonl`'s
+docstring calls the second one "load-bearing rather than incidental". Both
+were `dict(...)` — one level deep — while `provenance` is documented free-form
+JSON. Measured end to end: read `ex.to_dict()`, edit a nested value in the
+returned dict, and the frozen `Example` changes; the next `dump_jsonl` writes
+the change to the file.
+
+`io_utils.copy_json_value` recurses over `dict` and `list` and leaves
+everything else by reference. That is exactly the set of mutable containers
+`dump_jsonl`'s faithfulness table *accepts*. Everything else on that table is
+rejected at the write seam **with its own type named**, and copying those is
+actively wrong — a `namedtuple` rebuilt through `tuple(...)` loses its class,
+so the guard that must say `_Point` says `tuple` instead. `set` and
+`bytearray` are mutable but have no writer to corrupt, because the record is
+refused on the way in and on the way out. `copy.deepcopy` was measured rather
+than argued about: it turns eight arms red, because it deep-copies the very
+types the table rejects.
+
+`calibration.CalibrationRow` gets the same copy at its constructor and
+**not** at a serializer, because it has none. That module declares itself the
+analog of `dataset` three separate times — "calibration-side analog of
+`validate_dataset`", "matching the ordering `dataset._validate_record` settled
+on", "the one choke point both route through" — and the declared parity was
+false on exactly this field: `_row_from_dict` passed `obj["provenance"]`
+straight through. The remaining asymmetry is deliberate: its own
+representability comment says "nothing in this package writes a calibration
+record back out", so there is no outbound half, and inventing one for
+symmetry would be a guard with no harm to name.
+
+Triaged from the `portfolio-ops#71` worklist, which listed six candidates
+here. Two were real; the other four are pinned by name in
+`tests/test_frozen_record_provenance_aliasing.py` so a re-run of that sweep
+does not re-file them.
+
 ## Layer 1 — Dataset (#1)
 
 `Dataset` and `Example` dataclasses with strict load/dump semantics.
