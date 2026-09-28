@@ -743,3 +743,82 @@ Every gate in this package decides at full float precision and then explains the
 **The same-precision half is the easy one to miss, and `cli.py` was already the counter-example.** Widening only the side that needs it looks correct for as long as that side carries the long decimal expansion, which is what happens whenever the threshold is a round configured number. `cli.py`'s pre-existing form was κ at `.3f` against an unformatted threshold, rendering `Cohen's κ 0.600 < threshold 0.6` — and `0.600 < 0.6` is false as written. The annotation did not hide the ordering, it stated the reverse of it, in a `::error::` annotation on the PR check.
 
 **Duplicated from `prompt-regression-suite`'s D-012, not shared.** Two separate distributions with no dependency between them; manufacturing one so a six-line formatter could be imported would be the worse trade. The module cites `eval_harness/markdown.py` as the in-repo precedent, whose docstring says the GFM class "kept recurring" because the fix "was written inline at three call sites". This class reached three before anyone noticed, and was actually six.
+
+---
+
+## D-027 — a frozen record copies its free-form JSON field deeply, over containers only
+
+**Date.** 2026-09-25 · **Issue.** #254 · **Reversibility.** cheap
+
+**Decision.** `io_utils.copy_json_value` copies a JSON value deeply over `dict`
+and `list` and leaves everything else by reference. `Example` uses it at the
+constructor *and* at `to_dict()`; `CalibrationRow` uses it at the constructor
+only.
+
+**Why.** `frozen=True` prevents rebinding an attribute. It says nothing about
+the object the attribute points at, so a `dict` field stays editable in place
+through any reference a caller still holds — and no `FrozenInstanceError` ever
+fires, because nothing is rebound.
+
+The interesting part is that the defect was not a *missing* copy. `Example` was
+this repo's best-defended record on this axis: it copied `provenance` on the way
+in and on the way out, and `dump_jsonl`'s docstring calls the second copy "load-
+bearing rather than incidental". Both were `dict(...)` — one level deep — while
+`provenance` is documented free-form JSON. Measured end to end: read
+`ex.to_dict()`, edit a nested value in the returned dict, and the frozen
+`Example` changes, and the next `dump_jsonl` writes the change to the file.
+
+The second row was a **false declared parity**. `calibration._row_from_dict`
+passed `obj["provenance"]` straight through while `dataset._parse_example`
+copied it — in a module that calls itself the analog of `dataset` three separate
+times. Diff the populating code, not the field names.
+
+**The asymmetry between the two is deliberate.** `Example` is copied on both
+sides because `to_dict` feeds `dump_jsonl`. `CalibrationRow` is copied inbound
+only, because that module has no `to_dict` and no writer — its own comment says
+"nothing in this package writes a calibration record back out". Inventing an
+outbound half to make the two look symmetric would be a guard with no harm to
+name.
+
+**`dict` and `list` only.** That covers exactly the two mutable containers
+`dump_jsonl`'s faithfulness table *accepts*. Everything else on that table is
+rejected at the write seam with its own type named, and copying those is
+actively wrong: a `namedtuple` rebuilt through `tuple(...)` loses its class, so
+the guard that must name `_Point` reports `tuple`. That was my own first draft,
+and the repo's existing faithfulness table is what caught it. `set` and
+`bytearray` are mutable but have no writer to corrupt, since the record is
+refused both on the way in and on the way out.
+
+A `dict` or `list` subclass is normalised to its base. `Counter`, `OrderedDict`
+and a `list` subclass are all on the accept table, all compare equal to their
+base, and all serialize to identical JSON. Rebuilding via `type(value)(...)`
+would preserve the class for those three and raise for any subclass with a
+different `__init__` — a worse trade at a JSON boundary.
+
+**An existing arm pinned the old behaviour, and it was pinning a symptom.**
+`test_a_sequence_provenance_is_not_an_empty_object` asserted that a *list*
+`provenance` came out of `to_dict()` as `{}`, and its own docstring calls that
+"silently coerced, losing or reshaping the caller's data". The faithful copy
+removes the coercion, so the arm was updated to assert the better behaviour
+while keeping what it was actually protecting — the write-side rejection. The
+sibling `tags` arm still carries the "the write-side rule must read the
+`Example`" argument on a case that is still live.
+
+**Four of the six `portfolio-ops#71` rows in this package are false positives**
+and are now pinned by name in the test module, so a re-run of that sweep does
+not re-file them: `CalibrationResult.rows` and `.judge_scores` (not reachable —
+`calibrate` does `list(rows)`), `_EvalSpec.answer_source` (an `Any` holding a
+callable), and `DeltaReport.summary` (built locally; every `to_json` consumer
+`json.dumps` it immediately). Two of six matches the ~⅓ hit rate that issue
+predicted.
+
+**Alternatives considered.** All built and run.
+- *A shallow `dict(...)` at the new sites.* Rejected: 7 red. This is the
+  decisive probe — a shallow copy *is* the defect, so an arm that only asks
+  "was it copied at all" would be satisfied by the bug.
+- *Copy inbound only, leave `to_dict` shallow.* Rejected: 4 red.
+- *Recurse into `tuple` as well.* Rejected: 2 red — it drops a namedtuple's
+  class.
+- *`copy.deepcopy`.* Rejected: 8 red. It deep-copies the very types the
+  faithfulness table rejects. The objection is measured, not argued.
+- *Fix all six sweep rows.* Rejected: four are measured false positives.

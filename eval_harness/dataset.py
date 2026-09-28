@@ -51,6 +51,7 @@ from eval_harness.io_utils import (
     UNENCODABLE,
     UNSERIALIZABLE_TYPE,
     atomic_write_text,
+    copy_json_value,
     find_unrepresentable,
 )
 
@@ -116,6 +117,19 @@ class Example:
     provenance: dict[str, Any]
     tags: tuple[str, ...] = ()
 
+    def __post_init__(self) -> None:
+        # `frozen=True` prevents *rebinding* `provenance`; it says nothing about
+        # the mapping the attribute points at. Take a copy the caller does not
+        # hold, deep over JSON containers, so a `dict` handed to the constructor
+        # and then edited cannot reach into a frozen record (#254).
+        #
+        # The loader already did `dict(raw["provenance"])`, so this is not new
+        # behaviour on the `load_jsonl` path — it extends the same protection to
+        # the *direct* constructor, which `__all__` exports, and deepens it past
+        # the first level. `object.__setattr__` is how a frozen dataclass
+        # assigns during `__post_init__`.
+        object.__setattr__(self, "provenance", copy_json_value(self.provenance))
+
     def to_dict(self) -> dict[str, Any]:
         # `tags` is emitted only when non-empty so round-trip files don't gain
         # a trailing `"tags": []` they didn't write.
@@ -124,7 +138,13 @@ class Example:
             "input": self.input,
             "expected_outputs": [e.to_dict() for e in self.expected_outputs],
             "dataset_version": self.dataset_version,
-            "provenance": dict(self.provenance),
+            # `copy_json_value`, not `dict(...)`. `Dataset.dump_jsonl`'s
+            # docstring calls this copy "load-bearing rather than incidental"
+            # and it was one level deep, so a caller editing a *nested* value in
+            # the returned dict mutated this frozen `Example` and the next
+            # `dump_jsonl` wrote the mutation to disk — no rebinding, so no
+            # `FrozenInstanceError` (#254).
+            "provenance": copy_json_value(self.provenance),
         }
         if self.tags:
             out["tags"] = list(self.tags)

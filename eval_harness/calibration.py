@@ -19,7 +19,7 @@ from pathlib import Path
 
 from eval_harness.comparison import render_comparison
 from eval_harness.dataset import ValidationFinding, ValidationReport
-from eval_harness.io_utils import UNENCODABLE, find_unrepresentable
+from eval_harness.io_utils import UNENCODABLE, copy_json_value, find_unrepresentable
 from eval_harness.judge import Judge, JudgeParseError, JudgeScore
 from eval_harness.markdown import md_code_cell, md_code_span, md_table_cell
 
@@ -32,6 +32,26 @@ class CalibrationRow:
     rubric: str
     human_score: float  # in [0, 1]
     provenance: dict
+
+    def __post_init__(self) -> None:
+        # Parity with `dataset.Example`, which this module declares itself the
+        # analog of throughout ("calibration-side analog of `validate_dataset`",
+        # "matching the ordering `dataset._validate_record` settled on"). The
+        # declared parity was false on exactly this field: `_parse_example` did
+        # `dict(raw["provenance"])` and `_row_from_dict` passed
+        # `obj["provenance"]` straight through, so a caller hand-building rows —
+        # the documented way to use `calibrate`, which takes an
+        # `Iterable[CalibrationRow]` — kept a live handle on a frozen record's
+        # metadata (#254).
+        #
+        # **Inbound only, and the asymmetry is deliberate.** `Example` is copied
+        # on both sides because `to_dict` feeds `dump_jsonl`. This class has no
+        # `to_dict` and no writer at all — the representability guard above says
+        # so in as many words: "nothing in this package writes a calibration
+        # record back out". There is no outbound half to protect, and inventing
+        # one to make the two classes look symmetric would be a guard with no
+        # harm to name.
+        object.__setattr__(self, "provenance", copy_json_value(self.provenance))
 
 
 @dataclass(frozen=True)

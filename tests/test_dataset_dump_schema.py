@@ -238,11 +238,25 @@ def test_a_string_tags_is_not_six_tags(tmp_path: Path) -> None:
 
 
 def test_a_sequence_provenance_is_not_an_empty_object(tmp_path: Path) -> None:
-    """`dict([])` is `{}` and `dict([("a", 1)])` is `{"a": 1}` — a list
-    `provenance` was silently coerced, losing or reshaping the caller's data.
+    """A list `provenance` is rejected, and is no longer reshaped on the way there.
+
+    `to_dict()` did `dict(self.provenance)`, so `provenance=[]` became `{}` and
+    `provenance=[("a", 1)]` became `{"a": 1}` — the caller's data silently lost
+    or reshaped before anything could object to it. #254 replaced that with
+    `copy_json_value`, which is faithful, so `to_dict()` now hands back the list
+    it was given.
+
+    The arm still asserts the rejection, because that is what protects the file
+    on disk. What it no longer asserts is the coercion: the sibling `tags` arm
+    above still carries the "the write-side rule must read the `Example`"
+    argument, and it carries it on a case that is still live — `list(self.tags)`
+    really does explode `"urgent"` into six tags.
     """
-    assert dict([]) == {}
-    assert _example(provenance=[]).to_dict()["provenance"] == {}
+    assert dict([]) == {}, "the coercion this once relied on is still what dict() does"
+    assert _example(provenance=[]).to_dict()["provenance"] == [], (
+        "to_dict must not reshape a caller's provenance before the write-side "
+        "rule gets to object to it (#254)"
+    )
     with pytest.raises(ValueError, match="'provenance' must be an object"):
         Dataset("v1", [_example(provenance=[])]).dump_jsonl(tmp_path / "g.jsonl")
 
