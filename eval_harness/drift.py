@@ -42,7 +42,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from eval_harness.comparison import render_comparison
+from eval_harness.comparison import render_classified, render_comparison
 from eval_harness.io_utils import atomic_write_text, find_unencodable
 from eval_harness.judge import clamp_judge_score
 
@@ -1211,14 +1211,18 @@ def render_html(report: DriftReport) -> str:
         for i in range(len(_LENGTH_BUCKETS) - 1)
     ]
     length_svg = _bar_chart_svg(
-        f"Length JSD = {report.length.drift_score:.3f} ({report.length.status})",
+        "Length JSD = "
+        f"{render_classified(report.length.drift_score, report.length.threshold)} "
+        f"({report.length.status})",
         length_labels,
         list(report.length_histograms[0]),
         list(report.length_histograms[1]),
     )
     cluster_labels = [f"c{i}" for i in range(report.cluster_k)]
     cluster_svg = _bar_chart_svg(
-        f"Embedding cluster JSD = {report.embedding.drift_score:.3f} ({report.embedding.status})",
+        "Embedding cluster JSD = "
+        f"{render_classified(report.embedding.drift_score, report.embedding.threshold)} "
+        f"({report.embedding.status})",
         cluster_labels,
         list(report.cluster_stats[0].cluster_counts),
         list(report.cluster_stats[1].cluster_counts),
@@ -1227,7 +1231,9 @@ def render_html(report: DriftReport) -> str:
     if report.judge is not None and report.judge_stats is not None:
         judge_labels = [f"{i / 10:.1f}" for i in range(10)]
         judge_svg = _bar_chart_svg(
-            f"Judge-score JSD = {report.judge.drift_score:.3f} ({report.judge.status})",
+            "Judge-score JSD = "
+            f"{render_classified(report.judge.drift_score, report.judge.threshold)} "
+            f"({report.judge.status})",
             judge_labels,
             list(report.judge_stats[0].bucket_counts),
             list(report.judge_stats[1].bucket_counts),
@@ -1498,11 +1504,16 @@ def cli(argv: Sequence[str] | None = None) -> int:
         return 2
     summary = (
         f"wrote {args.output}: "
-        f"length={report.length.drift_score:.3f} ({report.length.status}), "
-        f"embedding={report.embedding.drift_score:.3f} ({report.embedding.status})"
+        f"length={render_classified(report.length.drift_score, report.length.threshold)} "
+        f"({report.length.status}), "
+        f"embedding={render_classified(report.embedding.drift_score, report.embedding.threshold)} "
+        f"({report.embedding.status})"
     )
     if report.judge is not None:
-        summary += f", judge={report.judge.drift_score:.3f} ({report.judge.status})"
+        summary += (
+            f", judge={render_classified(report.judge.drift_score, report.judge.threshold)} "
+            f"({report.judge.status})"
+        )
     print(summary)
     return 0
 
