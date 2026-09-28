@@ -2948,3 +2948,30 @@ was updated rather than worked around.
 Four of the six candidates the portfolio-wide sweep listed for this package are
 not defects. They are now pinned by name with their measurements, so the next
 person to run that sweep does not have to re-derive them.
+
+## 2026-09-28 — Issue #256: a drift score beside its own status
+**Duration:** ~12 min · **Branch:** `session/2026-09-28-0718-issue-256`
+
+- `drift.py` publishes the same three JSD scores in seven places. #252 routed the
+  three table rows, where a score and a threshold sit in adjacent cells. The other
+  four pair a score with its `status` and no threshold at all, so #252's discovery
+  arm — which requires a threshold in the string — could not reach them. At three
+  decimal places against the shipped 0.10 default, the identical published string
+  `Length JSD = 0.100` appeared with `(drifted)` in one run and `(ok)` in another.
+- Added `render_classified`, which widens until the rendered value read back as a
+  float falls in the same band as the true value: below the boundary, on it, or
+  above it. Three levels rather than two — a "would the verdict flip" check is
+  satisfied by a below-threshold value rendering at the threshold, which is the
+  very string that collides.
+- Searched for reachability rather than assuming it: about two million draws over
+  the module's own length histograms produced eight real Jensen-Shannon scores
+  inside the colliding band, on both sides, from corpora of thirty-odd inputs.
+  Four are committed and two run end to end into the rendered SVG title.
+
+**Why this work, this session:** it was the repo's only open `priority:high`
+issue, and the PR it was blocked behind merged in this session's Phase A.
+
+**Open questions / blockers:** none. #257 was filed for `threshold_drop`, which is
+published at two different widths on two surfaces and rounds `0.001` to `0.00`.
+
+**Next session:** #257 is unblocked once this PR merges.

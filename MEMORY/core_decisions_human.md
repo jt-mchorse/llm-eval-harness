@@ -822,3 +822,79 @@ predicted.
 - *`copy.deepcopy`.* Rejected: 8 red. It deep-copies the very types the
   faithfulness table rejects. The objection is measured, not argued.
 - *Fix all six sweep rows.* Rejected: four are measured false positives.
+
+## D-028 — A value beside its own status renders in the band it falls in (2026-09-28)
+
+**Decision:** A number published alongside a classification it did not compute —
+a drift score beside its `status` — is rendered through
+`eval_harness.comparison.render_classified`, which widens the rendering until
+the rendered value, read back as a float, falls on the same side of the boundary
+as the true value: below it, on it, or above it.
+
+**Why:** D-026 closed the shape where a gate and its *threshold* share one
+string, and its population arm requires a threshold to be in the string. Four
+sites in `drift.py` pair a score with its `status` and mention no threshold at
+all — the three SVG chart titles and the `drift` CLI summary line — so that arm
+provably could not reach them, and its docstring says so.
+
+At three decimal places against the shipped `DEFAULT_LENGTH_THRESHOLD = 0.10`,
+the identical published string `Length JSD = 0.100` appears with `(drifted)` in
+one run and `(ok)` in another. The `(drifted)` form is not merely ambiguous: the
+comparison is strict, so `0.100` claims the score is *at* the threshold while
+the label claims it is *past* it, and only one of those can be true.
+
+That band is reachable from ordinary data, and that was searched rather than
+assumed. About two million random draws over this module's own nine-bucket
+length histograms, with counts between zero and five, produced eight genuine
+Jensen-Shannon divergences inside the colliding band on both sides of the
+shipped default. Four are committed as a fixture; two are carried end to end
+through `compute_drift` into the rendered SVG title, so the test reads the
+string a person sees rather than the number the module computed.
+
+The rule has three levels rather than two, and that is what carries both halves
+of the defect in one sentence. A two-level "would the verdict flip" predicate is
+satisfied by a below-threshold value rendering *at* the threshold — which is
+precisely the string an above-threshold value used to render as, so the
+collision survives it. Measured: forty-five red arms for that neighbour.
+
+The first implementation was a one-line delegation to `render_comparison`, on
+the argument that two renderings differing at a given width must straddle the
+boundary. The arms falsified it twice. Signed zero breaks it — `-0.0001` renders
+`-0.000` and `0.0` renders `0.000`, two different strings for one value, and
+`-0.0` is not below `0.0`. A boundary that does not survive a three-place round
+trip breaks it again — for a value sitting exactly on `0.1004`, the pairwise
+rule short-circuits on equality and publishes `0.100`, which reads back as
+strictly *below* a boundary the value is on. Neither is reachable through
+`drift.py` today, because a JSD is non-negative and the shipped thresholds are
+round. That is the point: this is a public helper in a `py.typed` package, and a
+rule that happens to hold for the current call sites is not the rule it claims
+to be.
+
+**Alternatives considered:**
+- *Delegate to `render_comparison(value, boundary)[0]`* — rejected, built and
+  run, 13 red. It was the first draft.
+- *A two-level "did the status flip" predicate* — rejected, built and run, 45
+  red. It leaves the below-threshold half of the collision in place.
+- *A wider fixed width* — rejected, built and run: `.6f` 6 red and `.12f` 6 red.
+  A fixed width relocates the collision rather than removing it, and a rule
+  spelled as a hand-picked number of places cannot say what it is for.
+- *Round the decision to match the display* — rejected, built and run, 8 red,
+  and already rejected on principle in four portfolio repos. It makes the gate
+  less precise in order to make the message consistent, which is backwards.
+- *Fix only the three chart titles the issue listed first* — rejected. The CLI
+  summary is the fourth site, and the population arm is what holds a future
+  fifth axis to the rule.
+- *Fold `threshold_drop`'s two widths into this change* — rejected and filed as
+  #257. It is a standalone readout of a configured parameter, the shape D-026's
+  arm was deliberately narrowed to exclude, and it has a different remedy:
+  `--threshold-drop 0.001` publishes `threshold_drop=0.00`, collapsing a policy
+  input to the strictest possible setting.
+
+**Two sites decided out explicitly, not by omission.**
+`distance_to_nearest_golden_cluster` has no status and no threshold beside it,
+so it has no band; the table does not enforce distinctness either, so two rows
+rendering equally make no false claim. `threshold_drop` is #257.
+
+**Reversibility:** Cheap.
+
+**Related issues:** #256, #252, #257
