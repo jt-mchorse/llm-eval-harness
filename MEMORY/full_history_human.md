@@ -2975,3 +2975,41 @@ issue, and the PR it was blocked behind merged in this session's Phase A.
 published at two different widths on two surfaces and rounds `0.001` to `0.00`.
 
 **Next session:** #257 is unblocked once this PR merges.
+
+## 2026-09-29 — #257: the tool was misreporting its own configuration (~15 min)
+
+`eval_harness.comparison` had two renderers and needed a third. D-026 covers a
+decided comparison — two numbers, one ordering. D-028 covers a value beside its
+own classification — one number, one verdict. #257 is one number and nothing
+else: the policy input an operator typed, echoed back at a fixed width.
+`runner.py` published the delta gate at `.2f` and `comment.py` published the
+same field at `.3f`, so `--threshold-drop 0.0125` came out as `0.01` in one
+place and `0.013` in the other, in the same CI run. At the bottom of the range
+`0.001` collapsed to `0.00` — the strictest setting the flag has, printed for
+the loosest configuration.
+
+**The population was eight sites, not the two the issue named.** Six more reach
+`render_comparison` as its second operand, and that loop stops as soon as the
+two strings differ — which says nothing about whether either operand survived
+the trip. A configured `0.6004` against a κ of `0.9` publishes `threshold
+0.600`. Four of five probe pairs narrowed the configured side. It stayed
+invisible because every shipped default in this package is round.
+
+**The lesson worth keeping is that my own end-to-end arms were green against a
+call-site revert, and the cause was the orientation of a fixture I borrowed from
+the neighbouring class.** The calibration arm used κ = 0.6002 against a threshold
+of 0.6004 — a near-threshold pair, D-026's shape — and the plain loop already
+widens there, so the configured side came out exact by accident and the revert
+was 1 red. Rebuilt on κ = 0.9, a measurement nowhere near the threshold, the same
+revert went 3 red. The orientation that exposes this class is the opposite of the
+one that exposes its neighbour, and it is the ordinary case, not the corner one.
+Only the probe said so.
+
+Shipped `render_configured` (widen until the rendering reads back as the value
+that was set, `repr` as terminal fallback) and `exact_other` on
+`render_comparison`. 86 new arms; the suite went 1865 → 1951. Six neighbours were
+built and run and all six were rejected, including `repr` and `:g` — both
+round-trip correctly and both narrow `0.100` to `0.1`, which is a change to a
+published artifact. One string moves on purpose: the ASCII header widens `0.10`
+→ `0.100`, because "same precision" and "never narrow" together leave exactly
+one option. Recorded as D-029.
