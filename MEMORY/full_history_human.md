@@ -3013,3 +3013,54 @@ round-trip correctly and both narrow `0.100` to `0.1`, which is a change to a
 published artifact. One string moves on purpose: the ASCII header widens `0.10`
 → `0.100`, because "same precision" and "never narrow" together leave exactly
 one option. Recorded as D-029.
+
+## 2026-09-29 — #259: the refusal walker did not terminate either (~39 min)
+
+`copy_json_value` was recursive, so `Example(provenance=<cyclic>)` raised
+`RecursionError` out of its own constructor — the defect the issue described,
+found when `rag-production-kit` ported this function and its SSE totality suite
+went 8 red.
+
+**Checking the issue's premise is what found the real defect.** Its first
+acceptance criterion offered "refusing may be the better answer here, because this
+package *rejects* unrepresentable records at the write seam." Measured:
+`find_unrepresentable`, the refusal walker itself, **does not terminate on a
+cycle**. It is iterative, so it has no `RecursionError` to raise — and with no
+ancestor tracking it grew both its stack and its path string without bound until
+the process was OOM-killed. My first probe exited 137.
+
+Its own docstring is the argument against it. The walk is iterative so that a
+`RecursionError`, "which is not a `ValueError`", cannot escape a caller's
+`except ValueError`. A hang escapes `except ValueError` too, and forever. The
+rewrite bought a different way to not terminate.
+
+**And that made the obvious fix worse.** `__post_init__` copies before anything
+else, so the copy's `RecursionError` was *masking* the walker's hang. Porting the
+sibling's iterative memo copier on its own — the move #259 points at — lets the
+cyclic record through and converts an exception into an infinite loop. Both halves
+ship together, and an arm says so, so a future partial revert reads as a
+regression rather than a simplification.
+
+The cycle is preserved by the copier and refused by the walk as a fifth
+representability kind. `rag` preserves *and emits*, because its wire seam may not
+raise; this package refuses, so the only question was where — and a copier that
+refused would be a second enforcement site carrying neither the example id nor the
+field path. Third time today that the same class needed a different remedy per
+repo.
+
+**The process lesson is the sharpest of the run: my probe harness reported 0 red
+for three real regressions, and I nearly believed it twice.** Two independent
+causes. `pytest --collect-only -q` prints `path: count` in this version rather than
+ids, so the id list was empty and every probe looped zero times. And a *hanging*
+arm makes `pytest-timeout` abort the whole session with an `INTERNALERROR` and zero
+`FAILED` lines, which a summary parser reads as clean. The tell was arithmetic — a
+manual single-test run showed the mutation active and the arm red while the harness
+said zero. One subprocess per test id, each with its own timeout, fixes both: a
+hang becomes a result rather than a dead run. A probe that cannot distinguish
+"green" from "did not run" is not a probe.
+
+Two implementation choices were decided by measurement rather than by copying the
+sibling: ancestors rather than a global visited set (a DAG is legal and
+`json.dumps` writes it), and an on-path set with an exit marker rather than a fresh
+`frozenset` per node (quadratic without a depth cap — 20000 levels costs 0.059s one
+way and 1.573s the other). Recorded as D-030, amending D-027.
