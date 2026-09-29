@@ -145,7 +145,20 @@ UNENCODABLE = "unencodable"
 NON_FINITE = "non_finite"
 NON_STRING_KEY = "non_string_key"
 UNSERIALIZABLE_TYPE = "unserializable_type"
-_ALL_KINDS = frozenset({UNENCODABLE, NON_FINITE, NON_STRING_KEY, UNSERIALIZABLE_TYPE})
+#: A container reachable from itself. `json.dumps` raises
+#: ``ValueError: Circular reference detected`` on one, so unlike the four kinds
+#: above it does not *silently* corrupt a round trip, and the failure is already
+#: a `ValueError`. It is a finding anyway, because the walk meant to describe a
+#: record **could not terminate on it** (#259): iterative with no ancestor
+#: tracking, a cycle grew both the stack and the path string without bound until
+#: the process was OOM-killed. The docstring's own argument is why that matters --
+#: a `RecursionError` is unacceptable because it "would escape a caller's
+#: `except ValueError`", and a hang escapes it too, and forever. Reported here so
+#: the enforcement sites name the field path, as they do for every other kind.
+CIRCULAR_REFERENCE = "circular_reference"
+_ALL_KINDS = frozenset(
+    {UNENCODABLE, NON_FINITE, NON_STRING_KEY, UNSERIALIZABLE_TYPE, CIRCULAR_REFERENCE}
+)
 
 #: The Python types `json.dumps` emits *faithfully* -- one JSON value out, the
 #: same Python value back from `json.loads`. A `Counter`, an `OrderedDict`, an
@@ -242,9 +255,41 @@ def find_unrepresentable(
     caller's `except ValueError` and abort a collecting validation pass instead
     of becoming one finding.
     """
-    stack: list[tuple[str, Any]] = [("", record)]
+    # `(path, node, on_path_at_entry)`. **Ancestors, not a global visited set**
+    # (#259): two keys pointing at one dict is a legal DAG, and a `visited` set
+    # reports the second reference as circular -- built and run, and it flags the
+    # DAG control. Only a container reachable *from itself* is a cycle.
+    #
+    # Tracked with one mutable set plus an exit marker rather than a fresh
+    # `frozenset` per node, which is what `rag-production-kit`'s `_json_safe`
+    # does. That version is O(depth) per node and so quadratic in depth, and this
+    # walk has no depth cap where that one truncates at `_MAX_DEPTH`. A walk whose
+    # cost depends quadratically on a caller's nesting is the same class of
+    # host-dependent boundary the iterative rewrite existed to remove. Measured
+    # on a linear chain, marker vs frozenset: 5000 levels 0.005s vs 0.088s;
+    # 20000 levels 0.059s vs 1.573s. Four times the depth costs 12x here and 18x
+    # there -- the quadratic showing up, not a constant factor.
+    on_path: set[int] = set()
+    # `False` = descend into this node; `True` = leaving it, drop it from the
+    # path. LIFO, so the exit marker is pushed *before* the children and popped
+    # after all of them.
+    stack: list[tuple[str, Any, bool]] = [("", record, False)]
     while stack:
-        path, node = stack.pop()
+        path, node, leaving = stack.pop()
+        if leaving:
+            on_path.discard(id(node))
+            continue
+        if isinstance(node, (dict, list, tuple)):
+            if id(node) in on_path:
+                if CIRCULAR_REFERENCE in kinds:
+                    return path, CIRCULAR_REFERENCE, type(node).__name__
+                # Axis not enforced by this caller, so do not descend. Unlike the
+                # other not-enforced arms, skipping loses no coverage: nothing
+                # below a back-reference is absent from the path already, and
+                # descending is the non-termination this arm exists to stop.
+                continue
+            on_path.add(id(node))
+            stack.append((path, node, True))
         # `bool` first: it is an `int` subclass, and `math.isfinite(True)` is
         # True anyway, but branching on it explicitly keeps the numeric arm
         # about numbers.
@@ -281,18 +326,18 @@ def find_unrepresentable(
                     # UNENCODABLE keeps finding surrogates below a non-string
                     # key instead of losing that subtree.
                     seg = _safe_path_segment(ascii(k))
-                    stack.append((f"{path}.{seg}" if path else seg, v))
+                    stack.append((f"{path}.{seg}" if path else seg, v, False))
                     continue
                 seg = _safe_path_segment(k)
                 child = f"{path}.{seg}" if path else seg
                 # A key is a string on the record too, and is subject to the
                 # same UTF-8 rule as a value. Push it under its own path so the
                 # message points at the key rather than at whatever it maps to.
-                stack.append((f"{child} (object key)", k))
-                stack.append((child, v))
+                stack.append((f"{child} (object key)", k, False))
+                stack.append((child, v, False))
         elif isinstance(node, list):
             for i, v in enumerate(node):
-                stack.append((f"{path}[{i}]", v))
+                stack.append((f"{path}[{i}]", v, False))
         elif node is not None and not isinstance(node, _FAITHFUL_JSON_TYPES):
             # The value-side twin of the non-string-key arm above, and it
             # carries the same pair of harms that arm's own comment names for
@@ -324,7 +369,7 @@ def find_unrepresentable(
             # report and descending would make the message order-dependent.
             if isinstance(node, tuple):
                 for i, v in enumerate(node):
-                    stack.append((f"{path}[{i}]", v))
+                    stack.append((f"{path}[{i}]", v, False))
     return None
 
 
@@ -424,9 +469,67 @@ def copy_json_value(value: Any) -> Any:
     ``type(value)(...)`` instead would preserve the class for those three and
     raise for any subclass with a different ``__init__`` signature — a
     strictly worse trade at a boundary whose contract is JSON.
+
+    **Iterative, with an `id()`-keyed memo, and D-027 shipped it recursive
+    (#259).** A cyclic `provenance` never terminated and a deeply nested one
+    exhausted the stack -- inside `__post_init__`, before any validation ran, so
+    `Example(provenance=<cyclic>)` raised `RecursionError` straight out of its own
+    constructor. :func:`find_unrepresentable` in this very module is iterative
+    **on purpose** and its docstring gives the reason: a `RecursionError` "is not
+    a `ValueError`, so it would escape a caller's `except ValueError` and abort a
+    collecting validation pass instead of becoming one finding." D-027 put a
+    recursive copy *upstream* of that walk. The reason was already written down;
+    the copy just did not inherit it.
+
+    `rag-production-kit`'s D-022 ported this function and its own SSE totality
+    suite went 8 red on exactly this, which is how the sibling was found.
+
+    **A cycle is preserved, not refused here**, and that is the half that needed
+    deciding rather than copying. `rag` preserves *and emits*, because its wire
+    seam is lenient by D-017 ("stream alive, don't raise"). This package refuses
+    -- so the question was only *where*, and the answer is not "in the copier":
+    a copier that refused would be a second enforcement site with its own
+    message, and this module spent #213/#217/#234/#238 collapsing exactly that
+    kind of duplication into one walk. The copy is isomorphic to its input and
+    :data:`CIRCULAR_REFERENCE` refuses it at the seam, naming the field path.
+
+    That ordering is load-bearing in one direction: **making this function
+    iterative on its own is not shippable.** Before #259 the `RecursionError`
+    here was *masking* a worse failure one call later -- `find_unrepresentable`
+    is iterative and had no ancestor tracking, so a cycle that survived the copy
+    grew its stack and its path string without bound. Fixing the copy alone turns
+    a `RecursionError` into a hang. An arm states that so a future partial revert
+    reads as a regression rather than a simplification.
+
+    The memo does two jobs. It terminates on a cycle, and it **preserves the
+    input's sharing structure** -- two keys pointing at one dict still point at
+    one dict afterwards, a fresh one. The recursive version expanded that into
+    independent copies, which is both less faithful and exponential on a
+    DAG-shaped `provenance`.
     """
-    if isinstance(value, dict):
-        return {k: copy_json_value(v) for k, v in value.items()}
-    if isinstance(value, list):
-        return [copy_json_value(v) for v in value]
-    return value
+    if not isinstance(value, (dict, list)):
+        return value
+    root: Any = {} if isinstance(value, dict) else []
+    memo: dict[int, Any] = {id(value): root}
+    # Every source container stays referenced while the walk runs, so CPython
+    # cannot recycle an `id` out from under `memo`.
+    keep: list[Any] = [value]
+    stack: list[tuple[Any, Any]] = [(value, root)]
+    while stack:
+        src, dst = stack.pop()
+        items = src.items() if isinstance(src, dict) else enumerate(src)
+        for key, child in items:
+            if isinstance(child, (dict, list)):
+                copied = memo.get(id(child))
+                if copied is None:
+                    copied = {} if isinstance(child, dict) else []
+                    memo[id(child)] = copied
+                    keep.append(child)
+                    stack.append((child, copied))
+            else:
+                copied = child
+            if isinstance(dst, dict):
+                dst[key] = copied
+            else:
+                dst.append(copied)
+    return root
