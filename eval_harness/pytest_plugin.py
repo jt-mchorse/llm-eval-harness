@@ -275,7 +275,12 @@ def pytest_pyfunc_call(pyfuncitem: pytest.Function):
         # a fixed `.3f`, so a near-threshold result asserted `score=0.600 <
         # threshold=0.600` -- a failure explanation that contradicts itself, in
         # the one string a developer reads when CI goes red.
-        rendered_score, rendered_threshold = render_comparison(score.score, spec.threshold)
+        # `exact_other` because `spec.threshold` is the `@pytest.mark.eval`
+        # threshold the test author wrote; a failure message that names a
+        # different one sends the reader to the wrong number (#257).
+        rendered_score, rendered_threshold = render_comparison(
+            score.score, spec.threshold, exact_other=True
+        )
         raise AssertionError(
             f"eval_row.id={row_id!r} score={rendered_score} "
             f"< threshold={rendered_threshold}\n"

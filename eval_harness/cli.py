@@ -438,8 +438,11 @@ def _run_calibrate(args: argparse.Namespace) -> int:
         # is False as written. Mixed precision is the worse half of #252's class,
         # and this string is a `::error::` annotation on the PR check -- the
         # surface this repo's CI story is built on.
+        # `exact_other` because the threshold here is `--threshold-kappa` as the
+        # operator typed it. Without it this annotation names a threshold the
+        # run was not gated at (#257).
         rendered_kappa, rendered_threshold = render_comparison(
-            result.cohens_kappa, args.threshold_kappa
+            result.cohens_kappa, args.threshold_kappa, exact_other=True
         )
         print(
             f"::error::Cohen's κ {rendered_kappa} < threshold {rendered_threshold}; "

@@ -36,6 +36,39 @@ Duplicated from `prompt-regression-suite`'s D-012 rather than shared. The two ar
 separate distributions with no dependency between them, and manufacturing one so
 a six-line formatter could be imported would be a worse trade than the
 duplication. Recorded in D-026 so it does not read as an accident.
+
+Three kinds of number, three acceptance tests, one loop
+-------------------------------------------------------
+
+The module now holds three renderers. They differ only in *what makes a width
+wide enough*, and the difference is what each number **is**:
+
+======================  ====================================  ====================
+number                  wide enough when...                   function
+======================  ====================================  ====================
+a decided comparison    the two render differently            `render_comparison`
+a classified value      it reads back into the same band      `render_classified`
+a configured parameter  it reads back as itself               `render_configured`
+======================  ====================================  ====================
+
+The third is #257 and is a *different* class from the first two, not a third
+spelling of them. There is no second number and no verdict beside it: it is the
+policy input an operator typed, echoed back at a fixed width. The harm is not
+that the sentence contradicts itself — it is that the tool **misreports its own
+configuration**. `--threshold-drop 0.001` printed as ``threshold_drop=0.00``
+does not read as ambiguous; it reads as the *strictest possible setting*, the
+opposite end of the range from what was asked for.
+
+**And the class reaches into `render_comparison`, which is why `exact_other`
+exists.** The pairwise loop stops as soon as the two strings differ, and the
+threshold is a *configured* number at every one of this package's six call
+sites. With a round threshold that is invisible — ``0.6`` renders ``0.600`` and
+reads back as ``0.6``. With ``--threshold-kappa 0.6004`` against a κ of ``0.9``
+the loop stops at three places and publishes ``threshold 0.600``, which is a
+policy the operator did not set and which predicts the wrong verdict for any
+future κ in ``[0.600, 0.6004)``. Measured: four of five probe pairs narrow the
+configured side. D-026 made the *ordering* readable and had no reason to ask
+whether either operand survived the trip; asking it is D-029.
 """
 
 from __future__ import annotations
@@ -61,7 +94,7 @@ COMPARISON_MAX_PLACES = 17
 
 
 def render_comparison(
-    value: float, other: float, *, places: int = COMPARISON_PLACES
+    value: float, other: float, *, places: int = COMPARISON_PLACES, exact_other: bool = False
 ) -> tuple[str, str]:
     """Render two numbers so an ordering stated between them stays readable.
 
@@ -93,16 +126,41 @@ def render_comparison(
     distinguish, and widening would imply a difference that is not there. The
     gates in this package only reach their messages on a strict inequality, so
     none of them depends on that, but the function is total and says what it
-    does.
+    does. (``exact_other`` overrides that: an equal pair still widens until the
+    configured side reads back as itself, because misreporting the policy is a
+    false claim whether or not the measurement happens to equal it.)
+
+    **``exact_other`` marks *other* as a configured parameter** — a policy input
+    an operator typed, rather than something this package measured (#257). The
+    pair then widens until the ordering is readable *and* ``other`` reads back
+    as itself, still at one shared width. Without it the loop stops the instant
+    the two strings differ, which at three places publishes a configured
+    ``0.6004`` as ``0.600``: not a collision, and not backwards, but a
+    *different policy* than the one in force. See :func:`render_configured` for
+    the standalone form of the same rule.
+
+    There is deliberately no ``exact_value``. ``value`` is the measured side at
+    all six call sites, and a measurement rendered at three places is a summary
+    a reader expects, not a misstatement of anything an operator set. The
+    asymmetry is the finding, so the parameter is asymmetric and says so; the
+    population arm in ``tests/test_configured_parameter_round_trip.py`` is what
+    holds a seventh call site to the same reading of which operand is which.
     """
-    if value == other:
-        return (f"{value:.{places}f}", f"{other:.{places}f}")
     for width in range(places, COMPARISON_MAX_PLACES + 1):
         rendered = (f"{value:.{width}f}", f"{other:.{width}f}")
-        if rendered[0] != rendered[1]:
+        if exact_other and float(rendered[1]) != other:
+            # Round-tripping is monotone in width -- a wider rendering is at
+            # least as close to `other`, and the intervals that round to a given
+            # double nest -- so skipping this width cannot skip past a narrower
+            # acceptable one.
+            continue
+        if value == other or rendered[0] != rendered[1]:
             return rendered
     # Two distinct doubles too small for any fixed-point rendering to separate.
-    # `repr` round-trips a float by definition, so it always distinguishes them.
+    # `repr` round-trips a float by definition, so it always distinguishes them
+    # and, under `exact_other`, reproduces the configured value exactly. This is
+    # the one exit that does not guarantee a shared precision, which is as true
+    # of `repr(0.1), repr(0.25)` as it ever was.
     return (repr(value), repr(other))
 
 
@@ -190,5 +248,61 @@ def render_classified(value: float, boundary: float, *, places: int = COMPARISON
     for width in range(places, COMPARISON_MAX_PLACES + 1):
         rendered = f"{value:.{width}f}"
         if _band(float(rendered), boundary) == target:
+            return rendered
+    return repr(value)
+
+
+def render_configured(value: float, *, places: int = COMPARISON_PLACES) -> str:
+    """Render a configured parameter so it reads back as the value that was set.
+
+    The third member of this module's family, and the one with neither a second
+    number nor a verdict beside it (#257): a *policy input* echoed back to the
+    operator who set it.
+
+    ``runner.render_delta_ascii`` published the delta gate at ``.2f`` and
+    ``comment.py`` published the same field at ``.3f``, in the same CI run::
+
+        configured 0.05     .2f -> 0.05    .3f -> 0.050
+        configured 0.0125   .2f -> 0.01    .3f -> 0.013
+        configured 0.001    .2f -> 0.00    .3f -> 0.001
+
+    Two surfaces disagreeing about one number is the visible half. The half that
+    matters is the last row: ``threshold_drop=0.00`` reads as *"any drop at all
+    is a regression"* — the strictest setting the flag has — for a run actually
+    gated at ``0.001``. A configured value does not have a near-threshold case
+    the way a measurement does; it is wrong or it is right, and rounding makes
+    it wrong at every magnitude finer than the width.
+
+    **Wide enough means it reads back as itself.** Widen from *places* until
+    ``float(rendered) == value``. Stating the rule on the round trip rather than
+    on a width is the same move :func:`render_comparison` documents and for the
+    same reason: a hand-picked number of places has no way to say what it is
+    *for*, and any fixed width is wrong for some legal ``--threshold-drop``.
+
+    ``places`` is a floor, not a target, so this never narrows a published
+    column: at the shipped ``DEFAULT_THRESHOLD_DROP = 0.1`` three places gives
+    ``'0.100'``, which round-trips, so the PR comment is byte-identical to what
+    it published before. (The ASCII header widens ``'0.10'`` -> ``'0.100'``,
+    which is the deliberate half of D-029: it is the only way for the two
+    surfaces to share a precision without narrowing the comment.)
+
+    **Not ``repr`` or ``:g`` directly**, though both round-trip. Both would
+    narrow ``'0.100'`` to ``'0.1'`` in a published artifact — the exact
+    regression ``tests/test_demo_drift_published_values.py`` caught in D-026 —
+    and ``repr`` reaches for exponent form at small magnitudes, so a report line
+    would read ``threshold drop: 1e-05``. ``repr`` survives only as the terminal
+    fallback, for the values no fixed-point rendering can reach at all: it
+    round-trips a double by definition, so ``render_configured(1e-300)`` is
+    ``'1e-300'`` rather than seventeen zeros, and ``--threshold-drop 1e-300``
+    is a finite non-negative number the validator accepts.
+
+    Total on every float. A non-finite ``value`` never satisfies the round trip
+    (``float('nan') != nan``) and falls through to ``repr``, giving ``'nan'`` --
+    though every caller in this package rejects non-finite input upstream, and
+    ``runner.diff_runs`` and ``DeltaReport.from_json`` both say so by name.
+    """
+    for width in range(places, COMPARISON_MAX_PLACES + 1):
+        rendered = f"{value:.{width}f}"
+        if float(rendered) == value:
             return rendered
     return repr(value)

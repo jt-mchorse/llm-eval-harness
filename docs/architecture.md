@@ -21,9 +21,11 @@ eval_harness/
 ├── io_utils.py         ← cross-cutting: atomic_write_text (D-015)
 ├── markdown.py         ← cross-cutting: md_table_cell GFM escaper (#130/#134/#142)
 ├── comparison.py       ← cross-cutting: render_comparison, so a decided
-│                          ordering stays readable (#252, D-026); and
+│                          ordering stays readable (#252, D-026);
 │                          render_classified, so a value cannot contradict
-│                          the status beside it (#256, D-028)
+│                          the status beside it (#256, D-028); and
+│                          render_configured, so a policy input is echoed
+│                          back as the value that was set (#257, D-029)
 └── __init__.py         ← public surface (#24)
 ```
 
@@ -102,6 +104,68 @@ thirty-odd inputs. Four are committed as a fixture in
 [`tests/test_classified_rendering_matches_status.py`](../tests/test_classified_rendering_matches_status.py)
 and two are carried through `compute_drift` into the rendered title, so the
 arms read the drawn string rather than the computed score.
+
+## Cross-cutting — echoing back a configured parameter (#257, D-029)
+
+The third renderer in `comparison.py`, and the only one that is not a
+comparison. D-026 covers two numbers and an ordering; D-028 covers one number
+and a verdict. This covers **one number and nothing else** — the policy input an
+operator typed, echoed back at a fixed width.
+
+```
+                       .2f       .3f      render_configured
+configured 0.05        0.05      0.050    0.050
+configured 0.0125      0.01      0.013    0.0125
+configured 0.001       0.00      0.001    0.001
+```
+
+`runner.render_delta_ascii` published the delta gate at `.2f` and `comment.py`
+published the same field at `.3f`, in the same CI run. Two surfaces disagreeing
+about one number is the visible half. The half that matters is the last row:
+`threshold_drop=0.00` reads as *"any drop at all is a regression"* — the
+strictest setting `--threshold-drop` has — for a run actually gated at `0.001`.
+The harm here is not a self-contradicting sentence, as it was for D-026 and
+D-028. It is that **the tool misreports its own configuration**.
+
+Wide enough therefore means something different from either neighbour: the
+rendering, read back as a float, equals the value that was set. Three kinds of
+number, three acceptance tests, one loop:
+
+| number | wide enough when... | function |
+|--------|---------------------|----------|
+| a decided comparison | the two render differently | `render_comparison` |
+| a classified value | it reads back into the same band | `render_classified` |
+| a configured parameter | it reads back as itself | `render_configured` |
+
+**The class also reaches into `render_comparison`, which is why `exact_other`
+exists.** The pairwise loop stops as soon as the two strings differ, and the
+threshold is a configured number at all six of its call sites. With a round
+threshold that is invisible. With `--threshold-kappa 0.6004` against a κ of
+`0.9` the loop stops at three places and publishes `threshold 0.600` — a policy
+nobody set, under which a future κ of `0.6002` reads as passing against the
+threshold the report itself printed.
+
+`exact_other` marks the *second* operand as the configured one. There is
+deliberately no `exact_value`: a measurement rendered at three places is a
+summary a reader expects, not a misstatement of anything an operator set. The
+asymmetry is the finding.
+
+The answer is not `repr` or `:g`, though both round-trip. Both narrow `0.100` to
+`0.1`, which is the regression
+[`tests/test_demo_drift_published_values.py`](../tests/test_demo_drift_published_values.py)
+caught in D-026, and `:g` reaches for `1e-05` in a line a human reads. `repr`
+survives only as the terminal fallback, for values no fixed-point rendering can
+express at all — `--threshold-drop 1e-300` is finite, non-negative, and accepted.
+
+One published string changes by design: the ASCII header widens `0.10` →
+`0.100`. The two surfaces have to share a precision and neither may narrow, so
+the header is the one that moves. The PR comment is byte-identical.
+
+The arms live in
+[`tests/test_configured_parameter_round_trip.py`](../tests/test_configured_parameter_round_trip.py),
+including the one that records why the first draft was green against a call-site
+revert: it used a κ *near* the threshold, which is D-026's shape and the one
+orientation where the plain loop already widens on its own.
 
 ## Cross-cutting — copying a free-form JSON field (#254, D-027)
 

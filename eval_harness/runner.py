@@ -33,6 +33,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol
 
+from eval_harness.comparison import render_configured
 from eval_harness.dataset import Dataset, Example, filter_examples_by_tags, load_jsonl
 from eval_harness.judge import FAITHFULNESS_RUBRIC, Judge, JudgeParseError, JudgeScore
 from eval_harness.runs import (
@@ -784,9 +785,16 @@ def load_baseline(
 
 def render_delta_ascii(report: DeltaReport) -> str:
     """Markdown-friendly ASCII table for CLI/PR-comment output."""
+    # `threshold_drop` is the operator's `--threshold-drop`, echoed back. At the
+    # shipped `.2f` this header published `0.0125` as `0.01` while `comment.py`
+    # published the same field as `0.013`, and `--threshold-drop 0.001` as
+    # `0.00` -- the strictest setting the flag has, for a run gated at 0.001
+    # (#257). `render_configured` widens until the rendering reads back as the
+    # value that was set; the starting width moves 2 -> 3 so this surface and
+    # the PR comment share one precision without narrowing the comment (D-029).
     header = (
         f"# delta {report.current_run_id[:8]} vs {report.baseline_run_id[:8]} "
-        f"(suite={report.suite}, threshold_drop={report.threshold_drop:.2f})"
+        f"(suite={report.suite}, threshold_drop={render_configured(report.threshold_drop)})"
     )
     columns = ["status", "example_id", "baseline", "current", "delta", "flag"]
     sep = "  "
