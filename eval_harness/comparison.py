@@ -104,3 +104,91 @@ def render_comparison(
     # Two distinct doubles too small for any fixed-point rendering to separate.
     # `repr` round-trips a float by definition, so it always distinguishes them.
     return (repr(value), repr(other))
+
+
+def _band(value: float, boundary: float) -> int:
+    """Which side of *boundary* *value* falls on: ``-1`` below, ``0`` at, ``1`` above."""
+    if value < boundary:
+        return -1
+    if value > boundary:
+        return 1
+    return 0
+
+
+def render_classified(value: float, boundary: float, *, places: int = COMPARISON_PLACES) -> str:
+    """Render one number so the label printed beside it cannot contradict it.
+
+    The neighbouring population to :func:`render_comparison`, and the one
+    D-026's own population arm wrote down as unreachable: *a value beside its
+    own classification*, with the boundary **not in the string at all** (#256).
+
+    `drift.py` publishes the same three JSD scores in seven places. Three are
+    table rows carrying a score, a threshold and a status in adjacent cells --
+    two numbers in one comparison, which is :func:`render_comparison`'s shape
+    and was fixed in #252. The other four pair a score with its `status` and
+    nothing else::
+
+        f"Length JSD = {report.length.drift_score:.3f} ({report.length.status})"
+
+    `status` is `"drifted" if drift > threshold else "ok"`, decided at full
+    precision. At `.3f` against the shipped `DEFAULT_LENGTH_THRESHOLD = 0.10`::
+
+        0.10001335982634979  ->  'Length JSD = 0.100 (drifted)'
+        0.09999863005670209  ->  'Length JSD = 0.100 (ok)'
+        0.1                  ->  'Length JSD = 0.100 (ok)'
+
+    The first two are real Jensen-Shannon divergences over this module's own
+    nine-bucket length histograms, found by search rather than constructed
+    (#256), and they are carried end to end through `compute_drift` in
+    `tests/test_classified_rendering_matches_status.py`. **The identical
+    published string carries both statuses**, and the first is not merely
+    ambiguous but self-contradicting: the boundary is strict, so `0.100` says
+    "at the threshold" while `(drifted)` says "past it".
+
+    **The property is on the band, not on two numbers differing.** There is no
+    second number in the string to widen against, so the rule is stated one
+    level up: *the rendered value, read back as a float, falls on the same side
+    of the boundary as the true value does* -- below, at, or above, the
+    boundary being its own degenerate band. Both directions of the defect fall
+    out of that one sentence. A value above must not render at the boundary
+    (that reads as a contradiction); a value below must not either (that
+    collides with the rendering of a value above, which is how one string comes
+    to carry two verdicts); and a value that really is at the boundary must
+    render there, because widening it would imply a difference that is not
+    real.
+
+    **Its own loop, and not ``render_comparison(value, boundary)[0]``.** That
+    delegation was the first implementation, on the argument that two
+    renderings differing at width ``w`` must straddle the boundary. The
+    argument is wrong twice, and both were caught by the arms in the test
+    module rather than by reading:
+
+    * **Signed zero.** ``-0.0001`` against a boundary of ``0.0`` renders
+      ``'-0.000'`` while the boundary renders ``'0.000'``. The strings differ,
+      so the pairwise loop stops -- and ``float('-0.000')`` is ``-0.0``, which
+      is *not* below ``0.0``. Two different strings, one value.
+    * **A boundary that is not representable at ``places``.** For
+      ``value == boundary == 0.1004``, the pairwise rule returns the narrow
+      ``'0.100'`` unwidened, which reads back as ``0.1`` -- strictly *below* a
+      boundary the value is exactly *on*.
+
+    Neither is reachable through `drift.py` today (a JSD is non-negative and
+    the shipped thresholds are round), which is the point: this is a public
+    helper in a ``py.typed`` package, and a rule that happens to hold for the
+    current call sites is not the rule it claims to be.
+
+    ``repr`` is the terminal fallback, as in :func:`render_comparison`: it
+    round-trips a double by definition, so it classifies exactly. It is reached
+    only when no fixed width up to :data:`COMPARISON_MAX_PLACES` can separate
+    the value from the boundary.
+
+    ``places`` is the starting width, for the same never-narrow reason
+    :func:`render_comparison` documents. All four call sites in `drift.py`
+    publish three places today and pass the default.
+    """
+    target = _band(value, boundary)
+    for width in range(places, COMPARISON_MAX_PLACES + 1):
+        rendered = f"{value:.{width}f}"
+        if _band(float(rendered), boundary) == target:
+            return rendered
+    return repr(value)

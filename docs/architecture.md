@@ -21,7 +21,9 @@ eval_harness/
 ├── io_utils.py         ← cross-cutting: atomic_write_text (D-015)
 ├── markdown.py         ← cross-cutting: md_table_cell GFM escaper (#130/#134/#142)
 ├── comparison.py       ← cross-cutting: render_comparison, so a decided
-│                          ordering stays readable (#252, D-026)
+│                          ordering stays readable (#252, D-026); and
+│                          render_classified, so a value cannot contradict
+│                          the status beside it (#256, D-028)
 └── __init__.py         ← public surface (#24)
 ```
 
@@ -63,6 +65,43 @@ worse trade than the duplication.
 This module has the same justification `markdown.py` gives for existing:
 that class "kept recurring" because the fix "was written inline at three
 call sites". This one also reached three.
+
+## Cross-cutting — rendering a value beside its own status (#256, D-028)
+
+D-026 covers a gate and the *threshold* it was decided against, both in one
+string. Its population arm requires a threshold to be in that string, and
+four sites in `drift.py` do not have one: the three SVG chart titles and the
+`drift` CLI summary line each publish a JSD score next to its `status` and
+nothing else. The arm's own docstring records that limitation; this is the
+population on the other side of it.
+
+At three places against the shipped `DEFAULT_LENGTH_THRESHOLD = 0.10`, the
+identical string `Length JSD = 0.100` was published with `(drifted)` in one
+run and `(ok)` in another. The `(drifted)` form is self-contradicting rather
+than merely ambiguous: the comparison is strict, so the number claims the
+score is *at* the threshold while the label claims it is *past* it.
+
+`render_classified` widens until the rendered value, read back as a float,
+falls in the same band as the true value — below the boundary, on it, or
+above it. Three levels rather than two, because a "would the verdict flip"
+predicate is satisfied by a below-threshold value rendering *at* the
+threshold, which is exactly the string that collides with an above-threshold
+one.
+
+It keeps its own widening loop rather than delegating to `render_comparison`.
+That delegation was the first implementation and is wrong on signed zero
+(`-0.000` and `0.000` are different strings for the same value) and on a
+boundary that does not survive a round trip at the starting width. Neither is
+reachable through `drift.py` today, which is why a rule stated over the
+current call sites would have been the wrong rule.
+
+Reachability was searched, not argued: ~2M random draws over this module's own
+nine-bucket length histograms produced eight real Jensen-Shannon scores inside
+the colliding band around the shipped default, on both sides, from corpora of
+thirty-odd inputs. Four are committed as a fixture in
+[`tests/test_classified_rendering_matches_status.py`](../tests/test_classified_rendering_matches_status.py)
+and two are carried through `compute_drift` into the rendered title, so the
+arms read the drawn string rather than the computed score.
 
 ## Cross-cutting — copying a free-form JSON field (#254, D-027)
 
