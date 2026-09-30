@@ -1076,3 +1076,62 @@ that cannot distinguish "green" from "did not run" is not a probe.*
 **Reversibility:** Cheap.
 
 **Related issues:** #259, #254, #238, #234, #217, #213
+
+## D-031 — Result records own their containers, whoever built them (2026-09-30)
+**Decision:** `CalibrationResult` takes owned copies of `judge_scores` and `rows`
+(shallow `list(...)` after a shape check and a per-element type check) and
+enforces `n == len(rows) == len(judge_scores)`; `DeltaReport` copies `summary`
+with `copy_json_value` on the way in *and* out of `to_json()`; `StoredRun` copies
+`rows` with `copy_json_value`. Amends D-027.
+
+**Why:** D-027 cleared three of these rows — "`calibrate()` does `list(rows)`",
+"built inside `calibrate()`", "built locally; every `to_json` consumer
+`json.dumps` it". Each reason was true of the one in-package producer and said
+nothing about the class. Both classes are public and hand-built: `render_report`
+and `render_delta_markdown` take them as arguments. So a caller who appended to
+both lists they passed in got "calibration set: 1 rows" above a two-row table,
+appending to one raised `zip() argument 2 is longer` *out of the renderer*, and
+`to_json()` handed out the dict the CLI's exit code reads `n_flagged` from. This
+is yesterday's D-029 lesson — a true statement about today's callers is not a
+contract — pointed backwards at D-027.
+
+Deriving the population instead of taking the issue's three found a fourth row:
+`StoredRun.rows`, which `load_run_result_from_json` *validates* (unique ids,
+finite scores, `n_rows == len(rows)`) and then stored by reference. The arm walks
+every frozen dataclass by `rglob` and is pinned by value at six rows, with
+detector controls so an empty pass cannot read as green.
+
+**Shallow is complete for the two lists only because the elements are checked.**
+`JudgeScore` is frozen with scalar fields; `CalibrationRow` is frozen and owns its
+`provenance` (D-027). An annotation proves nothing, so each element is
+`isinstance`-checked, and a premise arm fails if either element type stops being
+frozen. The shape check runs first because `list("ab")` splats and `list(gen)`
+drains.
+
+**`n` is enforced rather than left to the copy**, because the copy only closes the
+*outside* route to a disagreement. A repo fixture built `n=10, rows=[]` and
+rendered "10 rows" over an empty table; it is `n=0` now.
+
+**What "owned" means is D-027's line, not immutability.** The record stops sharing
+its container with the caller; code holding the record can still edit its own
+attribute. My first `StoredRun` comment claimed `stored.rows.pop()` was
+prevented. It is not, and the comment was rewritten before commit.
+
+**The issue's fourth criterion named an artifact that does not exist.**
+`docs/calibration_report.md` is written only when an operator runs the real CLI.
+The byte-identity check ran on what *is* rendered — `diff-json` in all three
+formats over the demo fixtures, plus a calibration report over
+`fixtures/calibration.jsonl` with a deterministic judge: 5535 bytes, identical.
+
+**Alternatives considered:**
+- Tuples instead of lists — rejected: changes the public annotation and buys immutability, which is not the defect.
+- Deep copy of the two lists — rejected: the element check proves shallow is complete.
+- `dict(summary)` — rejected, built and run, 1 red: `dict[str, Any]` proves nothing about its values.
+- Copy before the shape check — rejected, built and run, 4 red.
+- Leave `n` to the copy — rejected, built and run, 5 red.
+- Inbound-only for `summary` — rejected, built and run, 2 red.
+- Move `n_rows == len(rows)` into `StoredRun.__post_init__` — deferred: `read_run` builds both from one transaction, and a constructor raise there changes the exit-code surface of every `read_run` caller.
+
+**Reversibility:** Cheap.
+
+**Related issues:** #262, #254, #259
