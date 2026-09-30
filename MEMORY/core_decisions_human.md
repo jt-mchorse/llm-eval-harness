@@ -980,3 +980,99 @@ times.
 narrow; unifying at two narrows the comment, unifying at three widens the header,
 and widening is the allowed direction. Nothing in `tests/`, `README.md` or
 `docs/` pinned the old literal — checked before the change, not after.
+
+---
+
+## D-030 — a cycle is preserved by the copier and refused by the walk (2026-09-29)
+
+**Amends D-027.** The deep-copy posture, the "deep over containers rather than
+`copy.deepcopy`" argument and the `dict`/`list`-only container set all stand. One
+thing changes: the copy is iterative, and the walk it feeds learns to describe a
+cycle.
+
+D-027 gave `Example.provenance` a deep copy and wrote it **recursively**, one call
+upstream of `find_unrepresentable` — which is iterative *on purpose*, and whose
+docstring gives the reason:
+
+> a recursive walk would add frames on top of that and could raise
+> `RecursionError` — which is not a `ValueError`, so it would escape a caller's
+> `except ValueError` and abort a collecting validation pass instead of becoming
+> one finding.
+
+The reason was already written down; the copy just did not inherit it.
+`rag-production-kit`'s D-022 ported this function and that repo's own SSE
+totality suite went 8 red on exactly this, which is how the sibling was found.
+
+### The issue's premise was wrong in a way that changed the fix
+
+#259 offered "refusing may be the better answer here, because this package
+*rejects* unrepresentable records at the write seam". Measured at `de38a56`:
+
+| call | result |
+|------|--------|
+| `copy_json_value(<cyclic>)` | `RecursionError` |
+| `copy_json_value(<5000 deep>)` | `RecursionError` |
+| `find_unrepresentable(<cyclic>)` | **did not terminate in 25s** |
+| `find_unrepresentable(<5000 deep>)` | `None` |
+
+**The refusal walker did not terminate either.** It is iterative, so it has no
+`RecursionError` to raise — it pushed onto its stack with no ancestor tracking, so
+a cycle grew both the stack and the path string without bound until the process
+was OOM-killed. My first probe exited 137.
+
+Its own docstring is the argument against it: a `RecursionError` is unacceptable
+because it escapes `except ValueError`. **A hang escapes `except ValueError` too,
+and forever.** The iterative rewrite traded one non-`ValueError` failure for a
+strictly worse one on the same input class. *Ask of any iterative rewrite whether
+it bought termination or only a different way to not terminate.*
+
+### The sequencing is load-bearing
+
+`Example.__post_init__` copies before anything else, so the copy's
+`RecursionError` was **masking** the walker's hang. Porting `rag`'s iterative memo
+copier on its own — the move the issue points at — lets the cyclic record through
+and converts a `RecursionError` into a non-terminating loop. Pinned as
+`test_the_copy_fix_alone_would_not_have_been_shippable`, so a future partial
+revert reads as a regression rather than a simplification.
+
+### Preserve in the copier, refuse at the seam
+
+`rag` preserves *and emits*, because its wire seam may not raise (D-017, "stream
+alive, don't raise"). This package refuses, so the only question was *where*. Not
+in the copier: that would be a second enforcement site with its own message,
+which is the duplication #213/#217/#234/#238 spent four issues collapsing into one
+walk — and the seam's message carries the example id *and* the field path, which a
+copier has neither of. Measured: refusing in the copier, 6 red.
+
+**Ancestors, not a global visited set.** Two keys pointing at one dict is a legal
+DAG that `json.dumps` writes by duplicating the subtree; a `visited` set would
+refuse a record the writer accepts (2 red on the DAG and diamond controls). Only a
+container reachable *from itself* is a cycle.
+
+**An on-path set plus an exit marker, not a fresh `frozenset` per node.** `rag`'s
+`_json_safe` uses the frozenset shape and can afford it because it truncates at
+`_MAX_DEPTH`; this walk has no cap, so that shape is quadratic in depth. Measured
+on a linear chain: 5000 levels 0.005s vs 0.088s, 20000 levels 0.059s vs 1.573s.
+Four times the depth costs 12× here and 18× there — the quadratic showing up, not
+a constant factor. A walk whose cost depends quadratically on a caller's nesting
+is the same class of host-dependent boundary the iterative rewrite existed to
+remove.
+
+### Two things worth keeping about the process
+
+The repo's own kind-coverage lock caught the fifth axis arriving exactly as it did
+the fourth: `test_every_kind_the_walk_can_return_has_a_reason` went red at the
+*discovery* the moment `CIRCULAR_REFERENCE` entered `_ALL_KINDS`, rather than at
+some later caller printing a wrong sentence.
+
+And **my probe harness reported 0 red for three real regressions.** Two causes.
+`pytest --collect-only -q` prints `path: count` in this version rather than ids, so
+the id list was empty and every probe looped zero times. And a *hanging* arm makes
+`pytest-timeout` abort the whole session with an `INTERNALERROR` and zero `FAILED`
+lines, which a summary parser reads as clean. The fix is one subprocess per test
+id with its own timeout, so a hang is a result rather than a dead run. *A probe
+that cannot distinguish "green" from "did not run" is not a probe.*
+
+**Reversibility:** Cheap.
+
+**Related issues:** #259, #254, #238, #234, #217, #213

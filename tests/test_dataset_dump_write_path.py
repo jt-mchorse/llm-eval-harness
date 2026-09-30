@@ -460,6 +460,7 @@ def test_dump_jsonl_calls_the_shared_walk_rather_than_restating_the_rules() -> N
         "dataset values must be finite",
         "has the non-string object key",
         "which `json.dumps` cannot emit faithfully",
+        "that contains itself",
     ],
 )
 def test_each_reason_is_written_once(fragment: str) -> None:
@@ -481,7 +482,9 @@ def test_every_kind_the_walk_can_return_has_a_reason() -> None:
     unhandled — the fallthrough this function raises on. The floor asserts the
     discovery found something, so a rename cannot make this test vacuous.
     """
-    assert len(_ALL_KINDS) >= 4
+    assert len(_ALL_KINDS) >= 5
+    cyclic: dict[str, Any] = {}
+    cyclic["self"] = cyclic
     samples: dict[str, dict[str, Any]] = {
         "unencodable": {"f": LONE},
         "non_finite": {"f": math.inf},
@@ -490,6 +493,11 @@ def test_every_kind_the_walk_can_return_has_a_reason() -> None:
         # set was 3 and `_ALL_KINDS` became 4, so the run went red at the
         # discovery rather than at some later caller printing a wrong sentence.
         "unserializable_type": {"f": (1, 2)},
+        # #259, and the lock did it again — the fifth axis arrived and this went
+        # red at the discovery. Unlike the four above, the harm was not what
+        # `json.dumps` does with the value: it was that this walk could not
+        # terminate on it, so no caller ever got as far as a message.
+        "circular_reference": {"f": cyclic},
     }
     assert set(samples) == set(_ALL_KINDS), (
         "a representability kind has no sample here; add one and a reason in "

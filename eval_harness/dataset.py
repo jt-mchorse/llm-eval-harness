@@ -46,6 +46,7 @@ from pathlib import Path
 from typing import Any, ClassVar
 
 from eval_harness.io_utils import (
+    CIRCULAR_REFERENCE,
     NON_FINITE,
     NON_STRING_KEY,
     UNENCODABLE,
@@ -539,6 +540,16 @@ def _find_unrepresentable(record: dict[str, Any]) -> tuple[str, str] | None:
             "no id and no field. Store the JSON shape you mean, a list or a "
             "string, rather than letting the writer pick one for you (D-022: "
             "a lossy write no reader can detect is refused, not performed)"
+        )
+    if kind == CIRCULAR_REFERENCE:
+        return path or "(record root)", (
+            f"is a {detail} that contains itself; `json.dumps` raises "
+            "`ValueError: Circular reference detected`, so unlike the four kinds "
+            "above this one is loud rather than lossy. It is refused here because "
+            "the walk that describes a record could not *reach* that error: "
+            "`find_unrepresentable` is iterative and had no ancestor tracking, so "
+            "a cycle grew its stack and its path string without bound until the "
+            "process died (#259). Break the cycle, or store the shape you mean"
         )
     # Every kind `find_unrepresentable` can return must be spelled out here.
     # A fallthrough `return` would hand a *new* axis whichever message happens

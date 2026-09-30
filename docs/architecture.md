@@ -210,6 +210,44 @@ here. Two were real; the other four are pinned by name in
 `tests/test_frozen_record_provenance_aliasing.py` so a re-run of that sweep
 does not re-file them.
 
+
+## Cross-cutting — a cycle in a free-form JSON field (#259, D-030)
+
+D-027 put the deep copy at the constructor and wrote it **recursively**, one call
+upstream of `find_unrepresentable` — which is iterative *on purpose*, because a
+`RecursionError` "is not a `ValueError`, so it would escape a caller's
+`except ValueError`". The reason was already written down; the copy did not
+inherit it, and `Example(provenance=<cyclic>)` raised `RecursionError` out of its
+own constructor.
+
+**The walk had the same hole, in a worse form.** Being iterative, it had no
+`RecursionError` to raise — and with no ancestor tracking, a cycle grew both its
+stack and its path string without bound until the process was OOM-killed. A hang
+escapes `except ValueError` too, and forever.
+
+| call | at `de38a56` |
+|------|--------------|
+| `copy_json_value(<cyclic>)` | `RecursionError` |
+| `find_unrepresentable(<cyclic>)` | did not terminate in 25s |
+
+Because `__post_init__` copies first, the copy's `RecursionError` was **masking**
+the walk's hang — so porting the sibling repo's iterative copier on its own would
+have traded one for the other. Both halves ship together, and an arm says so.
+
+The cycle is **preserved** by the copier and **refused** by the walk, as a fifth
+representability kind. `rag-production-kit` preserves *and emits*, because its
+wire seam may not raise (its D-017); this package refuses, so the only question
+was where — and a copier that refused would be a second enforcement site with
+neither the example id nor the field path that the seam's message carries.
+
+Two implementation choices with measurements behind them. **Ancestors, not a
+global visited set**: two keys pointing at one dict is a legal DAG that
+`json.dumps` writes by duplicating the subtree, and a `visited` set would refuse a
+record the writer accepts. **An on-path set plus an exit marker, not a fresh
+`frozenset` per node**: the frozenset shape is what `rag`'s `_json_safe` uses and
+can afford behind a `_MAX_DEPTH` cap; this walk has no cap, and the shape is
+quadratic in depth — 20000 levels costs 0.059s one way and 1.573s the other.
+
 ## Layer 1 — Dataset (#1)
 
 `Dataset` and `Example` dataclasses with strict load/dump semantics.
