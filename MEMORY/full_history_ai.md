@@ -3134,3 +3134,21 @@ context_for_next_session:
   - BRANCH_NOTE_263_265_ALSO_OPEN_this_one_touches_README_and_tests_only_MEMORY_conflicts_only
 followups: []
 ---
+
+session: 2026-09-30T09:36:42Z
+issue: 269
+focus: THE_ONE_OUTPUT_EXAMPLE_THAT_WROTE_INTO_THE_CHECKOUT
+phase: shipped
+duration_min: 1
+delta:
+  files_changed: 3
+  tests_added: 1
+  suite: "1976 green; ruff check and ruff format --check clean"
+decisions_made: []
+measured: "fresh clone plus the documented validate command left an untracked report.json in the repo root; revert of the README line 1 red of 8 in test_readme_snapshot.py"
+context_for_next_session:
+  - FOUND_BY_A_FRESH_CLONE_QUICKSTART_AUDIT_the_only_bash_fence_output_path_not_under_tmp_the_others_tmp_delta_json_and_tmp_drift_html_already_were_SAME_CLASS_AS_pyasync_120
+  - THE_ARM_STRIPS_SHELL_COMMENTS_FIRST_because_line_258_says_exit_2_leaves_dash_dash_out_untouched_and_a_naive_regex_reads_untouched_as_a_path
+  - docs_calibration_report_md_IS_WRITTEN_INTO_THE_CHECKOUT_BY_DESIGN_a_real_calibrate_run_is_meant_to_be_committed_README_610_DO_NOT_FILE
+  - installing_only_dev_then_every_example_runs_and_calibrate_without_the_judge_extra_prints_a_one_line_install_hint_THE_AUDITS_DEV_ONLY_FINDING_DID_NOT_REPRODUCE
+followups: []
