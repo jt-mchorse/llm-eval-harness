@@ -571,7 +571,13 @@ def render_report(
     # "0.600" and "0.6", so the report contradicted its own verdict (#252). Both
     # go through `render_comparison`, which also matches their precision.
     pass_fail = "PASS" if result.cohens_kappa >= threshold_kappa else "FAIL"
-    rendered_kappa, rendered_threshold = render_comparison(result.cohens_kappa, threshold_kappa)
+    # `threshold_kappa` is the operator's `--threshold-kappa`, so it must read
+    # back as itself and not merely differ from κ: the pairwise loop stops at
+    # three places, which published a configured 0.6004 as `0.600` in the line
+    # that states this report's policy (#257).
+    rendered_kappa, rendered_threshold = render_comparison(
+        result.cohens_kappa, threshold_kappa, exact_other=True
+    )
     lines = [
         "# Judge calibration report",
         "",

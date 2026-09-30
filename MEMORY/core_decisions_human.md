@@ -898,3 +898,85 @@ rendering equally make no false claim. `threshold_drop` is #257.
 **Reversibility:** Cheap.
 
 **Related issues:** #256, #252, #257
+
+---
+
+## D-029 — a configured parameter is echoed back as the value that was set (2026-09-29)
+
+**Context.** `eval_harness.comparison` already held two renderers. D-026 covers a
+*decided comparison* — two numbers and an ordering stated between them — and
+D-028 covers a *value beside its own classification* — one number and a verdict,
+with no threshold in the string. #257 is the third shape in the family and the
+only one that is not a comparison at all: **one number and nothing else**, the
+policy input an operator typed, echoed back at a fixed width.
+
+```python
+# runner.py:789 — the ASCII/Markdown delta header
+f"(suite={report.suite}, threshold_drop={report.threshold_drop:.2f})"
+
+# comment.py:90 — the sticky PR comment
+f"· threshold drop: `{report.threshold_drop:.3f}`"
+```
+
+`--threshold-drop` is `type=float` with no width constraint. `0.0125` was
+published as `0.01` in one place and `0.013` in the other, in the same CI run,
+for the same number.
+
+**The harm is not a sentence contradicting itself.** It is the tool misreporting
+its own configuration. `--threshold-drop 0.001` printed as `threshold_drop=0.00`
+does not read as ambiguous — it reads as *the strictest setting the flag has*,
+the opposite end of the range from what was asked for. A measurement has a
+near-threshold case; a configured value does not. It is the number that was set,
+or it is wrong.
+
+**The population is eight sites, and the issue named two.** Six more reach
+`render_comparison` as its *second* operand — `calibration.render_report`'s
+threshold bullet, the `::error::` κ annotation in `cli.py`, the pytest plugin's
+assertion message, and the three Threshold cells of `drift.render_html`. That
+loop stops as soon as the two strings differ, so a configured `0.6004` against a
+κ of `0.9` publishes `threshold 0.600`: a policy nobody set, and one under which
+a future κ of `0.6002` reads as passing against the threshold the report itself
+printed. Four of five probe pairs narrowed the configured side.
+
+That half was invisible because **every shipped default in this package is a
+round number** — `DEFAULT_THRESHOLD_DROP = 0.1`, the three drift thresholds,
+`--threshold-kappa 0.6`. All of them round-trip at their published width, so the
+defect needs an operator who configured something, and the test suite never did.
+It is D-026's `cli.py` lesson one level up: "the side that happens to carry the
+long expansion" is now "the side that happens to be round".
+
+**Decision.** `render_configured(value, *, places)` widens from the caller's
+published width until `float(rendered) == value`, with `repr` as the terminal
+fallback. `render_comparison` gains `exact_other`, which adds the same
+requirement to the threshold side of a pair while keeping both operands at one
+shared precision.
+
+**The lesson worth keeping: my first end-to-end arms were green against a
+call-site revert, and the orientation is why.** The calibration arm used κ =
+0.6002 against a threshold of 0.6004 — a *near-threshold* pair, which is D-026's
+shape. The plain pairwise loop already widens to four places there, so the
+configured side came out exact by accident and the revert was 1 red (the AST
+population arm alone). Rebuilt on κ = 0.9 — a measurement nowhere near the
+threshold — the same revert went 3 red. **The orientation that exposes this class
+is the opposite of the one that exposes D-026, and it is the ordinary case, not
+the corner one.** That distinction is now pinned as an arm of its own.
+
+**Rejected.** `repr` and `:g`, which both round-trip and both *narrow* `0.100` to
+`0.1` — the exact regression `test_demo_drift_published_values.py` caught in
+D-026 — and `:g` additionally prints `1e-05` in a line a human reads (10 and 13
+red). A wider fixed width (15 red): for any width there is a legal
+`--threshold-drop` one digit finer. Delegating to `render_comparison(v, v)[0]`
+(21 red): the pairwise stopping condition is about *two* numbers. Unifying both
+surfaces at two places (3 red): it buys "same precision" by narrowing the PR
+comment. Widening only the configured side (10 red): that is `cli.py`'s pre-#252
+mixed-precision shape, which states an ordering that is false as written.
+Refusing a fine-grained threshold at parse time: rejected on principle, not
+deferred — `0.0125` is a legitimate policy, and making the tool less capable to
+make its message correct is the same trade this portfolio has rejected five
+times.
+
+**The one deliberate change to published output.** The ASCII header widens
+`0.10` → `0.100`. The two surfaces have to share a precision and neither may
+narrow; unifying at two narrows the comment, unifying at three widens the header,
+and widening is the allowed direction. Nothing in `tests/`, `README.md` or
+`docs/` pinned the old literal — checked before the change, not after.

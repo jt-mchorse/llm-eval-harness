@@ -22,6 +22,7 @@ import os
 from typing import Any
 from urllib import error, request
 
+from eval_harness.comparison import render_configured
 from eval_harness.markdown import md_code_cell, md_code_span, md_table_cell
 from eval_harness.runner import DeltaReport, RowDelta
 
@@ -84,10 +85,14 @@ def render_delta_markdown(report: DeltaReport) -> str:
     # The run ids load from the delta JSON (hand-editable); a backtick in the
     # first 8 chars breaks these code spans just like the suite heading above.
     # `threshold_drop` is a formatted float — no backtick possible — so it stays raw.
+    # It is also the operator's configured `--threshold-drop`, and a fixed `.3f`
+    # republished `0.0125` as `0.013` here while the ASCII header said `0.01`
+    # (#257). `render_configured` widens from three places only as far as the
+    # round trip requires, so the shipped default still publishes `0.100`.
     lines.append(
         f"_current_ {md_code_span(report.current_run_id[:8])} "
         f"vs _baseline_ {md_code_span(report.baseline_run_id[:8])} "
-        f"· threshold drop: `{report.threshold_drop:.3f}`"
+        f"· threshold drop: `{render_configured(report.threshold_drop)}`"
     )
     lines.append("")
 

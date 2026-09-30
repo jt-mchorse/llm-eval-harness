@@ -1252,8 +1252,14 @@ def render_html(report: DriftReport) -> str:
         # *unformatted* threshold. At a near-threshold JSD that published
         # `0.6000` beside `0.6` with a `drifted` status -- the mixed-precision
         # half of #252, where the row reads as though the status were wrong.
+        # `exact_other` because the Threshold cell is a *configured* number --
+        # `DriftThresholds` as the caller set them. The pairwise loop stops as
+        # soon as the two cells differ, so a caller-set 0.10004 published as
+        # `0.1000`: a threshold column stating a policy that is not in force
+        # (#257). The three shipped defaults are round and round-trip at four
+        # places, so the committed report is unchanged.
         judge_score_cell, judge_threshold_cell = render_comparison(
-            report.judge.drift_score, report.judge.threshold, places=4
+            report.judge.drift_score, report.judge.threshold, places=4, exact_other=True
         )
         judge_row = (
             f"<tr><td>judge</td><td>{judge_score_cell}</td>"
@@ -1338,10 +1344,10 @@ def render_html(report: DriftReport) -> str:
     # Same three-cells-one-comparison shape as the judge row above, for the two
     # axes that are always present (#252).
     length_score_cell, length_threshold_cell = render_comparison(
-        report.length.drift_score, report.length.threshold, places=4
+        report.length.drift_score, report.length.threshold, places=4, exact_other=True
     )
     embedding_score_cell, embedding_threshold_cell = render_comparison(
-        report.embedding.drift_score, report.embedding.threshold, places=4
+        report.embedding.drift_score, report.embedding.threshold, places=4, exact_other=True
     )
     return (
         '<!doctype html><html lang="en"><head><meta charset="utf-8">'
