@@ -29,10 +29,12 @@ from __future__ import annotations
 import json
 import math
 import subprocess
+from collections.abc import Container
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol
 
+from eval_harness.calibration import _require_correlation_range
 from eval_harness.comparison import render_configured
 from eval_harness.dataset import Dataset, Example, filter_examples_by_tags, load_jsonl
 from eval_harness.io_utils import copy_json_value
@@ -96,6 +98,34 @@ class RunResult:
     git_sha: str | None
     rows: tuple[RowScore, ...]
 
+    def __post_init__(self) -> None:
+        # The write-side half of every rule `load_run_result_from_json` states
+        # (#264, D-032). This class is what `render_run_json` serialises, and
+        # without these a record could be written that the same module then
+        # refused to read -- `run_suite` did exactly that for a NaN or bool
+        # `judge_kappa`. One definition per rule, shared with the reader; see the
+        # block of `_check*` helpers above the reader.
+        _checked_run_id(self.run_id)
+        _checked_mean_score(self.mean_score)
+        _checked_judge_kappa(self.judge_kappa)
+        # Shape before the per-row loop and the copy: a `str` is iterable, and
+        # `tuple("ab")` would hand the loop two characters.
+        if not isinstance(self.rows, (list, tuple)):
+            raise TypeError(f"rows must be a tuple of RowScore; got {type(self.rows).__name__}")
+        seen: set[str] = set()
+        for index, row in enumerate(self.rows):
+            if not isinstance(row, RowScore):
+                raise TypeError(f"rows[{index}] must be a RowScore; got {type(row).__name__}")
+            _check_example_id(row.example_id)
+            _check_unique_example_id(row.example_id, seen)
+            seen.add(row.example_id)
+            _checked_row_score(row.score, row.example_id)
+        _check_n_rows(self.n_rows, len(self.rows))
+        # Validated, so owned (the D-019 pair D-031 pinned in this package): a
+        # caller's list would otherwise let every check above become a snapshot.
+        # `RowScore` is frozen with scalar fields, so a tuple is the whole depth.
+        object.__setattr__(self, "rows", tuple(self.rows))
+
     def to_json(self) -> dict[str, Any]:
         return {
             "run_id": self.run_id,
@@ -124,6 +154,11 @@ class RunSpec:
     judge_kappa: float | None = None
     rubric: str = FAITHFULNESS_RUBRIC
     tags: tuple[str, ...] = ()  # set-union filter on Example.tags; () = no filter
+
+    def __post_init__(self) -> None:
+        # Checked here, before `run_suite` spends a judge call per row, rather
+        # than only when the finished `RunResult` is built (#264, D-032).
+        _checked_judge_kappa(self.judge_kappa)
 
 
 def _require_number(value: Any, field_name: str) -> int | float | str:
@@ -855,6 +890,100 @@ def render_delta_ascii(report: DeltaReport) -> str:
     return "\n".join(lines) + "\n"
 
 
+# ----------------------------------------------------------------------
+# The run record's rules, one definition each, for both paths (#264, D-032)
+# ----------------------------------------------------------------------
+#
+# Each of these was written inline in `load_run_result_from_json`, one issue at
+# a time (#83, #116, #150, #185, #186, #190), and the *write* path had none of
+# them: `RunResult` had no `__post_init__` and `run_suite` copied
+# `RunSpec.judge_kappa` into both stores unchecked. So `judge_kappa=nan` wrote a
+# bare `NaN` token that this module's own reader refuses -- and a `NULL` into
+# SQLite, because SQLite stores NaN as NULL, so the same run read back as "no
+# κ" from the database. Extracted verbatim, messages unchanged, and called from
+# both sides; `test_the_writer_enforces_every_rule_the_reader_states` fails if
+# the reader gains a rule the writer does not share.
+
+
+def _check_example_id(example_id: Any) -> str:
+    if not isinstance(example_id, str) or not example_id:
+        raise ValueError(
+            f"example_id must be a non-empty string; got {example_id!r} — a "
+            "null/non-string example_id crashes diff_runs' sorted() join with a "
+            "raw TypeError and renders as a literal 'None' in the posted PR comment"
+        )
+    return example_id
+
+
+def _check_unique_example_id(example_id: str, seen: Container[str]) -> None:
+    if example_id in seen:
+        raise ValueError(
+            f"duplicate example_id {example_id!r} in run rows; ids must be unique within a run"
+        )
+
+
+def _checked_row_score(value: Any, example_id: str) -> float:
+    score = float(_require_number(value, "score"))
+    if not math.isfinite(score):
+        raise ValueError(
+            f"non-finite score {score} for example_id {example_id!r}; scores must be "
+            "finite — a NaN/Infinity row score silently disables the regression gate "
+            "(its delta is classified 'unchanged' and never flagged)"
+        )
+    return score
+
+
+def _check_n_rows(declared: Any, actual: int) -> int:
+    n_rows_declared = _require_int(declared, "n_rows")
+    if n_rows_declared != actual:
+        raise ValueError(
+            f"n_rows {n_rows_declared} disagrees with the actual row count "
+            f"{actual}; a mismatch signals a corrupt or incompatible payload and "
+            "would corrupt the per-example deltas diff_runs computes off rows"
+        )
+    return n_rows_declared
+
+
+def _checked_mean_score(value: Any) -> float:
+    mean_score = float(_require_number(value, "mean_score"))
+    if not math.isfinite(mean_score):
+        raise ValueError(
+            f"non-finite mean_score {mean_score}; mean_score must be finite — a "
+            "NaN/Infinity value corrupts the mean_delta diff_runs computes"
+        )
+    return mean_score
+
+
+def _checked_run_id(value: Any) -> str:
+    if not isinstance(value, str) or not value:
+        raise ValueError(
+            f"run_id must be a non-empty string; got {value!r} — a null/empty run_id "
+            "crashes the delta renderers' run_id[:8] slice with a raw TypeError"
+        )
+    return value
+
+
+def _checked_judge_kappa(value: Any) -> float | None:
+    """`None`, or a finite κ in `[-1, 1]`.
+
+    The range is new with #264 and is the calibration report's own bound
+    (`_require_correlation_range`, #204) -- this field *is* that κ, carried on
+    the run record, and it accepted `1.5` on both paths. Every committed
+    fixture, example and test value is in `0.71..0.82`.
+    """
+    if value is None:
+        return None
+    kappa = float(_require_number(value, "judge_kappa"))
+    if not math.isfinite(kappa):
+        raise ValueError(
+            f"non-finite judge_kappa {kappa}; judge_kappa must be finite when "
+            "present — a NaN/Infinity value egresses as an invalid bare NaN token in the "
+            "run JSON the dashboard reads"
+        )
+    _require_correlation_range(kappa, "judge_kappa")
+    return kappa
+
+
 def load_run_result_from_json(path: str | Path) -> StoredRun:
     """Read a `RunResult.to_json()` payload from disk; return as `StoredRun`.
 
@@ -903,22 +1032,14 @@ def load_run_result_from_json(path: str | Path) -> StoredRun:
         # CLI catch blocks honor for ValueError/KeyError but not TypeError. A
         # numeric id similarly slips through and renders wrong downstream. Reject
         # a non-string/empty example_id loudly, same loader guard as `run_id`.
-        if not isinstance(example_id, str) or not example_id:
-            raise ValueError(
-                f"example_id must be a non-empty string; got {example_id!r} — a "
-                "null/non-string example_id crashes diff_runs' sorted() join with a "
-                "raw TypeError and renders as a literal 'None' in the posted PR comment"
-            )
+        _check_example_id(example_id)
         # Reject duplicates loudly rather than silently overwriting the earlier
         # row — a silent dict-overwrite would drop a score and leave `n_rows`
         # (read from the payload below) disagreeing with `len(rows)`, corrupting
         # the per-example deltas `diff_runs` computes off `rows`. Mirrors the
         # uniqueness contract `dataset.load_jsonl` already enforces on ids.
-        if example_id in rows:
-            raise ValueError(
-                f"duplicate example_id {example_id!r} in run rows; ids must be unique within a run"
-            )
-        score = float(_require_number(r["score"], "score"))
+        _check_unique_example_id(example_id, rows)
+        score = _checked_row_score(r["score"], example_id)
         # A non-finite score (NaN / +/-Infinity) is corruption, not a measurement.
         # `json.loads` parses the bare `NaN`/`Infinity` tokens natively, so an
         # externally-produced or hand-edited artifact can carry one. It must not
@@ -929,12 +1050,6 @@ def load_run_result_from_json(path: str | Path) -> StoredRun:
         # for that row. Same failure mode the #42 `threshold_drop` finiteness
         # guard closes, here on the data side. Fail loud, like the duplicate-id
         # guard above.
-        if not math.isfinite(score):
-            raise ValueError(
-                f"non-finite score {score} for example_id {example_id!r}; scores must be "
-                "finite — a NaN/Infinity row score silently disables the regression gate "
-                "(its delta is classified 'unchanged' and never flagged)"
-            )
         rows[example_id] = (score, str(r.get("reasoning", "")))
     # `n_rows` is load-bearing the same way: `cli` renders it as the `n=` column
     # of the run table and `runs.py` persists it to SQLite. The duplicate-id guard
@@ -949,13 +1064,7 @@ def load_run_result_from_json(path: str | Path) -> StoredRun:
     # and an infinite `1e400` raised OverflowError past the CLI's exit-2 translation
     # (#190).
     if "n_rows" in payload:
-        n_rows_declared = _require_int(payload["n_rows"], "n_rows")
-        if n_rows_declared != len(rows):
-            raise ValueError(
-                f"n_rows {n_rows_declared} disagrees with the actual row count "
-                f"{len(rows)}; a mismatch signals a corrupt or incompatible payload and "
-                "would corrupt the per-example deltas diff_runs computes off rows"
-            )
+        _check_n_rows(payload["n_rows"], len(rows))
     # `mean_score` is load-bearing: `diff_runs` computes `mean_delta` directly
     # off it (current - baseline), and `RunResult.to_json` always emits it. A
     # silent `.get("mean_score", 0.0)` made an absent field indistinguishable
@@ -970,16 +1079,11 @@ def load_run_result_from_json(path: str | Path) -> StoredRun:
             "payload — refusing to default it to 0.0, which would silently corrupt "
             "the mean_delta diff_runs computes"
         )
-    mean_score = float(_require_number(payload["mean_score"], "mean_score"))
+    mean_score = _checked_mean_score(payload["mean_score"])
     # `mean_score` feeds `diff_runs`' `mean_delta` (current - baseline) directly;
     # a non-finite value (parseable from a raw NaN/Infinity JSON token) propagates
     # NaN into the summary the PR comment renders and the dashboard reads. Reject
     # it loudly, same finiteness contract as the per-row scores above.
-    if not math.isfinite(mean_score):
-        raise ValueError(
-            f"non-finite mean_score {mean_score}; mean_score must be finite — a "
-            "NaN/Infinity value corrupts the mean_delta diff_runs computes"
-        )
     # `run_id` is required (bracket access → KeyError → exit 2 when missing), but
     # a present-but-null value passed straight through to `StoredRun.run_id`, then
     # to `DeltaReport.current_run_id`, where `render_delta_ascii`/`render_delta_markdown`
@@ -987,12 +1091,7 @@ def load_run_result_from_json(path: str | Path) -> StoredRun:
     # documented exit-2 clean-failure contract the CLI catch blocks honor for
     # ValueError/KeyError but not TypeError. Reject a non-string/empty run_id loudly,
     # same finiteness-style loader guard as `mean_score`/`n_rows` above.
-    run_id = payload["run_id"]
-    if not isinstance(run_id, str) or not run_id:
-        raise ValueError(
-            f"run_id must be a non-empty string; got {run_id!r} — a null/empty run_id "
-            "crashes the delta renderers' run_id[:8] slice with a raw TypeError"
-        )
+    run_id = _checked_run_id(payload["run_id"])
     # `judge_kappa` is the one numeric field this loader read by a bare `.get()`,
     # skipping the `_require_number` + finiteness contract its siblings (`mean_score`,
     # `n_rows`, per-row `score`) all enforce. It is optional (`float | None`), so a
@@ -1004,15 +1103,7 @@ def load_run_result_from_json(path: str | Path) -> StoredRun:
     # strict JSON parsers (the dashboard, `jq`, browser `JSON.parse`) reject. Same
     # finiteness rationale as the `mean_score` guard above, mirrored for the optional
     # `mean_delta` field in `DeltaReport.from_json`.
-    judge_kappa_raw = payload.get("judge_kappa")
-    if judge_kappa_raw is not None:
-        judge_kappa_raw = float(_require_number(judge_kappa_raw, "judge_kappa"))
-        if not math.isfinite(judge_kappa_raw):
-            raise ValueError(
-                f"non-finite judge_kappa {judge_kappa_raw}; judge_kappa must be finite when "
-                "present — a NaN/Infinity value egresses as an invalid bare NaN token in the "
-                "run JSON the dashboard reads"
-            )
+    judge_kappa_raw = _checked_judge_kappa(payload.get("judge_kappa"))
     return StoredRun(
         run_id=run_id,
         started_at=payload["started_at"],
