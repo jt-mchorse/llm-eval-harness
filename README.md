@@ -142,6 +142,11 @@ ANTHROPIC_API_KEY=sk-... eval-harness calibrate
 # → exits non-zero if Cohen's κ < 0.6
 ```
 
+Every variable a live run reads is listed in [`.env.example`](.env.example):
+the key, `EVAL_HARNESS_JUDGE_MODEL` (the model the judge scores with, default
+`claude-haiku-4-5-20251001`), and the token `eval-harness comment` posts with.
+Copy it to `.env` (gitignored) and `set -a; . ./.env; set +a`.
+
 (Scripts that already invoke the legacy `eval-harness judge calibrate`
 form still work — it's a hidden backwards-compat alias; canonical is
 the top-level `calibrate` subcommand.)
