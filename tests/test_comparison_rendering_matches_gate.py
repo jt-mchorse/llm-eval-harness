@@ -317,7 +317,7 @@ def test_an_ordinary_pytest_assertion_is_unchanged(pytester: pytest.Pytester) ->
 
 def _report(kappa: float, threshold: float) -> str:
     return render_report(
-        CalibrationResult(n=10, cohens_kappa=kappa, pearson_r=0.8, judge_scores=[], rows=[]),
+        CalibrationResult(n=0, cohens_kappa=kappa, pearson_r=0.8, judge_scores=[], rows=[]),
         judge_model="stub-model",
         threshold_kappa=threshold,
     )

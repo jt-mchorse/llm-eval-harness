@@ -23,8 +23,9 @@ this module declares repeatedly — "calibration-side analog of
 on" — false on exactly this field.
 
 Triaged from the `portfolio-ops#71` worklist, which listed **six** candidates
-in this package. Two were real; the four that were not are pinned at the bottom
-of this module so a later sweep does not re-file them.
+in this package. Two were real; the ones that were not are pinned at the bottom
+of this module so a later sweep does not re-file them (three of the four
+originally cleared were re-opened by #262 -- see that arm).
 
 The arms below are built so the fix's own defect class cannot pass them: the
 central one asserts the copy is deep, because a *shallow* copy is what was
@@ -40,11 +41,9 @@ from typing import Any
 
 import pytest
 
-from eval_harness.calibration import CalibrationResult, CalibrationRow, calibrate
+from eval_harness.calibration import CalibrationRow
 from eval_harness.dataset import Dataset, Example, ExpectedOutput, load_jsonl
 from eval_harness.io_utils import copy_json_value
-from eval_harness.judge import JudgeScore
-from eval_harness.runner import DeltaReport
 
 
 def _example(provenance: dict[str, Any]) -> Example:
@@ -235,74 +234,36 @@ def test_to_dict_no_longer_reshapes_a_non_object_provenance() -> None:
 
 
 # ----------------------------------------------------------------------
-# The four cleared rows — recorded so a later sweep does not re-file them
+# The cleared row — recorded so a later sweep does not re-file it
 # ----------------------------------------------------------------------
 
 
-def test_calibration_result_does_not_alias_the_callers_row_list() -> None:
-    """`portfolio-ops#71` rows 1 and 2, measured as false positives.
+def test_the_cleared_row_is_named_so_a_resweep_does_not_re_file_it() -> None:
+    """One of the six `portfolio-ops#71` candidates in this package is not a
+    defect. The sweep re-runs and will list it again; this is where the triage
+    result lives so nobody re-derives it.
 
-    `calibrate` is the only construction site and does `rows_list = list(rows)`,
-    so `CalibrationResult.rows` is a list the caller never held. `judge_scores`
-    is built inside the same function. The sweep's source-level rule cannot see
-    either fact, which is exactly why it documents a `GAP` as a candidate.
+    This arm used to clear **four**. Three of them --
+    `CalibrationResult.rows`, `CalibrationResult.judge_scores` and
+    `DeltaReport.summary` -- were cleared as "built inside `calibrate()`" and
+    "built locally by `diff_runs`", which was true of those two functions and
+    said nothing about the classes: both are public and hand-built (a caller of
+    `render_report` / `render_delta_markdown` constructs one), and
+    `DeltaReport.to_json()` handed out the record's own `summary`. They are
+    owned now (#262, D-031) and their arms live in
+    `tests/test_frozen_record_result_ownership.py`.
+
+    `pytest_plugin._EvalSpec.answer_source` is an `Any` holding a callable taken
+    from a pytest marker, not a container. It is asserted by name rather than by
+    behaviour, because "is not a mutable container" is a fact about the field's
+    contract rather than something to exercise.
     """
+    from eval_harness.pytest_plugin import _EvalSpec
 
-    class _FakeJudge:
-        def score(self, prompt: str, response: str, *, rubric: str) -> JudgeScore:
-            return JudgeScore(score=0.5, reasoning="r", raw="{}")
-
-    rows = [_row({"a": 1}) for _ in range(3)]
-    result = calibrate(_FakeJudge(), rows)
-    rows.append(rows[0])
-    assert len(result.rows) == 3
-    assert result.rows is not rows
-    assert len(result.judge_scores) == 3
-
-
-def test_delta_report_summary_is_built_locally_not_taken_from_a_caller() -> None:
-    """`portfolio-ops#71` row 4, measured as not reachable.
-
-    `diff_runs` builds `summary` as a literal. `to_json()` does return the live
-    dict rather than a copy, and this arm pins that it is not *exploited*: every
-    consumer in the package (`cli.py` twice, `runner.py` once) hands the result
-    straight to `json.dumps`. Recorded rather than fixed, so the change stays on
-    the reachable defect — and asserted rather than asserted-about, so the day a
-    consumer starts mutating it, this is the arm that notices.
-    """
-    report = DeltaReport(
-        current_run_id="c",
-        baseline_run_id="b",
-        suite="s",
-        threshold_drop=0.1,
-        rows=(),
-        summary={"n_flagged": 3},
-    )
-    payload = report.to_json()
-    assert payload["summary"] == {"n_flagged": 3}
-    assert json.dumps(payload)  # the only thing every in-package consumer does
-
-
-def test_the_cleared_rows_are_named_so_a_resweep_does_not_re_file_them() -> None:
-    """Four of the six `portfolio-ops#71` candidates in this package are not
-    defects. The sweep re-runs and will list them again; this is where the
-    triage result lives so nobody re-derives it.
-
-    `pytest_plugin._EvalSpec.answer_source` is the fourth: an `Any` holding a
-    callable taken from a pytest marker, not a container. It is asserted here by
-    name rather than by behaviour, because "is not a mutable container" is a
-    fact about the field's contract rather than something to exercise.
-    """
     cleared = {
-        "calibration.CalibrationResult.rows": "calibrate() does list(rows); caller never holds it",
-        "calibration.CalibrationResult.judge_scores": "built inside calibrate()",
         "pytest_plugin._EvalSpec.answer_source": "an Any holding a callable, not a container",
-        "runner.DeltaReport.summary": "built locally; every to_json consumer json.dumps it",
     }
-    assert len(cleared) == 4
-    assert all(reason for reason in cleared.values())
+    assert len(cleared) == 1
     # Guard against the worklist's own failure mode: a name here that no longer
     # exists would leave a stale exemption nobody notices.
-    assert hasattr(CalibrationResult, "__dataclass_fields__")
-    assert {"rows", "judge_scores"} <= set(CalibrationResult.__dataclass_fields__)
-    assert "summary" in DeltaReport.__dataclass_fields__
+    assert "answer_source" in _EvalSpec.__dataclass_fields__

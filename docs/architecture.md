@@ -206,9 +206,9 @@ record back out", so there is no outbound half, and inventing one for
 symmetry would be a guard with no harm to name.
 
 Triaged from the `portfolio-ops#71` worklist, which listed six candidates
-here. Two were real; the other four are pinned by name in
-`tests/test_frozen_record_provenance_aliasing.py` so a re-run of that sweep
-does not re-file them.
+here. Two were real. Four were cleared, and three of those four were re-opened
+by #262 (D-031, below) — only `_EvalSpec.answer_source` is still pinned as
+cleared in `tests/test_frozen_record_provenance_aliasing.py`.
 
 
 ## Cross-cutting — a cycle in a free-form JSON field (#259, D-030)
@@ -664,6 +664,32 @@ alias was visible in `--help`, locked by
   corpus, because before #208 that corpus yielded 19 distinct embedding
   scores across 60 shuffles — pinning a literal without that arm pins a
   coin flip rather than a property.
+
+## Cross-cutting — result records own their containers (#262, D-031)
+
+D-027 cleared three rows — `CalibrationResult.rows`, `.judge_scores` and
+`DeltaReport.summary` — because `calibrate()` and `diff_runs` build them locally.
+That is true of the producers and says nothing about the classes, which are
+public and hand-built: `render_report` and `render_delta_markdown` take them as
+arguments, and `DeltaReport.to_json()` handed out the record's own `summary`, the
+dict the CLI's exit code reads `n_flagged` from.
+
+| field | copy | why that depth |
+|-------|------|----------------|
+| `CalibrationResult.judge_scores` | `list(...)` | every element is checked to be a frozen `JudgeScore` |
+| `CalibrationResult.rows` | `list(...)` | every element is checked to be a frozen `CalibrationRow`, which owns its `provenance` |
+| `DeltaReport.summary` | `copy_json_value`, in and out | `dict[str, Any]` proves nothing about its values |
+| `StoredRun.rows` | `copy_json_value` | annotated `tuple[float, str]` values, proved by nothing |
+
+`StoredRun.rows` was not on the issue. It was found by deriving the population —
+every frozen dataclass with a mutable-container field — rather than taking the
+list; the arm in `tests/test_frozen_record_result_ownership.py` is pinned by value
+at six rows. The shape check runs before each copy (`list("ab")` splats), and
+`CalibrationResult` also enforces `n == len(rows) == len(judge_scores)`, because
+the copy closes only the *outside* route to a stale count.
+
+"Owned" is D-027's line, not immutability: the record stops sharing its container
+with the caller, and code holding the record can still edit its own attribute.
 
 ## What's deliberately not in the harness
 

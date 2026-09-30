@@ -16,6 +16,7 @@ import math
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from eval_harness.comparison import render_comparison
 from eval_harness.dataset import ValidationFinding, ValidationReport
@@ -61,6 +62,57 @@ class CalibrationResult:
     pearson_r: float
     judge_scores: list[JudgeScore]
     rows: list[CalibrationRow]
+
+    def __post_init__(self) -> None:
+        # D-027 cleared both lists as "built inside `calibrate()`", which is true
+        # of `calibrate()` and says nothing about the class: `render_report`
+        # takes a `CalibrationResult`, so anyone hand-building one kept a live
+        # handle on a frozen record (#262). The one consumer pairs the two lists
+        # with `zip(..., strict=True)`, so appending to one raised out of the
+        # *renderer*, and appending to both left `n` stale -- "calibration set:
+        # 1 rows" above a two-row table, silently.
+        #
+        # **Shallow is the whole depth, and the element check is what makes that
+        # true rather than hoped.** `JudgeScore` is frozen with no container
+        # field; `CalibrationRow` is frozen and owns its one container
+        # (`provenance`, D-027). A `list(...)` is complete exactly when the
+        # elements are proved immutable (`embedding-model-shootout#133`), and an
+        # annotation proves nothing -- so the elements are checked, not assumed.
+        #
+        # **Shape before copy.** `list("ab")` is `['a', 'b']`: a coercing copy in
+        # front of the check would turn a mistyped argument into a valid-looking
+        # list. The element check would catch *that* one, but the order is the
+        # rule, not the coincidence.
+        object.__setattr__(
+            self, "judge_scores", _owned_list("judge_scores", self.judge_scores, JudgeScore)
+        )
+        object.__setattr__(self, "rows", _owned_list("rows", self.rows, CalibrationRow))
+        # `n` is a third statement of the same count. Enforced here rather than
+        # left to the copy, because the copy only closes the *outside* route to a
+        # disagreement -- a constructor handed `n=10, rows=[]` rendered "10 rows"
+        # over an empty table with nothing noticing.
+        if not self.n == len(self.rows) == len(self.judge_scores):
+            raise ValueError(
+                f"n={self.n} must equal len(rows)={len(self.rows)} and "
+                f"len(judge_scores)={len(self.judge_scores)}; render_report states n "
+                f"and pairs the two lists row for row"
+            )
+
+
+def _owned_list(name: str, value: object, element_type: type) -> list[Any]:
+    """A list the caller does not hold, of elements proved to be `element_type`.
+
+    Shape first, then elements, then the copy -- see
+    `CalibrationResult.__post_init__` for why that order and why shallow.
+    """
+    if not isinstance(value, (list, tuple)):
+        raise TypeError(f"{name} must be a list; got {type(value).__name__}")
+    for index, element in enumerate(value):
+        if not isinstance(element, element_type):
+            raise TypeError(
+                f"{name}[{index}] must be a {element_type.__name__}; got {type(element).__name__}"
+            )
+    return list(value)
 
 
 # ----------------------------------------------------------------------
