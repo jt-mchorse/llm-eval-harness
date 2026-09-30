@@ -3117,5 +3117,20 @@ context_for_next_session:
   - SQLITE_STORES_NaN_AS_NULL_so_a_NaN_that_reaches_both_a_JSON_artifact_and_a_DB_row_becomes_TWO_DIFFERENT_ANSWERS_worth_a_portfolio_grep_for_other_repos_writing_floats_to_sqlite
   - A_PROBE_THAT_PRINTED_NOTHING_WAS_A_COLLECTION_ERROR_FROM_AN_EMPTY_FUNCTION_BODY_NOT_A_RESULT_empty_output_must_be_treated_as_DID_NOT_RUN
   - GOTCHA_DOC_SYMBOL_LOCK_REFUSED_A_BACKTICKED_NaN_write_math_nan_or_unbackticked_prose
+
+session: 2026-09-30T09:11Z
+issue: 267
+focus: A_STDOUT_LOCK_RECOMPUTED_THE_NUMBERS_INSTEAD_OF_RUNNING_THE_CLI_SO_THE_PRINTED_PREFIX_WAS_INVISIBLE
+phase: shipped
+duration_min: 1   # computed from the plan comment timestamp and date -u
+delta:
+  files_changed: 3
+  tests_added: 5
+  suite: "1975 -> 1981 green"
+decisions_made: []
+measured: "old README: 3 red"
+context_for_next_session:
+  - TEST_THE_DRAWN_THING_NOT_THE_COMPUTED_ONE_AGAIN_the_lock_claimed_it_mirrors_exactly_what_the_cli_prints_and_it_formatted_numbers_itself
+  - BRANCH_NOTE_263_265_ALSO_OPEN_this_one_touches_README_and_tests_only_MEMORY_conflicts_only
 followups: []
 ---

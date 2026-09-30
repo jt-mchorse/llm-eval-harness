@@ -3089,3 +3089,14 @@ way and 1.573s the other). Recorded as D-030, amending D-027.
 **Open questions / blockers:** this PR takes D-032 because #263 takes D-031, so merge #263 first and rebase this one.
 
 **Next session:** grep the portfolio for other repos that write floats to SQLite, since NaN silently becomes NULL there.
+
+## 2026-09-30 — Issue #267: the drift example quotes the real stdout
+**Duration:** ~1 min · **Branch:** session/2026-09-30-0910-issue-267
+
+- The README's drift `# stdout:` line omitted the `wrote <path>:` prefix the CLI prints; its lock recomputed the numbers instead of running the CLI. A new arm runs the CLI and compares the whole line. The library snippet imports `Path`, and an arm checks every README Python block for undefined names.
+
+**Why this work, this session:** found by the fresh-clone Quickstart audit.
+
+**Open questions / blockers:** #263 and #265 are open here too (MEMORY conflicts only).
+
+**Next session:** none.
