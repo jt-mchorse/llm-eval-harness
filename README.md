@@ -461,7 +461,7 @@ eval-harness drift \
     --candidate fixtures/drift/shifted.jsonl \
     --output    /tmp/drift.html \
     --judge-stub
-# stdout: length=0.729 (drifted), embedding=0.147 (drifted), judge=0.896 (drifted)
+# stdout: wrote /tmp/drift.html: length=0.729 (drifted), embedding=0.147 (drifted), judge=0.896 (drifted)
 ```
 
 Three axes are scored:
@@ -578,6 +578,8 @@ U+FFFF".
 Library API (when wiring into a custom workflow):
 
 ```python
+from pathlib import Path
+
 from eval_harness import compute_drift, render_drift_html
 
 report = compute_drift(
