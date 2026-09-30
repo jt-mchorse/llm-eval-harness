@@ -3077,3 +3077,15 @@ way and 1.573s the other). Recorded as D-030, amending D-027.
 **Open questions / blockers:** none. The issue's fourth criterion named `docs/calibration_report.md`, which is operator-generated and not committed; the check ran on what is rendered instead.
 
 **Next session:** leh's non-gated backlog is now empty apart from #177 (maintainer-gated) and #212 (low).
+
+## 2026-09-30 — Issue #264: the run record's writer enforces its reader's rules (D-032)
+**Duration:** ~8 min · **Branch:** session/2026-09-30-0737-issue-264
+
+- `run_suite` could write a run JSON that this package's own reader refuses (a NaN or bool `judge_kappa`), and SQLite turned the NaN into NULL. Every reader rule is now one shared function called by both sides, κ is checked when the `RunSpec` is built, and κ has the `[-1, 1]` range the calibration report already enforced.
+- 30 new arms, including an identical-message parity table and a set-equality arm over the reader's and writer's rule calls. Six revert probes are all red.
+
+**Why this work, this session:** found by widening the sibling sweep from #262. #186 had hardened only the read side.
+
+**Open questions / blockers:** this PR takes D-032 because #263 takes D-031, so merge #263 first and rebase this one.
+
+**Next session:** grep the portfolio for other repos that write floats to SQLite, since NaN silently becomes NULL there.

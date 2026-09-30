@@ -3099,5 +3099,23 @@ context_for_next_session:
   - MY_FIRST_StoredRun_COMMENT_OVERCLAIMED_stored_rows_pop_IS_NOT_PREVENTED_BY_AN_INBOUND_COPY_OWNERSHIP_NOT_IMMUTABILITY_say_which_one_a_copy_buys
   - GOTCHA_leh_addopts_IS_ra_q_SO_A_PROBE_PASSING_ANOTHER_q_PRINTS_NO_SUMMARY_LINE_and_every_arm_read_as_EMPTY_use_o_addopts_EMPTY_and_parse_N_passed_N_failed_AND_CHECK_THE_TOTAL
   - DEFERRED_StoredRun_n_rows_vs_len_rows_in_post_init_would_change_read_runs_exit_code_surface_not_filed_as_an_issue_because_read_run_builds_both_in_one_transaction
+
+session: 2026-09-30T07:44Z
+issue: 264
+focus: THE_WRITER_EMITTED_A_RUN_ITS_OWN_READER_REFUSES_AND_SQLITE_TURNED_THE_NaN_INTO_NULL
+phase: shipped
+duration_min: 8   # 07:36 hunt start -> 07:44 close, from date -u and the issue timestamps
+delta:
+  files_changed: 4
+  tests_added: 30
+  suite: "1975 -> 2005 green"
+decisions_made: ["D-032"]
+measured: "reverts with totals (2005 each): no RunSpec check 7 red, no RunResult __post_init__ 15, no range 3, second copy own words 3, no ownership 1, writer skips n_rows 3"
+context_for_next_session:
+  - BRANCH_NOTE_THIS_PR_TAKES_D_032_BECAUSE_263_TAKES_D_031_MERGE_263_FIRST_then_REBASE_this_one_MEMORY_conflicts_rebuild_as_main_plus_this_block_README_range_line_already_says_D_032
+  - A_FIX_THAT_HARDENED_ONLY_THE_READ_SIDE_186_IS_A_STANDING_INVITATION_ask_of_every_reader_guard_can_the_in_package_writer_emit_that_value
+  - SQLITE_STORES_NaN_AS_NULL_so_a_NaN_that_reaches_both_a_JSON_artifact_and_a_DB_row_becomes_TWO_DIFFERENT_ANSWERS_worth_a_portfolio_grep_for_other_repos_writing_floats_to_sqlite
+  - A_PROBE_THAT_PRINTED_NOTHING_WAS_A_COLLECTION_ERROR_FROM_AN_EMPTY_FUNCTION_BODY_NOT_A_RESULT_empty_output_must_be_treated_as_DID_NOT_RUN
+  - GOTCHA_DOC_SYMBOL_LOCK_REFUSED_A_BACKTICKED_NaN_write_math_nan_or_unbackticked_prose
 followups: []
 ---
