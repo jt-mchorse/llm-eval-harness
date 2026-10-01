@@ -3168,3 +3168,22 @@ context_for_next_session:
   - EVAL_HARNESS_JUDGE_MODEL_CHANGES_WHICH_MODEL_SCORES_EVERY_ROW_AND_WAS_FINDABLE_ONLY_IN_judge_py_the_env_example_sweep_surfaced_an_undocumented_behaviour_knob_not_just_a_missing_file
   - GH_TOKEN_IS_LISTED_BLANK_ON_PURPOSE_it_is_the_fallback_and_an_empty_value_falls_through_the_or_in_resolve_token
 followups: []
+
+---
+session: 2026-10-01T08:51Z
+issue: 275
+focus: THE_DB_PATH_WAS_THE_ONE_UNGUARDED_INPUT_AND_RUN_PAID_EVERY_JUDGE_CALL_BEFORE_FINDING_OUT
+phase: shipped
+duration_min: 4   # 08:47 issue -> 08:51 close, from date -u
+delta:
+  files_changed: 4
+  tests_added: 12
+  suite: "2056 -> 2068 green"
+decisions_made: []
+measured: "hunt agent on 23ec9ab: list/diff with a junk file, a directory, or a parent that is a file -> exit 1 traceback; run with a counting backend paid 10 judge calls before the DatabaseError. Revert probes, control 2068: no CLI preflight 3 red, no run_suite preflight 1."
+context_for_next_session:
+  - SAME_SHAPE_AS_168_AND_217_VALIDATE_THE_EXPENSIVE_STEPS_INPUTS_BEFORE_THE_EXPENSIVE_STEP_the_database_was_the_input_neither_reached_ASK_OF_EVERY_LOOP_THAT_SPENDS_MONEY_WHAT_IT_TOUCHES_AFTERWARDS
+  - list_KEEPS_ITS_NO_DATABASE_MEANS_NO_RUNS_ANSWER_for_a_path_that_does_not_exist_including_a_parent_that_is_a_file_pinned_in_the_test_rather_than_changed
+  - WORKED_IN_WORKTREE_leh_db_beside_the_main_clone_where_a_0600_mode_agent_was_working
+followups: []
+---

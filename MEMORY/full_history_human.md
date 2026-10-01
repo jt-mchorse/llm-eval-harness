@@ -3120,3 +3120,14 @@ it along with the Anthropic key and the GitHub token (plus its `GH_TOKEN`
 fallback) for the PR-comment command. The README's real-API section points at
 the file. A test derives the variable names from the source, so the file can't
 drift. Part of portfolio-ops#80.
+
+## 2026-10-01 — Issue #275: a bad --db is exit 2, and run finds out before paying
+**Duration:** ~4 min · **Branch:** session/2026-10-01-0900-issue-db
+
+- A `--db` that was not a database, was a directory, or sat under a regular file crashed `run`, `diff` and `list` with a raw traceback at exit 1, the code these subcommands use for "a row regressed". `run` was worse: it opened the database only after scoring every row, so it paid a judge call per row and lost the result. A new `check_db` now runs before the judge loop, both in `run_suite` and in the CLI before the backend is built, and the read-side subcommands translate database errors to `::error::` with exit 2. 12 new tests; both revert probes are red.
+
+**Why this work, this session:** found by this run's second hunt wave in a priority-tier repo.
+
+**Open questions / blockers:** none.
+
+**Next session:** none queued.
