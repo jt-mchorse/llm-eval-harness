@@ -3078,3 +3078,26 @@ context_for_next_session:
   - BRANCH_NOTE_THIS_PR_TOOK_D_030_BECAUSE_THE_OPEN_PR_260_IN_THIS_REPO_TAKES_D_029_and_the_two_branches_MEMORY_APPENDS_WILL_CONFLICT_MERGE_260_FIRST_THEN_REBASE
 followups: []
 ---
+
+---
+session: 2026-09-30T07:28Z
+issue: 262
+focus: THREE_ROWS_D_027_CLEARED_WERE_CLEARED_ON_A_TRUE_STATEMENT_ABOUT_THE_PRODUCER_AND_THE_DERIVED_POPULATION_FOUND_A_FOURTH
+phase: shipped
+duration_min: 10
+delta:
+  files_changed: 8
+  tests_added: 38
+  suite: "1975 -> 2013 green"
+decisions_made: ["D-031"]
+measured: "reverts with pass+fail totals checked (150 per arm, control 150 passed): no CalibrationResult copy 12 red, no summary inbound 4, no to_json outbound 2, no StoredRun copy 2, shallow dict(summary) 1, copy before shape 4, no n check 5, no element check 3. Rendered output 5535 bytes identical."
+context_for_next_session:
+  - D_027_CLEARED_ROWS_ON_A_TRUE_STATEMENT_ABOUT_THE_ONE_IN_PACKAGE_PRODUCER_built_inside_calibrate_built_locally_by_diff_runs_AND_THE_CLASSES_ARE_PUBLIC_AND_HAND_BUILT_WHEN_A_CLEARING_SAYS_WHO_BUILDS_IT_ASK_WHETHER_ANYONE_ELSE_CAN
+  - THE_CLEARING_ARM_ONLY_EXERCISED_THE_PRODUCER_so_a_hand_built_record_was_OUTSIDE_ITS_CORPUS_it_said_asserted_rather_than_asserted_about_AND_STILL_COULD_NOT_SEE_IT
+  - DERIVING_THE_POPULATION_FOUND_StoredRun_rows_WHICH_THE_ISSUE_DID_NOT_LIST_validated_by_the_loader_then_stored_by_reference_THE_ARM_IS_PINNED_BY_VALUE_AT_SIX_ROWS_WITH_DETECTOR_CONTROLS
+  - THE_ISSUES_FOURTH_AC_NAMED_docs_calibration_report_md_WHICH_DOES_NOT_EXIST_it_is_operator_generated_I_FILED_THAT_ISSUE_MYSELF_YESTERDAY_verify_your_own_issue_premises_too
+  - MY_FIRST_StoredRun_COMMENT_OVERCLAIMED_stored_rows_pop_IS_NOT_PREVENTED_BY_AN_INBOUND_COPY_OWNERSHIP_NOT_IMMUTABILITY_say_which_one_a_copy_buys
+  - GOTCHA_leh_addopts_IS_ra_q_SO_A_PROBE_PASSING_ANOTHER_q_PRINTS_NO_SUMMARY_LINE_and_every_arm_read_as_EMPTY_use_o_addopts_EMPTY_and_parse_N_passed_N_failed_AND_CHECK_THE_TOTAL
+  - DEFERRED_StoredRun_n_rows_vs_len_rows_in_post_init_would_change_read_runs_exit_code_surface_not_filed_as_an_issue_because_read_run_builds_both_in_one_transaction
+followups: []
+---

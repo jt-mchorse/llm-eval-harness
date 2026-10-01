@@ -3064,3 +3064,16 @@ sibling: ancestors rather than a global visited set (a DAG is legal and
 `json.dumps` writes it), and an on-path set with an exit marker rather than a fresh
 `frozenset` per node (quadratic without a depth cap — 20000 levels costs 0.059s one
 way and 1.573s the other). Recorded as D-030, amending D-027.
+
+## 2026-09-30 — Issue #262: result records own their containers (D-031)
+**Duration:** ~10 min · **Branch:** session/2026-09-30-0718-issue-262
+
+- `CalibrationResult`, `DeltaReport` and `StoredRun` now take copies of their container fields. D-027 had cleared three of these because the in-package producer builds them locally — true of the producer, not of the public, hand-built classes. `StoredRun.rows` was not on the issue; deriving the population (every frozen dataclass with a mutable-container field) found it.
+- `CalibrationResult` also enforces `n == len(rows) == len(judge_scores)`; one repo fixture was rendering "10 rows" over an empty table.
+- 38 new arms; eight revert probes each red with totals checked; rendered diff-json and calibration output byte-identical.
+
+**Why this work, this session:** it was the last `portfolio-ops#71` row for this repo and was only blocked on #261 merging, which Phase A did.
+
+**Open questions / blockers:** none. The issue's fourth criterion named `docs/calibration_report.md`, which is operator-generated and not committed; the check ran on what is rendered instead.
+
+**Next session:** leh's non-gated backlog is now empty apart from #177 (maintainer-gated) and #212 (low).

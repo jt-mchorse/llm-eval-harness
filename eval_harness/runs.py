@@ -34,6 +34,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from eval_harness.io_utils import copy_json_value
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS runs (
     run_id TEXT PRIMARY KEY,
@@ -75,6 +77,26 @@ class StoredRun:
     n_rows: int
     git_sha: str | None
     rows: dict[str, tuple[float, str]]  # example_id -> (score, reasoning)
+
+    def __post_init__(self) -> None:
+        # Not on #262's list; found by deriving the population instead of taking
+        # it (a frozen record with a mutable-container field that it does not
+        # copy). Both in-package producers (`read_run`,
+        # `load_run_result_from_json`) build this map locally, so no caller holds
+        # it -- the D-027 "built locally" argument, and like that argument it is
+        # true of the producers and says nothing about the class. `StoredRun` is
+        # `diff_runs`' public input, and a hand-built one kept the caller's dict:
+        # an edit after construction changed what `diff_runs` joined on while
+        # `n_rows` went on stating the old count.
+        #
+        # What this buys is *ownership*, not immutability -- the same line D-027
+        # drew for `provenance`: the record no longer shares its map with anyone,
+        # and code holding the record can still edit its own attribute. Values
+        # are annotated `tuple[float, str]` and nothing proves it, so this is the
+        # `copy_json_value` row rather than a `dict(...)`.
+        if not isinstance(self.rows, dict):
+            raise TypeError(f"rows must be a dict; got {type(self.rows).__name__}")
+        object.__setattr__(self, "rows", copy_json_value(self.rows))
 
 
 def new_run_id() -> str:

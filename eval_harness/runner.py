@@ -35,6 +35,7 @@ from typing import Any, Protocol
 
 from eval_harness.comparison import render_configured
 from eval_harness.dataset import Dataset, Example, filter_examples_by_tags, load_jsonl
+from eval_harness.io_utils import copy_json_value
 from eval_harness.judge import FAITHFULNESS_RUBRIC, Judge, JudgeParseError, JudgeScore
 from eval_harness.runs import (
     StoredRun,
@@ -360,17 +361,34 @@ class DeltaReport:
     rows: tuple[RowDelta, ...]
     summary: dict[str, Any] = field(default_factory=dict)
 
+    def __post_init__(self) -> None:
+        # D-027 cleared `summary` as "built locally" by `diff_runs`, which is
+        # true of `diff_runs` and says nothing about the class (#262). It is the
+        # field the CLI exit code reads (`summary["n_flagged"]`) and the sticky
+        # PR comment renders, so a caller's later edit to the dict they passed
+        # changed both. `dict[str, Any]` proves nothing about its values, so this
+        # is the `copy_json_value` row, the same as `Example.provenance`. Shape
+        # first: the copy leaves a non-container by reference, so it cannot be
+        # what rejects one.
+        if not isinstance(self.summary, dict):
+            raise TypeError(f"summary must be a dict; got {type(self.summary).__name__}")
+        object.__setattr__(self, "summary", copy_json_value(self.summary))
+
     @property
     def regressed_ids(self) -> list[str]:
         return [r.example_id for r in self.rows if r.flagged]
 
     def to_json(self) -> dict[str, Any]:
+        # Copied on the way out too, for the reason `Example.to_dict` is: this
+        # dict is handed to callers (`cli`, `comment`), and returning the
+        # record's own mapping let an edit to the payload reach the frozen
+        # report.
         return {
             "current_run_id": self.current_run_id,
             "baseline_run_id": self.baseline_run_id,
             "suite": self.suite,
             "threshold_drop": self.threshold_drop,
-            "summary": self.summary,
+            "summary": copy_json_value(self.summary),
             "rows": [
                 {
                     "example_id": r.example_id,
