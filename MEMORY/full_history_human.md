@@ -3120,3 +3120,15 @@ it along with the Anthropic key and the GitHub token (plus its `GH_TOKEN`
 fallback) for the PR-comment command. The README's real-API section points at
 the file. A test derives the variable names from the source, so the file can't
 drift. Part of portfolio-ops#80.
+
+## 2026-10-01 — Issue #266: the delta record's constructors enforce its reader's rules (D-033)
+**Duration:** ~11 min · **Branch:** session/2026-10-01-0719-issue-266
+
+- `DeltaReport` and `RowDelta` now run every rule their `from_json` readers state, through the same functions and with the same messages, so a hand-built report can no longer render (or crash the renderer) in a shape the `comment` CLI refuses. The reader also stopped accepting the two things `diff_runs` never emits: a negative `threshold_drop`, and a `status` outside the five `diff_runs` produces.
+- `threshold_drop` and the row scores are stored as checked floats, because both renderers crash on a numeric string. 56 new arms. Eight revert probes are all red, and the demo `diff-json`/comment output is byte-identical.
+
+**Why this work, this session:** highest-priority unblocked issue in the priority tier, unblocked by this run's Phase A merges of #263 and #265.
+
+**Open questions / blockers:** none.
+
+**Next session:** two consistency rules neither reader states (`flagged` only when `regressed`; `n_flagged` vs the flagged rows) are deferred, not filed.

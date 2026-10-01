@@ -3168,3 +3168,23 @@ context_for_next_session:
   - EVAL_HARNESS_JUDGE_MODEL_CHANGES_WHICH_MODEL_SCORES_EVERY_ROW_AND_WAS_FINDABLE_ONLY_IN_judge_py_the_env_example_sweep_surfaced_an_undocumented_behaviour_knob_not_just_a_missing_file
   - GH_TOKEN_IS_LISTED_BLANK_ON_PURPOSE_it_is_the_fallback_and_an_empty_value_falls_through_the_or_in_resolve_token
 followups: []
+
+---
+session: 2026-10-01T07:30Z
+issue: 266
+focus: THE_DELTA_RECORDS_CONSTRUCTORS_HAD_NONE_OF_THEIR_READERS_RULES_AND_THE_READER_WAS_LOOSER_THAN_diff_runs_TWICE
+phase: shipped
+duration_min: 11   # 07:19 branch -> 07:30 close, from date -u
+delta:
+  files_changed: 7
+  tests_added: 56
+  suite: "2044 -> 2100 green"
+decisions_made: ["D-033"]
+measured: "revert probes, one full-suite subprocess each, control 2100 passed: no DeltaReport checks 14 red, no RowDelta checks 9, no negative rule 8, no status membership 2, own-words copy 2, rows not owned 2, scores not stored 1, threshold not stored 1. Demo diff-json x5 + comment --dry-run byte-identical."
+context_for_next_session:
+  - THE_264_PATTERN_TRANSFERRED_CLEANLY_BUT_ONE_PART_DID_NOT_D_032_REJECTED_STORING_THE_COERCED_VALUE_AND_HERE_STORING_IT_IS_REQUIRED_because_the_renderers_format_these_fields_as_floats_ASK_OF_EACH_FIELD_WHAT_READS_IT_NOT_WHAT_THE_SIBLING_DECIDED
+  - A_DOCSTRING_IN_test_frozen_record_result_ownership_SAID_THE_VALIDATED_HALF_WAS_EMPTY_AND_WAS_ALREADY_FALSE_AFTER_265_the_assertion_still_held_so_nothing_went_red_PROSE_BESIDE_A_PASSING_ASSERTION_IS_NOT_CHECKED_BY_IT
+  - DEFERRED_flagged_true_only_when_status_regressed_is_a_NEW_consistency_rule_and_summary_n_flagged_vs_count_of_flagged_rows_is_another_neither_reader_states_them
+  - WORKED_IN_A_GIT_WORKTREE_leh_266_BESIDE_THE_MAIN_CLONE_because_a_Phase_A_merge_agent_was_rebasing_in_the_clone_PYTHONPATH_TO_THE_WORKTREE_beats_the_editable_install
+followups: []
+---
