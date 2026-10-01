@@ -41,6 +41,7 @@ from eval_harness.io_utils import copy_json_value
 from eval_harness.judge import FAITHFULNESS_RUBRIC, Judge, JudgeParseError, JudgeScore
 from eval_harness.runs import (
     StoredRun,
+    check_db,
     connect,
     init_db_on,
     latest_run_id_for_suite,
@@ -668,6 +669,10 @@ def run_suite(
     the dataset's directory, or `None` when the lookup fails.
     """
     dataset, examples = _load(spec.dataset_path, tags=spec.tags)
+    # The database is checked BEFORE the judge loop (#275). It was opened only
+    # to write the finished run, so an unusable `db_path` raised after a judge
+    # call per row had been paid for, and the scores were lost.
+    check_db(db_path)
     rid = run_id or new_run_id()
     when = started_at or utc_now_iso()
     git_sha = _detect_git_sha(Path(spec.dataset_path))
