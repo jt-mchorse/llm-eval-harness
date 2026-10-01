@@ -205,7 +205,7 @@ def test_bash_fence_fixture_paths_exist() -> None:
     Scoped to ``fixtures/`` on purpose, so the check stays quiet and a
     finding means something:
 
-    - Output paths (``report.json``, ``/tmp/delta.json``,
+    - Output paths (``/tmp/report.json``, ``/tmp/delta.json``,
       ``docs/calibration_report.md``) are *written* by the command; they
       must not exist beforehand.
     - ``fixtures/main-baseline.json`` and ``results/current.json`` appear
@@ -308,4 +308,41 @@ def test_demo_section_names_followup_issue_not_pending_dependency() -> None:
         "Demo section must not contain the phrase 'pending until ... lands'; that framing "
         "was correct only when the gating issue was open. If a gating issue exists, name it "
         "as a follow-up; otherwise the section should describe today's two-command demo path."
+    )
+
+
+def test_bash_fence_out_paths_leave_the_checkout() -> None:
+    """Every ``--out`` / ``--output`` a reader is told to type writes under ``/tmp/`` (#269).
+
+    The validator example used to write ``--out report.json``. Run from a
+    fresh clone, as every other command here is, it left an untracked
+    ``report.json`` in the checkout root that ``.gitignore`` does not cover,
+    so the next ``git add -A`` committed it. Every other output example
+    already wrote under ``/tmp/``.
+
+    The text after a shell ``#`` is dropped first: ``# → exit 2 leaves --out
+    untouched`` is prose about the flag, not a value for it.
+    """
+    fence_re = re.compile(r"^```(\w*)\s*$")
+    out_re = re.compile(r"--(?:out|output)[ =]+(\S+)")
+    comment_re = re.compile(r"(?:^|\s)#.*$")
+
+    values: list[str] = []
+    lang: str | None = None
+    for line in _readme().splitlines():
+        fence = fence_re.match(line)
+        if fence:
+            lang = None if lang is not None else fence.group(1)
+            continue
+        if lang == "bash":
+            values.extend(out_re.findall(comment_re.sub("", line)))
+
+    # Two today (the validator's and the drift report's). A floor, so a
+    # reworded block cannot leave this test checking nothing.
+    assert len(values) >= 2, f"found only {values} in ```bash fences — pattern went stale"
+    inside = sorted(v for v in values if not v.startswith("/tmp/"))
+    assert not inside, (
+        f"README's shell examples write output inside the checkout: {inside}. "
+        "A reader running them from a fresh clone gets an untracked file in the "
+        "repo. Point the example at /tmp/."
     )

@@ -3100,3 +3100,13 @@ way and 1.573s the other). Recorded as D-030, amending D-027.
 **Open questions / blockers:** #263 and #265 are open here too (MEMORY conflicts only).
 
 **Next session:** none.
+
+## 2026-09-30T09:36:42Z — #269: the validator example wrote report.json into the checkout
+
+The README's dataset-validator example used `--out report.json`. Run from a fresh
+clone, like every other command there, it left an untracked file in the repo root
+that `.gitignore` doesn't cover. Every other output example already wrote under
+`/tmp/`, so this one now does too. A README test requires the same of every
+`--out` or `--output` in a bash block; it ignores shell comments, since one
+comment line mentions `--out` as prose. Checked and left alone:
+`docs/calibration_report.md` is meant to be committed after a real run.

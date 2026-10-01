@@ -253,8 +253,8 @@ is set, so the operator's diagnostic channel is preserved when stdout
 is captured to a file:
 
 ```bash
-eval-harness validate fixtures/broken.jsonl --json --out report.json
-# → atomic-writes the report dict to report.json; stdout silent
+eval-harness validate fixtures/broken.jsonl --json --out /tmp/report.json
+# → atomic-writes the report dict to /tmp/report.json; stdout silent
 # → exit 1 (any findings); exit 2 leaves --out untouched
 ```
 

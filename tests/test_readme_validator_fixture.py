@@ -97,7 +97,7 @@ def test_readme_json_command_exits_1_with_one_of_each_finding_code() -> None:
 def test_readme_out_command_writes_the_same_payload_and_silences_stdout(
     tmp_path: Path,
 ) -> None:
-    """The second documented command: the same, plus `--out report.json`."""
+    """The second documented command: the same, plus `--out /tmp/report.json`."""
     out = tmp_path / "report.json"
     stdout_proc = _run("validate", "fixtures/broken.jsonl", "--json")
     proc = _run("validate", "fixtures/broken.jsonl", "--json", "--out", str(out))
