@@ -3168,3 +3168,23 @@ context_for_next_session:
   - EVAL_HARNESS_JUDGE_MODEL_CHANGES_WHICH_MODEL_SCORES_EVERY_ROW_AND_WAS_FINDABLE_ONLY_IN_judge_py_the_env_example_sweep_surfaced_an_undocumented_behaviour_knob_not_just_a_missing_file
   - GH_TOKEN_IS_LISTED_BLANK_ON_PURPOSE_it_is_the_fallback_and_an_empty_value_falls_through_the_or_in_resolve_token
 followups: []
+
+---
+session: 2026-10-01T08:52Z
+issue: 274
+focus: ATOMIC_WRITE_TEXT_CREATED_0600_REGARDLESS_OF_UMASK_AND_AN_OVERWRITE_DEMOTED_0644_TO_0600
+phase: shipped
+duration_min: 5   # computed from the plan comment timestamp (08:47:30Z) and date -u
+delta:
+  files_changed: 3
+  tests_added: 11
+  suite: "2057 -> 2068 green; ruff check, ruff format --check and mypy clean"
+decisions_made: []
+measured: "main, umask 022: new file 0o600, overwrite of 0o644 -> 0o600. Fixed: 0o644 and 0o644. Revert probe (main's io_utils.py): 8 failed of 2068. Neighbour arms: hard-coded 0o644 = 2 red (umask 077, write_text parity); no mode copy = 4 red."
+context_for_next_session:
+  - NAMEDTEMPORARYFILE_AND_MKSTEMP_ALWAYS_CREATE_0600_and_os_replace_carries_the_temp_inode_mode_onto_the_target
+  - TEMP_NOW_os_open_O_EXCL_0o666_with_secrets_token_hex_4_so_the_random_part_stays_8_chars_and_the_NAME_MAX_budget_is_unchanged
+  - os_fdopen_CLOSES_THE_FD_ITSELF_WHEN_THE_TEXT_WRAPPER_FAILS_an_extra_os_close_on_LookupError_is_a_double_close_EBADF_test_unknown_encoding_leaves_no_temp_pins_it
+  - examples_drift_report_py_NamedTemporaryFile_IS_A_SCRATCH_FILE_IN_THE_SYSTEM_TEMP_DIR_NOT_AN_ATOMIC_WRITE_0600_IS_CORRECT_THERE_left_alone
+followups: ["portfolio-ops#81"]
+---
