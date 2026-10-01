@@ -3151,4 +3151,20 @@ context_for_next_session:
   - THE_ARM_STRIPS_SHELL_COMMENTS_FIRST_because_line_258_says_exit_2_leaves_dash_dash_out_untouched_and_a_naive_regex_reads_untouched_as_a_path
   - docs_calibration_report_md_IS_WRITTEN_INTO_THE_CHECKOUT_BY_DESIGN_a_real_calibrate_run_is_meant_to_be_committed_README_610_DO_NOT_FILE
   - installing_only_dev_then_every_example_runs_and_calibrate_without_the_judge_extra_prints_a_one_line_install_hint_THE_AUDITS_DEV_ONLY_FINDING_DID_NOT_REPRODUCE
+
+session: 2026-09-30T09:46:10Z
+issue: 271
+focus: THE_JUDGE_MODEL_OVERRIDE_WAS_DOCUMENTED_NOWHERE
+phase: shipped
+duration_min: 0
+delta:
+  files_changed: 3
+  tests_added: 5
+  suite: "1981 green; ruff check and ruff format --check clean"
+decisions_made: []
+measured: "reads found: ANTHROPIC_API_KEY (Anthropic() implicit), EVAL_HARNESS_JUDGE_MODEL (judge.py, across a line break), GITHUB_TOKEN and GH_TOKEN (comment.py). Probes: file absent 3 red of 5; EVAL_HARNESS_JUDGE_MODEL dropped 1 red."
+context_for_next_session:
+  - PART_OF_portfolio_ops_80_lco_238_shipped_the_same_lock_remaining_ems_vsas_mcp_github_gists
+  - EVAL_HARNESS_JUDGE_MODEL_CHANGES_WHICH_MODEL_SCORES_EVERY_ROW_AND_WAS_FINDABLE_ONLY_IN_judge_py_the_env_example_sweep_surfaced_an_undocumented_behaviour_knob_not_just_a_missing_file
+  - GH_TOKEN_IS_LISTED_BLANK_ON_PURPOSE_it_is_the_fallback_and_an_empty_value_falls_through_the_or_in_resolve_token
 followups: []

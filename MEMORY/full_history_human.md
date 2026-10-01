@@ -3110,3 +3110,13 @@ that `.gitignore` doesn't cover. Every other output example already wrote under
 `--out` or `--output` in a bash block; it ignores shell comments, since one
 comment line mentions `--out` as prose. Checked and left alone:
 `docs/calibration_report.md` is meant to be committed after a real run.
+
+## 2026-09-30T09:46:10Z — #271: added .env.example, which surfaced an undocumented judge-model knob
+
+Writing the `.env.example` the portfolio handoff asks for turned up
+`EVAL_HARNESS_JUDGE_MODEL`. It sets the model that scores every row, and nothing
+documented it; you could only find it by reading `judge.py`. The new file lists
+it along with the Anthropic key and the GitHub token (plus its `GH_TOKEN`
+fallback) for the PR-comment command. The README's real-API section points at
+the file. A test derives the variable names from the source, so the file can't
+drift. Part of portfolio-ops#80.
