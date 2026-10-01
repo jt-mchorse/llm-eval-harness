@@ -184,7 +184,7 @@ def test_drift_example_stdout_matches_live_computation() -> None:
     """
     body = _readme()
     match = re.search(
-        r"# stdout: "
+        r"# stdout: wrote \S+: "
         r"length=([\d.]+) \((\w+)\), "
         r"embedding=([\d.]+) \((\w+)\), "
         r"judge=([\d.]+) \((\w+)\)",
@@ -192,7 +192,7 @@ def test_drift_example_stdout_matches_live_computation() -> None:
     )
     assert match, (
         "README Drift-detection section must quote the example output as "
-        "'# stdout: length=<N> (<status>), embedding=<N> (<status>), "
+        "'# stdout: wrote <path>: length=<N> (<status>), embedding=<N> (<status>), "
         "judge=<N> (<status>)' so this snapshot can lock it."
     )
     readme = {
@@ -219,6 +219,38 @@ def test_drift_example_stdout_matches_live_computation() -> None:
         f"compute_drift output {live} on the committed drift fixtures. "
         f"{REGEN_HINT}"
     )
+
+
+def test_drift_example_stdout_is_the_line_the_cli_prints(tmp_path: Path, capsys) -> None:
+    """The quoted `# stdout:` line, whole, against the CLI's real stdout (#267).
+
+    The arm above recomputes the three numbers from `compute_drift`, which is
+    why it could not see the `wrote <path>: ` prefix the CLI prints around
+    them: it tested the computation, not the drawn line. This one runs the
+    documented command and compares the entire line, with only the `--output`
+    path moved into `tmp_path`.
+    """
+    from eval_harness.cli import main
+
+    quoted = re.search(r"^# stdout: (wrote (\S+): .*)$", _readme(), re.M)
+    assert quoted, "README drift example has no `# stdout: wrote <path>: ...` line"
+    documented_path = quoted.group(2)
+    out = tmp_path / "drift.html"
+    rc = main(
+        [
+            "drift",
+            "--golden",
+            str(DRIFT_GOLDEN),
+            "--candidate",
+            str(DRIFT_CANDIDATE),
+            "--output",
+            str(out),
+            "--judge-stub",
+        ]
+    )
+    assert rc == 0
+    printed = capsys.readouterr().out.strip().replace(str(out), documented_path)
+    assert printed == quoted.group(1), f"CLI printed {printed!r}"
 
 
 if __name__ == "__main__":  # pragma: no cover
