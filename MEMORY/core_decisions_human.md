@@ -1135,3 +1135,26 @@ formats over the demo fixtures, plus a calibration report over
 **Reversibility:** Cheap.
 
 **Related issues:** #262, #254, #259
+
+## D-032 — The run record's writer enforces every rule its reader states (2026-09-30)
+**Decision:** Each rule `load_run_result_from_json` states is one module-level `_check*` function, called by the reader and by a new `RunResult.__post_init__`. `RunSpec.__post_init__` checks `judge_kappa` too, and `judge_kappa` gains the `[-1, 1]` range the calibration report already enforces.
+
+**Why:** The reader accumulated its rules one issue at a time (#83, #116, #150, #185, #186, #190) and the writer had none of them. `run_suite` copied `RunSpec.judge_kappa` into both stores unchecked. With `nan`, the run JSON carried a bare `NaN` token that this module's own reader refuses, and SQLite — which stores NaN as NULL — recorded "no κ", so one run had two stores giving two answers. With `True`, the JSON said `true` and was refused. `1.5` was accepted by both paths even though `calibration._require_correlation_range` refuses it for the same quantity in the report.
+
+`RunSpec` checks first because `run_suite` writes SQLite *before* it builds the `RunResult`: with only the constructor check, a bad κ would still reach the database, after a judge call per row.
+
+"One definition" is made observable as identical messages: eleven corruptions are built both as a constructor call and as a payload, and the two errors must match word for word. A population arm requires the reader's and the writer's `_check*` calls to be the same set, and pins the reader's four remaining inline raises as JSON-shape rules only, so a new value rule written inline fails too.
+
+`RunResult` now validates `rows`, so by the D-019 pair it also keeps them — as a tuple, which is the whole depth because `RowScore` is frozen with scalar fields.
+
+Found by widening the #262 sibling sweep: `RunResult.n_rows` beside `rows` looked like the same shape, but `run_suite` always agrees. The defect was one field over.
+
+**Alternatives considered:**
+- Check only in `RunResult` — rejected, built and run, 7 red: SQLite is written first.
+- A second copy of the κ rule in the writer — rejected, built and run, 3 red: the messages drift.
+- No range — rejected, built and run, 3 red.
+- Coerce and store κ as `float` in the constructor — rejected: the reader accepts a numeric string, so emitting one is not an asymmetry.
+
+**Reversibility:** Cheap.
+
+**Related issues:** #264, #186, #185, #190, #262, #204

@@ -691,6 +691,26 @@ the copy closes only the *outside* route to a stale count.
 "Owned" is D-027's line, not immutability: the record stops sharing its container
 with the caller, and code holding the record can still edit its own attribute.
 
+## Cross-cutting — the run record's writer enforces its reader's rules (#264, D-032)
+
+`load_run_result_from_json` gained its rules one issue at a time (#83, #116,
+#150, #185, #186, #190). The write side had none: `RunResult` had no
+`__post_init__`, and `run_suite` copied `RunSpec.judge_kappa` into both stores
+unchecked.
+
+| `RunSpec(judge_kappa=...)` | JSON written | reader | SQLite |
+|---|---|---|---|
+| `math.nan` | a bare NaN token | refused | NULL, so `read_run` says `None` |
+| `True` | `true` | refused | `1.0` |
+| `1.5` | `1.5` | accepted | `1.5` |
+
+Every rule is now one module-level `_check*` function, called by the reader and
+by `RunResult.__post_init__`; κ is also checked at `RunSpec` construction,
+because `run_suite` writes SQLite before it builds the `RunResult`. κ gains the
+`[-1, 1]` range `calibration._require_correlation_range` already enforces for
+the report. An arm requires the reader's and writer's rule calls to be the same
+set, and eleven corruptions are built both ways with identical messages.
+
 ## What's deliberately not in the harness
 
 - **Live model traffic in tests.** Backend is a Protocol; tests stub it.
