@@ -711,6 +711,35 @@ because `run_suite` writes SQLite before it builds the `RunResult`. κ gains the
 the report. An arm requires the reader's and writer's rule calls to be the same
 set, and eleven corruptions are built both ways with identical messages.
 
+## Cross-cutting — the delta record's constructors enforce its reader's rules (#266, D-033)
+
+The same shape one record over. `DeltaReport.from_json` and `RowDelta.from_json`
+gained their rules one issue at a time (#42, #89, #116, #150, #190, #228, #230);
+the constructors had none, so a hand-built report rendered — or crashed the
+renderer — in a shape the `comment` CLI's own reader refuses:
+
+| hand-built | before | now |
+|---|---|---|
+| `threshold_drop=math.nan` | renders, reader refuses | refused at construction |
+| `suite=None` | renderer AttributeError | refused at construction |
+| `summary={"n_flagged": 2.5}` | renders, reader refuses | refused at construction |
+| row `flagged="yes"` | renders, reader refuses | refused at construction |
+| `threshold_drop=-0.1` | renders **and reads back** | refused by both |
+| row `status="bogus"` | renders **and reads back** | refused by both |
+
+The last two rows are where the reader was looser than the producer. Both now
+take the producer's rule rather than restating it: `_checked_threshold_drop` is
+the one definition `diff_runs`, the reader and `DeltaReport` call, and
+`DELTA_ROW_STATUSES` is the five values `diff_runs` emits — an arm runs a diff
+that produces all five and checks `_status_for` over a grid.
+
+`threshold_drop` and the three row scores are *stored* as the checked float,
+not only checked: the reader coerces a numeric string with `float()`, and both
+renderers format these fields as floats, so a stored `"0.5"` was a raw
+ValueError at render time. `rows` is shape-checked and copied to a tuple. The
+demo fixtures' `diff-json` (three thresholds) and sticky-comment output are
+byte-identical before and after.
+
 ## What's deliberately not in the harness
 
 - **Live model traffic in tests.** Backend is a Protocol; tests stub it.
