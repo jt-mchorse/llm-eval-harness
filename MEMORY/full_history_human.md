@@ -3121,6 +3121,29 @@ fallback) for the PR-comment command. The README's real-API section points at
 the file. A test derives the variable names from the source, so the file can't
 drift. Part of portfolio-ops#80.
 
+## 2026-10-01 — Issue #266: the delta record's constructors enforce its reader's rules (D-033)
+**Duration:** ~11 min · **Branch:** session/2026-10-01-0719-issue-266
+
+- `DeltaReport` and `RowDelta` now run every rule their `from_json` readers state, through the same functions and with the same messages, so a hand-built report can no longer render (or crash the renderer) in a shape the `comment` CLI refuses. The reader also stopped accepting the two things `diff_runs` never emits: a negative `threshold_drop`, and a `status` outside the five `diff_runs` produces.
+- `threshold_drop` and the row scores are stored as checked floats, because both renderers crash on a numeric string. 56 new arms. Eight revert probes are all red, and the demo `diff-json`/comment output is byte-identical.
+
+**Why this work, this session:** highest-priority unblocked issue in the priority tier, unblocked by this run's Phase A merges of #263 and #265.
+
+**Open questions / blockers:** none.
+
+**Next session:** two consistency rules neither reader states (`flagged` only when `regressed`; `n_flagged` vs the flagged rows) are deferred, not filed.
+
+## 2026-10-01 — Issue #275: a bad --db is exit 2, and run finds out before paying
+**Duration:** ~4 min · **Branch:** session/2026-10-01-0900-issue-db
+
+- A `--db` that was not a database, was a directory, or sat under a regular file crashed `run`, `diff` and `list` with a raw traceback at exit 1, the code these subcommands use for "a row regressed". `run` was worse: it opened the database only after scoring every row, so it paid a judge call per row and lost the result. A new `check_db` now runs before the judge loop, both in `run_suite` and in the CLI before the backend is built, and the read-side subcommands translate database errors to `::error::` with exit 2. 12 new tests; both revert probes are red.
+
+**Why this work, this session:** found by this run's second hunt wave in a priority-tier repo.
+
+**Open questions / blockers:** none.
+
+**Next session:** none queued.
+
 ## 2026-10-01T08:52Z — #274: atomic writes honour the umask and keep an existing file's mode
 
 `atomic_write_text` built its temp file with `NamedTemporaryFile`, which always

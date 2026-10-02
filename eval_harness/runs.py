@@ -123,6 +123,22 @@ def connect(path: str | Path) -> sqlite3.Connection:
     return conn
 
 
+def check_db(path: str | Path) -> None:
+    """Open ``path`` as a run database, create the schema, and close it (#275).
+
+    The preflight for every caller that is about to spend something before it
+    touches the database: ``run_suite`` scores every row first, so a ``--db``
+    that is not a database, is a directory, or sits under a regular file used
+    to fail only after a judge call per row. Raises the same ``sqlite3.Error``
+    / ``OSError`` the real open would.
+    """
+    conn = connect(path)
+    try:
+        init_db_on(conn)
+    finally:
+        conn.close()
+
+
 def init_db(path: str | Path) -> None:
     """Idempotently create the schema at `path`."""
     with connect(path) as conn:

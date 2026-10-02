@@ -39,6 +39,12 @@ from eval_harness.runner import DeltaReport, RowDelta, render_delta_ascii
 # ---------------------------------------------------------------------------
 
 
+def _with_forced_status(row: RowDelta, status: str) -> RowDelta:
+    """Set a status no constructor or reader accepts (#266), to test a renderer's own guard."""
+    object.__setattr__(row, "status", status)
+    return row
+
+
 def _make_report(rows: list[RowDelta], summary: dict[str, float | int]) -> DeltaReport:
     return DeltaReport(
         current_run_id="cur_runid_abcdef0123",
@@ -258,9 +264,17 @@ def test_render_escapes_pipe_in_status_so_columns_dont_break():
     # #130/#134/#142 wired every other cell through it. A `|` in status injects an
     # extra GFM column; the row's unescaped-pipe count must equal the header's.
     # Fails pre-fix (the piped status row carried one extra unescaped pipe).
+    #
+    # Since #266 neither `RowDelta` nor its reader accepts a status outside
+    # `DELTA_ROW_STATUSES`, so this row is forced past the constructor: the
+    # escaping stays as defence in depth and this pins it.
     md = render_delta_markdown(
         _make_report(
-            [RowDelta("qa_01", 0.6, 0.9, 0.3, "improved | INJECTED", False)],
+            [
+                _with_forced_status(
+                    RowDelta("qa_01", 0.6, 0.9, 0.3, "improved", False), "improved | INJECTED"
+                )
+            ],
             _default_summary(mean_delta=0.3, n_improved=1),
         )
     )
@@ -281,9 +295,14 @@ def test_render_neutralizes_newline_in_status_so_the_row_stays_one_line():
     # delimiter — it splits the cell across two physical lines, corrupting the
     # table exactly as an unescaped pipe corrupts columns. The status-bearing row
     # must render as exactly one physical line. Fails pre-fix (row split in two).
+    # Forced past the constructor, as in the pipe case above (#266).
     md = render_delta_markdown(
         _make_report(
-            [RowDelta("qa_01", 0.9, 0.4, -0.5, "regressed\nEVIL", True)],
+            [
+                _with_forced_status(
+                    RowDelta("qa_01", 0.9, 0.4, -0.5, "regressed", True), "regressed\nEVIL"
+                )
+            ],
             _default_summary(mean_delta=-0.5, n_regressed=1, n_flagged=1),
         )
     )
