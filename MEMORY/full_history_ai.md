@@ -3227,3 +3227,24 @@ context_for_next_session:
   - examples_drift_report_py_NamedTemporaryFile_IS_A_SCRATCH_FILE_IN_THE_SYSTEM_TEMP_DIR_NOT_AN_ATOMIC_WRITE_0600_IS_CORRECT_THERE_left_alone
 followups: ["portfolio-ops#81"]
 ---
+
+---
+session: 2026-10-02T07:26Z
+issue: 278
+focus: A_BARE_STRING_IS_A_Sequence_str_SO_compute_drift_Example_tags_AND_filter_examples_by_tags_SPLIT_IT_INTO_LETTERS
+phase: shipped
+duration_min: 5   # plan comment 07:21:29Z -> date -u 07:26Z
+delta:
+  files_changed: 5
+  tests_added: 29
+  suite: "2138 -> 2167 green; ruff check and ruff format --check clean"
+decisions_made: []
+measured: "revert probe, ONE SUBPROCESS PER TEST ID over 29 ids (the id count is asserted, not assumed): baseline 0 red, compute_drift guard alone 7 red, Example guard alone 4 red, filter guard alone 4 red INCLUDING the run_suite arm. First probe run looped ZERO times because pyproject addopts already has -q so --collect-only -q is -qq and prints path: count."
+context_for_next_session:
+  - ONE_HELPER_refuse_bare_string_IN_dataset_py_called_from_Example___post_init___filter_examples_by_tags_AND_compute_drift_which_imports_it_the_tags_message_LEADS_WITH_THE_LOADERS_FIELD_RULES_REASON
+  - THE_ORCHESTRATOR_ARM_GOES_THROUGH_RunSpec_tags_run_suite_AND_A_ROW_TAGGED_e_WHICH_main_SCORED_AS_THE_geometry_SUBSET_backend_calls_must_be_0
+  - dump_jsonl_BARE_STRING_BRANCH_IS_NOW_UNREACHABLE_THROUGH_THE_CONSTRUCTOR_two_tests_in_test_dataset_dump_schema_reach_it_via_object___setattr___smuggled_tags_KEPT_AS_DEFENCE_IN_DEPTH
+  - THE_OWNERSHIP_LOCK_test_the_validated_half_of_the_pair_FLAGGED_Example_tags_AND_THE_FIX_WAS_TO_NARROW_THE_DETECTOR_NOT_TO_COPY_a_read_whose_only_use_is_refuse_bare_string_CHECKS_THE_BINDING_WHICH_frozen_ALREADY_PROTECTS_probe_adding_an_element_read_beside_it_turns_the_lock_RED_again
+  - Example_tags_IS_STILL_STORED_AS_GIVEN_a_list_stays_a_list_and_a_GENERATOR_tags_IS_CONSUMED_BY_THE_FIRST_set_ex_tags_NOT_FIXED_HERE_the_issue_said_other_collections_behave_as_before
+followups: []
+---
