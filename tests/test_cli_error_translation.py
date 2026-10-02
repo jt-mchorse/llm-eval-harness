@@ -304,7 +304,7 @@ def test_comment_container_row_score_exits_two(tmp_path: Path, capsys, field: st
     # — an uncaught TypeError at exit 1. Must be exit 2.
     row = {
         "example_id": "ex1",
-        "status": "changed",
+        "status": "improved",
         "baseline_score": 0.8,
         "current_score": 0.9,
         "delta": 0.1,

@@ -421,9 +421,11 @@ def test_the_population_is_the_six_rows_and_not_an_empty_pass() -> None:
 def test_the_validated_half_of_the_pair_is_empty_here_and_says_so() -> None:
     """`chunking-strategies-lab` D-019: a field must be owned if its annotation
     is a mutable container *or* `__post_init__` validates it, and neither
-    condition is a superset. In this package the second half is empty -- no
-    frozen record's `__post_init__` names a tuple/Sequence field -- which is a
-    result, pinned so the day one gains a validator this arm moves."""
+    condition is a superset. This arm pins that no frozen record validates a
+    tuple/Sequence field without owning it. It used to say the second half was
+    *empty*; it is not any more -- `RunResult.rows` (#264) and `DeltaReport.rows`
+    (#266) are validated, and both are copied to a tuple, which is why this
+    still passes. Reverting either copy turns it red."""
     immutable_annotated = ("tuple", "Sequence", "frozenset")
     validated_not_owned = []
     for module, node in _frozen_dataclasses():
