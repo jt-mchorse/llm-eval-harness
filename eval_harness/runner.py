@@ -257,14 +257,171 @@ def _finite_or_none(value: Any, field_name: str, example_id: Any) -> float | Non
     return f
 
 
+# ----------------------------------------------------------------------
+# The delta record's rules, one definition each, for both paths (#266)
+# ----------------------------------------------------------------------
+#
+# The #264 sibling one record over. `DeltaReport.from_json` and
+# `RowDelta.from_json` gained their rules one issue at a time (#42, #89, #116,
+# #150, #190, #228, #230) and the constructors had none, so a hand-built report
+# rendered -- or crashed the renderer -- in a shape the `comment` CLI's own
+# reader refuses. And the reader was *looser* than the producer twice: it read
+# back a negative `threshold_drop`, which `diff_runs` refuses, and any `status`
+# string, where `diff_runs` produces five. Each rule is now one function called
+# by the reader and by `__post_init__`, with the reader's messages unchanged;
+# `test_the_delta_writer_enforces_every_rule_the_reader_states` fails if the
+# reader gains a rule the constructor does not share.
+
+#: Every `status` `diff_runs` gives a row: `_status_for`'s three for an id on
+#: both sides, plus `new` and `removed`. The summary's `n_*` counts are keyed
+#: on exactly these.
+DELTA_ROW_STATUSES: tuple[str, ...] = ("improved", "regressed", "unchanged", "new", "removed")
+
+
+def _checked_threshold_drop(value: Any) -> float:
+    """A finite ``threshold_drop >= 0`` -- ``diff_runs``' rule, now everyone's.
+
+    ``_status_for`` flips the sign (``delta < -threshold_drop``), so a negative
+    value inverts regression detection, and a NaN makes every comparison false
+    so nothing is ever flagged (#42). The reader refused the second and read
+    back the first (#266).
+    """
+    threshold_drop = float(_require_number(value, "threshold_drop"))
+    if not math.isfinite(threshold_drop):
+        raise ValueError(
+            f"non-finite threshold_drop {threshold_drop}; threshold_drop must be a "
+            "finite number >= 0.0 — a NaN/Infinity value renders as 'nan' in the "
+            "posted PR comment and flags nothing"
+        )
+    if threshold_drop < 0.0:
+        raise ValueError(
+            f"threshold_drop must be a finite number >= 0.0; got {threshold_drop} — "
+            "the regression test is `delta < -threshold_drop`, so a negative value "
+            "inverts it"
+        )
+    return threshold_drop
+
+
+def _check_delta_row_example_id(example_id: Any) -> str:
+    if not isinstance(example_id, str) or not example_id:
+        raise ValueError(
+            f"example_id must be a non-empty string; got {example_id!r} — a "
+            "null/non-string example_id renders as a literal 'None' row id in the "
+            "posted PR comment"
+        )
+    return example_id
+
+
+def _check_delta_row_status(status: Any, example_id: str) -> str:
+    # `status` lands in two renderers -- the GFM cell in `comment._row_to_md`
+    # and `render_delta_text`'s `f"{r.status:9}"` -- so a non-string was a raw
+    # AttributeError/TypeError at exit 1 (#124). An unknown string rendered
+    # fine and was counted by none of the summary's `n_*` fields (#266).
+    if not isinstance(status, str):
+        raise ValueError(
+            f"status must be a string; got {type(status).__name__} for example_id {example_id!r}"
+        )
+    if status not in DELTA_ROW_STATUSES:
+        raise ValueError(
+            f"status must be one of {', '.join(DELTA_ROW_STATUSES)}; got {status!r} for "
+            f"example_id {example_id!r} — diff_runs produces no other, and the "
+            "summary counts are keyed on these"
+        )
+    return status
+
+
+def _check_delta_row_flagged(flagged: Any, example_id: str) -> bool:
+    # Required *exactly* a bool (#230): every consumer reads it by truthiness,
+    # so `"false"` invents a flag and `0` suppresses one, and `isinstance(v,
+    # int)` would accept both `1` and `True`. The full reasoning is at the
+    # call site in `RowDelta.from_json`.
+    if not isinstance(flagged, bool):
+        raise ValueError(
+            f"flagged must be a boolean when present; got {flagged!r} for example_id "
+            f"{example_id!r} — every consumer reads it by truthiness, so a non-bool "
+            "silently invents a regression flag (any truthy value, including the "
+            'JSON string "false") or suppresses a real one (0, "", [], null), '
+            "contradicting the n_flagged count rendered on the same comment"
+        )
+    return flagged
+
+
+def _check_delta_summary(summary: dict[str, Any]) -> None:
+    mean_delta = summary.get("mean_delta")
+    # `mean_delta` may be legitimately absent or an explicit null (an
+    # undefined mean Δ, e.g. an all-new suite — the renderer coerces that
+    # to 0.0). Only a present, non-null, non-finite value is corruption.
+    if mean_delta is not None and not math.isfinite(
+        float(_require_number(mean_delta, "mean_delta"))
+    ):
+        raise ValueError(
+            f"non-finite mean_delta {mean_delta} in delta JSON summary; mean_delta must be "
+            "finite — a NaN/Infinity value renders as '+nan' in the posted PR comment"
+        )
+    # The count fields are rendered by `comment._count` via a bare `int(v)`
+    # (#116), outside `_run_comment`'s exit-2 try. `_require_int` rather than
+    # `int(_require_number(...))` is what keeps `1e400` from raising
+    # OverflowError past `except ValueError` (#190). The full history is at the
+    # call site in `DeltaReport.from_json`.
+    for count_key in (
+        "n_flagged",
+        "n_regressed",
+        "n_improved",
+        "n_new",
+        "n_removed",
+        "n_unchanged",
+    ):
+        count_val = summary.get(count_key)
+        if count_val is not None:
+            try:
+                _require_int(count_val, count_key)
+            except ValueError as e:
+                raise ValueError(
+                    f"delta JSON summary '{count_key}' must be an integer count when "
+                    f"present; got {count_val!r} — {e}"
+                ) from None
+
+
+def _check_delta_run_id(label: str, value: Any) -> str:
+    if not isinstance(value, str):
+        raise ValueError(
+            f"{label} must be a string when present; got {value!r} — a null value "
+            f"crashes the delta renderer's {label}[:8] slice with a raw TypeError"
+        )
+    return value
+
+
+def _check_delta_suite(suite: Any) -> str:
+    if not isinstance(suite, str):
+        raise ValueError(
+            f"suite must be a string when present; got {suite!r} — a null/non-string "
+            "suite crashes the markdown renderer's code span with a raw AttributeError "
+            "and renders as a literal 'None' suite name in the ascii header"
+        )
+    return suite
+
+
 @dataclass(frozen=True)
 class RowDelta:
     example_id: str
     baseline_score: float | None  # None when row is `new` in current
     current_score: float | None  # None when row is `removed`
     delta: float | None  # None when either side is missing
-    status: str  # "improved" | "regressed" | "unchanged" | "new" | "removed"
+    status: str  # one of DELTA_ROW_STATUSES
     flagged: bool
+
+    def __post_init__(self) -> None:
+        # The write-side half of every rule `from_json` states (#266), sharing
+        # its definitions. The three scores are *stored* as the checked float,
+        # not only checked: the reader coerces a numeric string with `float()`,
+        # and both renderers format these with `.3f`, so a stored `"0.5"` would
+        # be a raw ValueError at render time rather than a value.
+        _check_delta_row_example_id(self.example_id)
+        _check_delta_row_status(self.status, self.example_id)
+        _check_delta_row_flagged(self.flagged, self.example_id)
+        for name in ("baseline_score", "current_score", "delta"):
+            checked = _finite_or_none(getattr(self, name), name, self.example_id)
+            object.__setattr__(self, name, checked)
 
     @classmethod
     def from_json(cls, payload: dict[str, Any]) -> RowDelta:
@@ -285,6 +442,9 @@ class RowDelta:
         fields is now validated at this boundary: three by type
         (``example_id``, ``status``, ``flagged``) and three by
         finiteness (``baseline_score``, ``current_score``, ``delta``).
+        Since #266 ``status`` must also be one of ``DELTA_ROW_STATUSES``,
+        and every rule here is shared with :meth:`__post_init__`, so a
+        hand-built row is held to the same contract.
 
         ``baseline_score`` / ``current_score`` / ``delta`` are rejected
         when present-but-non-finite (NaN / +/-Infinity), the same
@@ -306,26 +466,20 @@ class RowDelta:
         # `render_delta_markdown` and posts the literal string 'None' as the row
         # id in the PR comment (exit 0, silently wrong) instead of failing clean.
         # `_run_comment` already translates this ValueError to exit 2.
-        if not isinstance(example_id, str) or not example_id:
-            raise ValueError(
-                f"example_id must be a non-empty string; got {example_id!r} — a "
-                "null/non-string example_id renders as a literal 'None' row id in the "
-                "posted PR comment"
-            )
+        _check_delta_row_example_id(example_id)
         # Same parity guard as `example_id` above: `status` is a required
-        # free-form string that lands in two renderers — the GFM table cell in
+        # string (free-form until #266) that lands in two renderers — the GFM table cell in
         # `comment._row_to_md` (escaped via `md_table_cell`) and the ascii row
         # in `render_delta_text` (`f"{r.status:9}"`). A present-but-non-string
         # status from an externally-produced delta JSON would raise a raw
         # AttributeError (`md_table_cell(...).replace`) or TypeError (the `:9`
         # format spec) at exit 1, breaking the exit-2 contract the comment path
         # honors (#124). Reject it as a clean ValueError here instead.
-        status = payload["status"]
-        if not isinstance(status, str):
-            raise ValueError(
-                f"status must be a string; got {type(status).__name__} for "
-                f"example_id {example_id!r}"
-            )
+        #
+        # And a *string* outside `DELTA_ROW_STATUSES` read back fine (#266),
+        # though `diff_runs` produces five values and the summary counts are
+        # keyed on exactly those.
+        status = _check_delta_row_status(payload["status"], example_id)
         # `flagged` was the last field on this row read with a bare `.get` and no
         # type check at all — the row-level sibling of the `suite` gap #228 closed
         # one level up. It is annotated `bool` and every consumer reads it by
@@ -364,15 +518,7 @@ class RowDelta:
         # guard below rejects one — `.get` defaults only fire on a MISSING key —
         # while a genuinely missing key still defaults to `False` for the older
         # payloads the docstring promises to keep reading.
-        flagged = payload.get("flagged", False)
-        if not isinstance(flagged, bool):
-            raise ValueError(
-                f"flagged must be a boolean when present; got {flagged!r} for example_id "
-                f"{example_id!r} — every consumer reads it by truthiness, so a non-bool "
-                "silently invents a regression flag (any truthy value, including the "
-                'JSON string "false") or suppresses a real one (0, "", [], null), '
-                "contradicting the n_flagged count rendered on the same comment"
-            )
+        flagged = _check_delta_row_flagged(payload.get("flagged", False), example_id)
         return cls(
             example_id=example_id,
             baseline_score=_finite_or_none(
@@ -408,6 +554,26 @@ class DeltaReport:
         if not isinstance(self.summary, dict):
             raise TypeError(f"summary must be a dict; got {type(self.summary).__name__}")
         object.__setattr__(self, "summary", copy_json_value(self.summary))
+        # The write-side half of every rule `from_json` states (#266), sharing
+        # its definitions; the summary is checked *after* the copy, so what was
+        # checked is what is kept. `threshold_drop` is stored as the checked
+        # float for the reason `RowDelta`'s scores are: both renderers format it
+        # through `render_configured`, which a numeric string crashes.
+        _check_delta_run_id("current_run_id", self.current_run_id)
+        _check_delta_run_id("baseline_run_id", self.baseline_run_id)
+        _check_delta_suite(self.suite)
+        object.__setattr__(self, "threshold_drop", _checked_threshold_drop(self.threshold_drop))
+        _check_delta_summary(self.summary)
+        # Shape before the per-row loop and the copy: a `str` is iterable.
+        # Validated, so owned (D-019): a caller's list would otherwise let a
+        # later append reach the frozen report. `RowDelta` validates itself and
+        # is frozen with scalar fields, so a tuple is the whole depth.
+        if not isinstance(self.rows, (list, tuple)):
+            raise TypeError(f"rows must be a tuple of RowDelta; got {type(self.rows).__name__}")
+        for index, row in enumerate(self.rows):
+            if not isinstance(row, RowDelta):
+                raise TypeError(f"rows[{index}] must be a RowDelta; got {type(row).__name__}")
+        object.__setattr__(self, "rows", tuple(self.rows))
 
     @property
     def regressed_ids(self) -> list[str]:
@@ -478,14 +644,11 @@ class DeltaReport:
             raise ValueError(
                 f"delta JSON top-level value must be a JSON object; got {type(payload).__name__}"
             )
-        threshold_drop = float(
-            _require_number(payload.get("threshold_drop", DEFAULT_THRESHOLD_DROP), "threshold_drop")
+        # Non-finite was refused here since #89; a negative value read back
+        # until #266, though `diff_runs` refuses it. One rule now, `diff_runs`'.
+        threshold_drop = _checked_threshold_drop(
+            payload.get("threshold_drop", DEFAULT_THRESHOLD_DROP)
         )
-        if not math.isfinite(threshold_drop):
-            raise ValueError(
-                f"non-finite threshold_drop {threshold_drop} in delta JSON; threshold_drop "
-                "must be finite — a NaN/Infinity value renders as 'nan' in the posted PR comment"
-            )
         # A present-but-non-object `summary` (a JSON number/list/bool) reaches
         # `dict(...)` and raises a raw `TypeError` (exit 1) — the nested-container
         # sibling of the top-level guard above (#150 covered the top level and the
@@ -499,18 +662,7 @@ class DeltaReport:
                 f"got {type(summary_raw).__name__}"
             )
         summary = dict(summary_raw or {})
-        mean_delta = summary.get("mean_delta")
-        # `mean_delta` may be legitimately absent or an explicit null (an
-        # undefined mean Δ, e.g. an all-new suite — the renderer coerces that
-        # to 0.0). Only a present, non-null, non-finite value is corruption.
-        if mean_delta is not None and not math.isfinite(
-            float(_require_number(mean_delta, "mean_delta"))
-        ):
-            raise ValueError(
-                f"non-finite mean_delta {mean_delta} in delta JSON summary; mean_delta must be "
-                "finite — a NaN/Infinity value renders as '+nan' in the posted PR comment"
-            )
-        # The summary count fields (`n_flagged` etc.) are rendered by
+        # `mean_delta` must be finite when present (#89). The summary count fields (`n_flagged` etc.) are rendered by
         # `comment._count` via a bare `int(v)`; #116 guarded the present-but-null
         # case there, but a present-but-non-numeric value — a JSON array/object
         # (`int([1,2])` → TypeError) or a non-numeric string (`int("abc")` →
@@ -525,23 +677,7 @@ class DeltaReport:
         # `int(_require_number(...))`) is what keeps an infinite count — `1e400`
         # is a plain JSON number — from raising OverflowError straight through
         # the `except ValueError` below and out as a traceback at exit 1 (#190).
-        for _count_key in (
-            "n_flagged",
-            "n_regressed",
-            "n_improved",
-            "n_new",
-            "n_removed",
-            "n_unchanged",
-        ):
-            _count_val = summary.get(_count_key)
-            if _count_val is not None:
-                try:
-                    _require_int(_count_val, _count_key)
-                except ValueError as e:
-                    raise ValueError(
-                        f"delta JSON summary '{_count_key}' must be an integer count when "
-                        f"present; got {_count_val!r} — {e}"
-                    ) from None
+        _check_delta_summary(summary)
         # `.get` defaults only fire on a MISSING key; a present-but-null
         # current_run_id/baseline_run_id passes None straight to the renderers,
         # where `current_run_id[:8]` raises a raw TypeError (exit 1) instead of the
@@ -549,15 +685,8 @@ class DeltaReport:
         # mean_delta guard above. Reject a non-string value here.
         current_run_id = payload.get("current_run_id", "current")
         baseline_run_id = payload.get("baseline_run_id", "baseline")
-        for _label, _val in (
-            ("current_run_id", current_run_id),
-            ("baseline_run_id", baseline_run_id),
-        ):
-            if not isinstance(_val, str):
-                raise ValueError(
-                    f"{_label} must be a string when present; got {_val!r} — a null value "
-                    f"crashes the delta renderer's {_label}[:8] slice with a raw TypeError"
-                )
+        _check_delta_run_id("current_run_id", current_run_id)
+        _check_delta_run_id("baseline_run_id", baseline_run_id)
         # `suite` is the third top-level string read with a bare `.get` default, and
         # until #228 it was the only field in this classmethod with no type check at
         # all. `RowDelta.from_json`'s `status` guard below already states the
@@ -571,13 +700,7 @@ class DeltaReport:
         # Two different failures, one cause, so the guard belongs here at the parse
         # boundary rather than in either renderer. `_run_comment` translates this
         # ValueError to the clean exit-2 line.
-        suite = payload.get("suite", "(unknown)")
-        if not isinstance(suite, str):
-            raise ValueError(
-                f"suite must be a string when present; got {suite!r} — a null/non-string "
-                "suite crashes the markdown renderer's code span with a raw AttributeError "
-                "and renders as a literal 'None' suite name in the ascii header"
-            )
+        suite = _check_delta_suite(payload.get("suite", "(unknown)"))
         # A present-but-non-array `rows` (a JSON number/object/bool) reaches the
         # `for r in ...` and raises a raw `TypeError: not iterable` (exit 1) —
         # the same nested-container sibling as `summary` above. Reject it as a
@@ -746,8 +869,10 @@ def diff_runs(
     # is silently non-flagged → the CI regression gate silently disables.
     # Same shape as the sweep landed in ai-app-integration-tests #24 and
     # sister repos.
-    if not math.isfinite(threshold_drop) or threshold_drop < 0.0:
-        raise ValueError(f"threshold_drop must be a finite number >= 0.0; got {threshold_drop}")
+    #
+    # Since #266 this is the one definition the delta reader and `DeltaReport`
+    # share, so a report `diff_runs` would refuse to build cannot be read back.
+    threshold_drop = _checked_threshold_drop(threshold_drop)
     if current.suite != baseline.suite:
         raise ValueError(
             f"cannot diff across suites: current={current.suite} baseline={baseline.suite}"

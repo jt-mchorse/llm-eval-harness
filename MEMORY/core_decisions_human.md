@@ -1158,3 +1158,20 @@ Found by widening the #262 sibling sweep: `RunResult.n_rows` beside `rows` looke
 **Reversibility:** Cheap.
 
 **Related issues:** #264, #186, #185, #190, #262, #204
+
+## D-033 — The delta record's constructors enforce every rule its reader states (2026-10-01)
+**Decision:** Each rule `DeltaReport.from_json` and `RowDelta.from_json` state is one module-level `_check*` function, called by the reader and by the record's `__post_init__`. The two rules where the reader was looser than `diff_runs` now take `diff_runs`' definition: a negative `threshold_drop` is refused everywhere, and `status` must be one of the five values in `DELTA_ROW_STATUSES`.
+
+**Why:** It is #264's shape one record over. The readers gained their rules one issue at a time (#42, #89, #116, #150, #190, #228, #230) and the constructors had none, so a hand-built report could be rendered and written in a shape the `comment` CLI's own reader refuses — and `suite=None` crashed the markdown renderer outright. The reader also read back two things the producer can never emit: a negative `threshold_drop`, which inverts the regression test, and a status that none of the summary's `n_*` counts include.
+
+`threshold_drop` and the three row scores are stored as the checked float, not only checked. D-032 declined to coerce κ because a stored numeric string still round-trips. These fields are different: both renderers format them as floats, so a stored `"0.5"` was a raw ValueError at render time.
+
+**Alternatives considered:**
+- Check without storing — rejected, built and run: 1 red each, and a numeric string crashes both renderers.
+- A second copy of a rule in its own words — rejected, built and run, 2 red.
+- Keep the reader loose on negative `threshold_drop` (8 red) or on `status` (2 red) — rejected.
+- A `flagged`-only-when-`regressed` consistency rule — deferred: it is a new rule, not one either reader states.
+
+**Reversibility:** Cheap.
+
+**Related issues:** #266, #264, #262, #230, #228, #190, #164, #42
