@@ -3157,3 +3157,14 @@ cleanup are unchanged. 11 new tests cover umask 022 and 077, overwrites of
 0644/0600/0640, the capped-name path, a latin-1 write, an unknown encoding, and
 `Dataset.dump_jsonl`. Reverting to main's helper turns 8 of them red. Part of
 portfolio-ops#81.
+
+## 2026-10-02 — run refuses a read-only database before paying for the judge (#281)
+
+#276 added a database check that runs before `run` scores anything. On a
+database that already exists, though, its schema step writes nothing, so a
+database the process could read but not write still passed. `run` then paid one
+judge call per row and failed when it tried to save. The check now performs a
+real write inside a transaction that it rolls back. `BEGIN IMMEDIATE` on its own
+was tried first and passes both read-only cases, so it wasn't enough. 8 new
+tests cover a read-only file, a read-only directory, zero judge calls, and the
+CLI's exit 2.
