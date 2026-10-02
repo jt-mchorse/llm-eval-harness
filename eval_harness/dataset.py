@@ -130,6 +130,10 @@ class Example:
         # the first level. `object.__setattr__` is how a frozen dataclass
         # assigns during `__post_init__`.
         object.__setattr__(self, "provenance", copy_json_value(self.provenance))
+        # `tags="geometry"` stayed a `str`, so `set(ex.tags)` in the tag filter
+        # was seven letters and the example was invisible to its own tag (#278).
+        # `dump_jsonl` already refused it, two calls too late for a filter.
+        refuse_bare_string("tags", self.tags, _FIELD_RULES_BY_NAME["tags"][1])
 
     def to_dict(self) -> dict[str, Any]:
         # `tags` is emitted only when non-empty so round-trip files don't gain
@@ -398,6 +402,29 @@ _FIELD_RULES: tuple[tuple[str, Any, str], ...] = (
 )
 
 _FIELD_RULES_BY_NAME = {name: (pred, reason) for name, pred, reason in _FIELD_RULES}
+
+
+def refuse_bare_string(name: str, value: Any, reason: str) -> None:
+    """Raise `ValueError` if `value` is a bare `str`/`bytes` (#278).
+
+    For a parameter annotated as a collection of strings. A `str` *is* a
+    `Sequence[str]` and an `Iterable[str]`, so the annotation admits it, mypy
+    accepts it, and every coercion downstream (`set(...)`, `list(...)`, a `for`
+    loop) quietly turns `"geometry"` into seven one-character entries. Nothing
+    after the coercion can tell, because the result is a well-formed collection
+    of strings -- which is why the check has to run on the value as the caller
+    passed it.
+
+    Only the bare-string shape: every other collection a caller passes today
+    behaves exactly as before. `reason` leads the message so a caller who knows
+    the loader's wording (`_FIELD_RULES`) recognises it.
+    """
+    if isinstance(value, (str, bytes, bytearray)):
+        fix = f"pass {name}=[{value!r}]" if isinstance(value, str) else "decode it to str first"
+        raise ValueError(
+            f"{reason}; {name}={value!r} is a bare {type(value).__name__}, which would "
+            f"be split into its characters -- {fix}"
+        )
 
 
 def _find_field_violation(values: Mapping[str, Any], fields: Sequence[str]) -> str | None:
@@ -707,7 +734,12 @@ def filter_examples_by_tags(
     operator who wants to score "the geometry cluster or the history cluster
     in one shot". Strict-intersection (`--require-all-tags`) is a future
     extension if anyone asks; it's deliberately out-of-scope for issue #15.
+
+    A bare `str` for `tags` raises `ValueError`, including `""`: `"geometry"`
+    was read as the letter set and selected nothing (#278).
     """
+    if tags is not None:
+        refuse_bare_string("tags", tags, _FIELD_RULES_BY_NAME["tags"][1])
     materialized = list(examples)
     if not tags:
         return materialized
