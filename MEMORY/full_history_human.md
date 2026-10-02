@@ -3157,3 +3157,13 @@ cleanup are unchanged. 11 new tests cover umask 022 and 077, overwrites of
 0644/0600/0640, the capped-name path, a latin-1 write, an unknown encoding, and
 `Dataset.dump_jsonl`. Reverting to main's helper turns 8 of them red. Part of
 portfolio-ops#81.
+
+## 2026-10-02 — Cohen's κ is exact, so a judge right at the threshold passes (#283)
+
+κ was computed from floating-point fractions. A value that is exactly a round
+number could land a hair below it: an exact 3/5 came out as
+0.5999999999999996. The calibration gate is "κ ≥ 0.6", so a judge that met the
+bar exactly was reported as FAIL and the CLI exited with an error. The same
+effect labelled an exact 0.4 as "fair" instead of "moderate". κ is now computed
+exactly from the integer counts and converted to a float once at the end. A new
+test checks every 2×2 table up to 30 rows against the exact value.

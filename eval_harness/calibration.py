@@ -15,6 +15,7 @@ import json
 import math
 from collections.abc import Iterable
 from dataclasses import dataclass
+from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
@@ -473,16 +474,23 @@ def cohens_kappa(rater_a: list[int], rater_b: list[int]) -> float:
     _require_binary_labels(rater_a, "rater_a")
     _require_binary_labels(rater_b, "rater_b")
 
+    # Exact rational arithmetic on the integer counts, one float conversion at
+    # the end (#283). In floats, `sum/n` marginals left a κ that is exactly a
+    # round number a few ULP BELOW it -- 3/5 came out 0.5999999999999996 -- and
+    # every consumer compares against round numbers: the `>= threshold_kappa`
+    # gate (default 0.6) failed a judge that met it exactly, and
+    # `_interpret_kappa`'s ladder labelled an exact 2/5 "fair". The labels are
+    # validated as 0 or 1 above, so `int(...)` is exact.
     n = len(rater_a)
-    po = sum(1 for a, b in zip(rater_a, rater_b, strict=True) if a == b) / n
+    po = Fraction(sum(1 for a, b in zip(rater_a, rater_b, strict=True) if a == b), n)
 
-    a_pos = sum(rater_a) / n
-    b_pos = sum(rater_b) / n
+    a_pos = Fraction(int(sum(rater_a)), n)
+    b_pos = Fraction(int(sum(rater_b)), n)
     pe = a_pos * b_pos + (1 - a_pos) * (1 - b_pos)
 
-    if pe == 1.0:
+    if pe == 1:
         return 0.0
-    return (po - pe) / (1 - pe)
+    return float((po - pe) / (1 - pe))
 
 
 def _require_finite_numbers(values: list[float], label: str) -> None:
