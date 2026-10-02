@@ -354,7 +354,7 @@ def test_atomic_write_text_honors_encoding_parameter(tmp_path: Path) -> None:
     """Public API exposes `encoding`; non-utf-8 callers must be able to opt in."""
     out = tmp_path / "latin.txt"
     # Payload uses only characters expressible in latin-1 — the test is
-    # whether the helper threads `encoding` through to NamedTemporaryFile,
+    # whether the helper threads `encoding` through to the temp file,
     # not whether the codec accepts every Unicode char.
     payload = "café naïveté"
     atomic_write_text(out, payload, encoding="latin-1")

@@ -3143,3 +3143,17 @@ drift. Part of portfolio-ops#80.
 **Open questions / blockers:** none.
 
 **Next session:** none queued.
+
+## 2026-10-01T08:52Z — #274: atomic writes honour the umask and keep an existing file's mode
+
+`atomic_write_text` built its temp file with `NamedTemporaryFile`, which always
+creates 0600, and `os.replace` carried that mode onto the target. With umask 022
+every new artifact came out 0600 (run/diff `--out`, the calibrate and drift HTML
+reports, `Dataset.dump_jsonl`), and overwriting a 0644 file demoted it to 0600.
+The temp file is now opened with mode 0o666, so the kernel applies the umask. If
+the target already exists, its mode is copied onto the temp before the rename.
+The temp-name cap, surrogate handling, the `encoding` parameter, fsync and
+cleanup are unchanged. 11 new tests cover umask 022 and 077, overwrites of
+0644/0600/0640, the capped-name path, a latin-1 write, an unknown encoding, and
+`Dataset.dump_jsonl`. Reverting to main's helper turns 8 of them red. Part of
+portfolio-ops#81.
