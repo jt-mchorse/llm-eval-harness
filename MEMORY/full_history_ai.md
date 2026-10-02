@@ -3227,3 +3227,19 @@ context_for_next_session:
   - examples_drift_report_py_NamedTemporaryFile_IS_A_SCRATCH_FILE_IN_THE_SYSTEM_TEMP_DIR_NOT_AN_ATOMIC_WRITE_0600_IS_CORRECT_THERE_left_alone
 followups: ["portfolio-ops#81"]
 ---
+
+---
+session: 2026-10-02T13:00Z
+issue: 285
+focus: drift_READ_JSONL_WITH_splitlines_SO_A_VALID_ROW_CONTAINING_U2028_WAS_CUT_IN_HALF_READ_PATH_STRICTER_THAN_ITS_WRITER
+phase: shipped
+delta:
+  files_changed: 2
+  tests_added: 13
+  suite: "2138 -> 2151 green; ruff clean"
+decisions_made: []
+measured: "main: dump_jsonl -> validate ok -> drift rc 2 'invalid JSON' on a row with U+2028. Revert: 5 of 13 red. The U+000B/C and U+001C-1E rows stay green even on main because json.dumps escapes control chars regardless of ensure_ascii; only U+2028/U+2029/U+0085 reach the file raw."
+context_for_next_session:
+  - str_splitlines_IS_NOT_LINE_ITERATION_grep_the_portfolio_for_splitlines_on_JSONL_reads
+followups: []
+---

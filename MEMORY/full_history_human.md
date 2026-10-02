@@ -3157,3 +3157,12 @@ cleanup are unchanged. 11 new tests cover umask 022 and 077, overwrites of
 0644/0600/0640, the capped-name path, a latin-1 write, an unknown encoding, and
 `Dataset.dump_jsonl`. Reverting to main's helper turns 8 of them red. Part of
 portfolio-ops#81.
+
+## 2026-10-02 — drift reads JSONL the way the rest of the package does (#285)
+
+`drift` split its JSONL input with `str.splitlines()`, which also treats
+U+2028, U+2029 and U+0085 as line breaks. Those characters can appear raw
+inside a JSON string, so a valid row was cut in half and refused as invalid
+JSON. That happened even on a file the package's own writer produced and its
+own validator accepted. It now splits only on real line endings. 13 new tests,
+including dump → validate → drift on the same file.
