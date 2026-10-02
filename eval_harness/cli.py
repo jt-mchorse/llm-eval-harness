@@ -38,7 +38,7 @@ from eval_harness.comment import (
 )
 from eval_harness.comparison import render_comparison
 from eval_harness.dataset import DatasetLoadError, load_jsonl, validate_dataset
-from eval_harness.io_utils import atomic_write_text
+from eval_harness.io_utils import atomic_write_text, check_writable
 from eval_harness.judge import (
     AnthropicBackend,
     Judge,
@@ -401,6 +401,12 @@ def _run_calibrate(args: argparse.Namespace) -> int:
     # extra / API key needed) and reports exit 2 with a clean ::error:: line.
     if not rows:
         return _fail(f"no rows to calibrate against in {args.calibration}")
+    # `--report` is written after the judge has scored every row; an unwritable
+    # path used to cost the whole calibration run and then fail (#287).
+    try:
+        check_writable(args.report)
+    except OSError as e:
+        return _fail(f"failed to write {args.report}: {e}")
     # `AnthropicBackend.__init__` imports `anthropic`, so in a minimal install
     # (CI installs `.[dev]`, not `[judge]`) it raises `ImportError` right here.
     # The zero-row guard above already argues that this "breaks the `2 = usage
@@ -528,6 +534,14 @@ def _run_run(args: argparse.Namespace) -> int:
         check_db(args.db)
     except (sqlite3.Error, OSError) as e:
         return _db_fail(args.db, e)
+    # The other output written after the paid loop (#287): the scores reach the
+    # database, but the run JSON the Action's comment step reads did not, and
+    # the command exited 2 having paid for every row.
+    if args.out:
+        try:
+            check_writable(args.out)
+        except OSError as e:
+            return _fail(f"failed to write {args.out}: {e}")
 
     # Same construction-time `ImportError` as `_run_calibrate`. The comment on
     # the dataset-load seam above already reasons about this exception — it is
