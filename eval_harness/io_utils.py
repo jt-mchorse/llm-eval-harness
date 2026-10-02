@@ -423,6 +423,26 @@ def atomic_write_text(path: str | Path, text: str, encoding: str = "utf-8") -> N
 # with `0o666` so the KERNEL applies the umask (reading the umask in Python
 # needs `os.umask(0)`, which briefly changes it for every thread), and an
 # existing target's mode is copied onto the temp before the rename.
+def check_writable(path: str | Path) -> None:
+    """Raise the `OSError` `atomic_write_text(path, ...)` would, without writing (#287).
+
+    A preflight for a write that comes after paid work: `calibrate --report` and
+    `run --out` were checked only when the result was ready, so an unwritable
+    path cost a judge call per row first. This does what the writer does -- the
+    same parent `mkdir` and the same temp file created beside the target -- and
+    removes the temp file again, so a path passes exactly when the real write
+    would get that far. A target that is an existing directory is refused too:
+    the writer's final `os.replace` onto it would fail.
+    """
+    target = Path(path)
+    if target.is_dir():
+        raise IsADirectoryError(21, "Is a directory", str(target))
+    target.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_path = _open_temp(target)
+    os.close(fd)
+    tmp_path.unlink()
+
+
 _TEMP_ATTEMPTS = 100
 
 
