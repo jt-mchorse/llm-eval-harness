@@ -3157,3 +3157,12 @@ cleanup are unchanged. 11 new tests cover umask 022 and 077, overwrites of
 0644/0600/0640, the capped-name path, a latin-1 write, an unknown encoding, and
 `Dataset.dump_jsonl`. Reverting to main's helper turns 8 of them red. Part of
 portfolio-ops#81.
+
+## 2026-10-02 — calibrate and run check their output path before paying the judge (#287)
+
+#276 and #282 made `run` check its database before scoring anything. The
+other output paths were still checked only at the end. `calibrate --report`
+into an unwritable directory paid for all 50 judge calls and then failed.
+`run --out` paid for every row before exiting 2. Both now check the path up
+front, doing exactly what the real writer does and leaving no file behind.
+5 new tests.

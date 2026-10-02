@@ -3227,3 +3227,20 @@ context_for_next_session:
   - examples_drift_report_py_NamedTemporaryFile_IS_A_SCRATCH_FILE_IN_THE_SYSTEM_TEMP_DIR_NOT_AN_ATOMIC_WRITE_0600_IS_CORRECT_THERE_left_alone
 followups: ["portfolio-ops#81"]
 ---
+
+---
+session: 2026-10-02T13:35Z
+issue: 287
+focus: calibrate_report_AND_run_out_WERE_CHECKED_ONLY_AFTER_EVERY_JUDGE_CALL_WAS_PAID_276s_RULE_THE_OTHER_OUTPUTS
+phase: shipped
+delta:
+  files_changed: 3
+  tests_added: 5
+  suite: "2138 -> 2143 green; ruff clean"
+decisions_made: []
+measured: "hunt agent: calibrate --report into a 0555 dir -> 50 judge calls then 'failed to write' rc 2. Revert per call site: calibrate 2 red, run 2 red."
+context_for_next_session:
+  - check_writable_MIRRORS_atomic_write_text_SAME_MKDIR_SAME_open_temp_AND_UNLINKS_so_it_passes_exactly_when_the_writer_would_get_that_far
+  - FOUND_BY_THE_SECOND_ORDER_HUNT_OVER_THIS_RUNS_OWN_282_ASK_OF_EVERY_PREFLIGHT_WHICH_OTHER_OUTPUT_IS_WRITTEN_AFTER_THE_PAID_LOOP
+followups: []
+---
