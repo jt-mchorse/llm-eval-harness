@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sqlite3
 import sys
 from pathlib import Path
 
@@ -57,9 +58,28 @@ from eval_harness.runner import (
     render_run_json,
     run_suite,
 )
-from eval_harness.runs import RunSummary, connect, init_db_on, list_runs, read_run
+from eval_harness.runs import (
+    RunSummary,
+    check_db,
+    connect,
+    init_db_on,
+    list_runs,
+    read_run,
+)
 
 DEFAULT_DB_PATH = Path.home() / ".eval-harness" / "runs.db"
+
+
+def _db_fail(path: object, err: Exception) -> int:
+    """The ``--db`` seam's exit-2 line (#275).
+
+    ``sqlite3.DatabaseError`` (not a database), ``OperationalError`` (a
+    directory, an unreadable file) and the ``FileExistsError`` /
+    ``NotADirectoryError`` from ``connect``'s ``mkdir`` (a parent that is a
+    regular file) escaped ``run``, ``diff`` and ``list`` as raw tracebacks at
+    exit 1, the code these subcommands use for "a row regressed".
+    """
+    return _fail(f"cannot use --db {path}: {err}")
 
 
 def _fail(message: str) -> int:
@@ -500,6 +520,15 @@ def _run_run(args: argparse.Namespace) -> int:
     except DatasetLoadError as e:
         return _fail(str(e))
 
+    # The database too, and before the backend (#275): `run_suite` opened it
+    # only after scoring every row, so a bad `--db` cost a judge call per row
+    # and then crashed at exit 1. `run_suite` now checks it first as well; this
+    # one is what turns the failure into the CLI's exit-2 line.
+    try:
+        check_db(args.db)
+    except (sqlite3.Error, OSError) as e:
+        return _db_fail(args.db, e)
+
     # Same construction-time `ImportError` as `_run_calibrate`. The comment on
     # the dataset-load seam above already reasons about this exception — it is
     # why the dataset is validated *first* — and then let it escape once the
@@ -584,6 +613,8 @@ def _run_run(args: argparse.Namespace) -> int:
         # `_run_diff_json` already translate its ValueError to exit 2 via _fail.
         # `run` must honor the same contract instead of leaking a traceback (#110).
         return _fail(str(e))
+    except (sqlite3.Error, OSError) as e:
+        return _db_fail(args.db, e)
     print(render_delta_ascii(report), file=sys.stderr)
     return 1 if report.summary["n_flagged"] > 0 else 0
 
@@ -597,6 +628,8 @@ def _run_diff(args: argparse.Namespace) -> int:
             current = read_run(conn, args.current)
             baseline = read_run(conn, args.baseline)
             report = diff_runs(current, baseline, threshold_drop=args.threshold_drop)
+    except (sqlite3.Error, OSError) as e:
+        return _db_fail(args.db, e)
     except KeyError as e:
         # read_run's KeyError message is already specific ("no run with id 'x'").
         return _fail(e.args[0] if e.args else str(e))
@@ -715,6 +748,8 @@ def _run_list(args: argparse.Namespace) -> int:
             runs = list_runs(conn, limit=args.limit, suite=args.suite)
     except ValueError as e:
         return _fail(str(e))
+    except (sqlite3.Error, OSError) as e:
+        return _db_fail(db_path, e)
 
     if args.as_json:
         rendered = json.dumps([_run_summary_to_json(r) for r in runs], indent=2) + "\n"
