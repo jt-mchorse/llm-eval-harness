@@ -34,6 +34,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import html
+import io
 import json
 import math
 import re
@@ -1412,7 +1413,12 @@ def _load_inputs_jsonl(path: Path) -> list[str]:
     """Read a JSONL of inputs. Each row is a bare string OR an object with input/prompt/text."""
     out: list[str] = []
     raw = path.read_text(encoding="utf-8")
-    for lineno, line in enumerate(raw.splitlines(), start=1):
+    # Universal newlines -- `\n`, `\r\n`, `\r` -- the rule iterating a text file
+    # applies, and the one every other JSONL reader in this package uses (#285).
+    # `str.splitlines()` also breaks on U+2028/U+2029/U+0085 and U+000B/C,
+    # U+001C-1E, which `json.dumps(..., ensure_ascii=False)` writes unescaped
+    # INSIDE strings, so a valid row was cut in half and refused as invalid JSON.
+    for lineno, line in enumerate(io.StringIO(raw, newline=None), start=1):
         line = line.strip()
         if not line:
             continue
