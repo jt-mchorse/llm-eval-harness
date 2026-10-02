@@ -3227,3 +3227,21 @@ context_for_next_session:
   - examples_drift_report_py_NamedTemporaryFile_IS_A_SCRATCH_FILE_IN_THE_SYSTEM_TEMP_DIR_NOT_AN_ATOMIC_WRITE_0600_IS_CORRECT_THERE_left_alone
 followups: ["portfolio-ops#81"]
 ---
+
+---
+session: 2026-10-02T09:30Z
+issue: 281
+focus: check_db_PASSED_A_READ_ONLY_DATABASE_SO_run_STILL_PAID_A_JUDGE_CALL_PER_ROW_276s_CASE_ANOTHER_ARGUMENT
+phase: shipped
+delta:
+  files_changed: 2
+  tests_added: 8
+  suite: "2138 -> 2146 green; ruff clean"
+decisions_made: []
+measured: "main: chmod 0444 db -> run_suite paid 10 judge calls then OperationalError readonly; CLI exit 1 traceback. sqlite probe: BEGIN IMMEDIATE alone PASSES a 0444 file AND a 0555 dir; CREATE TABLE inside the txn raises on both. Revert 6/8 red; BEGIN-IMMEDIATE-only neighbour 6/8 red."
+context_for_next_session:
+  - CREATE_TABLE_IF_NOT_EXISTS_ON_AN_EXISTING_DB_IS_A_NO_OP_SO_A_SCHEMA_STEP_IS_NOT_A_WRITABILITY_PROOF_a_rolled_back_DDL_write_is
+  - TESTS_SKIP_AS_ROOT_because_root_ignores_permissions
+  - FOUND_BY_A_HUNT_AGENT_RUNNING_276S_DOCUMENTED_PREFLIGHT_WITH_A_DIFFERENT_ARGUMENT
+followups: []
+---
