@@ -3284,3 +3284,20 @@ context_for_next_session:
   - FOUND_BY_A_HUNT_AGENT_RUNNING_276S_DOCUMENTED_PREFLIGHT_WITH_A_DIFFERENT_ARGUMENT
 followups: []
 ---
+
+---
+session: 2026-10-02T10:55Z
+issue: 283
+focus: COHENS_KAPPA_IN_FLOATS_LANDED_A_ULP_BELOW_EXACT_ROUND_VALUES_SO_A_JUDGE_AT_EXACTLY_0_6_FAILED_THE_GE_0_6_GATE
+phase: shipped
+delta:
+  files_changed: 2
+  tests_added: 5
+  suite: "2138 -> 2143 green; ruff clean"
+decisions_made: []
+measured: "main: 18-row table (2,1,1,14) exact 3/5 -> 0.5999999999999996 -> report FAIL. Revert to main's calibration.py: 5 of 5 red, including an exhaustive check over 40k+ 2x2 tables up to n=30 that the float equals float(exact Fraction)."
+context_for_next_session:
+  - A_GATE_ON_A_ROUND_NUMBER_NEEDS_EXACT_ARITHMETIC_UPSTREAM_counts_are_integers_so_Fraction_is_free_LOOK_FOR_OTHER_RATIO_METRICS_COMPARED_TO_ROUND_THRESHOLDS
+  - pearson_r_IS_THE_UNPURSUED_SIBLING_the_hunter_did_not_build_a_reachable_case_for_its_label_ladder
+followups: []
+---

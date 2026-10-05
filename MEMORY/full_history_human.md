@@ -3205,3 +3205,13 @@ real write inside a transaction that it rolls back. `BEGIN IMMEDIATE` on its own
 was tried first and passes both read-only cases, so it wasn't enough. 8 new
 tests cover a read-only file, a read-only directory, zero judge calls, and the
 CLI's exit 2.
+
+## 2026-10-02 — Cohen's κ is exact, so a judge right at the threshold passes (#283)
+
+κ was computed from floating-point fractions. A value that is exactly a round
+number could land a hair below it: an exact 3/5 came out as
+0.5999999999999996. The calibration gate is "κ ≥ 0.6", so a judge that met the
+bar exactly was reported as FAIL and the CLI exited with an error. The same
+effect labelled an exact 0.4 as "fair" instead of "moderate". κ is now computed
+exactly from the integer counts and converted to a float once at the end. A new
+test checks every 2×2 table up to 30 rows against the exact value.
