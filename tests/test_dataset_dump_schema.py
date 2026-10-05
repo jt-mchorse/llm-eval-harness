@@ -67,6 +67,18 @@ def _example(**overrides: Any) -> Example:
     return Example(**base)
 
 
+def _smuggled_tags(tags: Any) -> Example:
+    """An `Example` whose `tags` bypassed the constructor's own refusal.
+
+    Since #278 `Example(tags="urgent")` raises, so the write-side rule can no
+    longer be reached through the constructor. It stays as defence in depth for
+    a record mutated after construction, and this is how the tests reach it.
+    """
+    ex = _example()
+    object.__setattr__(ex, "tags", tags)
+    return ex
+
+
 # (label, Dataset factory, substring the refusal must contain). Every row was
 # verified to WRITE a file on `main`; the third column is what the loader said
 # when that file was read back, or — for the three silent rows — what the new
@@ -114,7 +126,7 @@ REJECT_ROWS: tuple[tuple[str, Any, str], ...] = (
     ),
     (
         "tags is a bare string",
-        lambda: Dataset("v1", [_example(tags="urgent")]),
+        lambda: Dataset("v1", [_smuggled_tags("urgent")]),
         "'tags' must be a list of strings",
     ),
     (
@@ -229,12 +241,15 @@ def test_a_string_tags_is_not_six_tags(tmp_path: Path) -> None:
     cleanly as six tags. Nothing stated over the *record* can see it.
     """
     assert list("urgent") == ["u", "r", "g", "e", "n", "t"]
-    record = _example(tags="urgent").to_dict()
+    # Since #278 the constructor refuses it first, with the same reason text.
+    with pytest.raises(ValueError, match="'tags' must be a list of strings"):
+        _example(tags="urgent")
+    record = _smuggled_tags("urgent").to_dict()
     assert record["tags"] == ["u", "r", "g", "e", "n", "t"], (
         "to_dict still explodes a string; the write-side rule must read the Example"
     )
     with pytest.raises(ValueError, match="'tags' must be a list of strings"):
-        Dataset("v1", [_example(tags="urgent")]).dump_jsonl(tmp_path / "g.jsonl")
+        Dataset("v1", [_smuggled_tags("urgent")]).dump_jsonl(tmp_path / "g.jsonl")
 
 
 def test_a_sequence_provenance_is_not_an_empty_object(tmp_path: Path) -> None:
