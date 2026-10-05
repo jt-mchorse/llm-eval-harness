@@ -3158,6 +3158,64 @@ cleanup are unchanged. 11 new tests cover umask 022 and 077, overwrites of
 `Dataset.dump_jsonl`. Reverting to main's helper turns 8 of them red. Part of
 portfolio-ops#81.
 
+## 2026-10-02 — a bare string is refused where a collection of strings is expected (#278)
+
+A `str` is a `Sequence[str]`, so three entry points accepted one and split it
+into letters. `compute_drift(golden, "Who wrote Macbeth?")` scored one
+candidate per character and called a paid judge once per letter.
+`Example(tags="geometry")` could not be selected by its own tag. And
+`filter_examples_by_tags(rows, "geometry")` selected every row tagged with one
+of those letters, so `run_suite` scored the wrong subset without complaint.
+One helper, `refuse_bare_string`, now raises `ValueError` at all three. The
+message names the parameter, shows the value, says it would be split into
+characters, and gives the working spelling. Every other collection behaves as
+before. 29 new tests; reverting each guard on its own turns 7, 4 and 4 of them
+red, and the 4 for the filter include an arm that goes through `run_suite`.
+
+Two existing locks needed attention. The `dump_jsonl` tests built
+`Example(tags="urgent")`, which the constructor now refuses, so they set the
+attribute past the constructor to keep the write-side guard covered. The
+frozen-record ownership lock flagged `Example.tags` as validated but not
+copied. The check only looks at the type of the object bound to the field,
+which `frozen=True` already protects, so the detector now ignores a read that is
+passed only to `refuse_bare_string`. Adding a second, element-level read beside
+it still turns the lock red.
+
+## 2026-10-02 — the test session fails if any test rewrites a committed file (portfolio-ops#79)
+
+Ported from python-async-llm-pipelines#115, where a test overwrote a committed
+artifact on every CI run. The overwrite only happened on Linux, so nobody
+noticed. `tests/_committed_files_guard.py` records a hash of every git-tracked
+file when the session starts and fails the session if any changed or
+disappeared. It covers every tracked file, not only `docs/`, because committed
+outputs live in different places in each repo and no current test writes any of
+them. A self-test runs a real inner pytest session in a throwaway git repo
+using the same guard file. A test that writes a tracked file fails that
+session, a test that deletes one fails it, and a test that writes only under
+`tmp_path` passes. Checked here by running a throwaway test that appended to
+`README.md`: the session failed and named the file.
+
+## 2026-10-02 — run refuses a read-only database before paying for the judge (#281)
+
+#276 added a database check that runs before `run` scores anything. On a
+database that already exists, though, its schema step writes nothing, so a
+database the process could read but not write still passed. `run` then paid one
+judge call per row and failed when it tried to save. The check now performs a
+real write inside a transaction that it rolls back. `BEGIN IMMEDIATE` on its own
+was tried first and passes both read-only cases, so it wasn't enough. 8 new
+tests cover a read-only file, a read-only directory, zero judge calls, and the
+CLI's exit 2.
+
+## 2026-10-02 — Cohen's κ is exact, so a judge right at the threshold passes (#283)
+
+κ was computed from floating-point fractions. A value that is exactly a round
+number could land a hair below it: an exact 3/5 came out as
+0.5999999999999996. The calibration gate is "κ ≥ 0.6", so a judge that met the
+bar exactly was reported as FAIL and the CLI exited with an error. The same
+effect labelled an exact 0.4 as "fair" instead of "moderate". κ is now computed
+exactly from the integer counts and converted to a float once at the end. A new
+test checks every 2×2 table up to 30 rows against the exact value.
+
 ## 2026-10-02 — drift reads JSONL the way the rest of the package does (#285)
 
 `drift` split its JSONL input with `str.splitlines()`, which also treats

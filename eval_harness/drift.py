@@ -44,6 +44,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from eval_harness.comparison import render_classified, render_comparison
+from eval_harness.dataset import refuse_bare_string
 from eval_harness.io_utils import atomic_write_text, find_unencodable
 from eval_harness.judge import clamp_judge_score
 
@@ -649,6 +650,12 @@ def compute_drift(
     D-017's split: a token-less input is representable and merely
     unembeddable, whereas this one cannot be written down.
     """
+    # First, ahead of the emptiness checks and of any judge call: a bare `str` is
+    # a `Sequence[str]`, so `compute_drift(golden, "Who wrote Macbeth?")` used to
+    # run as 27 one-character candidates, call a paid `judge_score_fn` once per
+    # character, and report letters as the representative examples (#278).
+    for name, value in (("golden_inputs", golden_inputs), ("candidate_inputs", candidate_inputs)):
+        refuse_bare_string(name, value, f"{name} must be a sequence of strings")
     if not golden_inputs:
         raise ValueError("golden_inputs must be non-empty")
     if not candidate_inputs:
