@@ -3194,3 +3194,14 @@ using the same guard file. A test that writes a tracked file fails that
 session, a test that deletes one fails it, and a test that writes only under
 `tmp_path` passes. Checked here by running a throwaway test that appended to
 `README.md`: the session failed and named the file.
+
+## 2026-10-02 — run refuses a read-only database before paying for the judge (#281)
+
+#276 added a database check that runs before `run` scores anything. On a
+database that already exists, though, its schema step writes nothing, so a
+database the process could read but not write still passed. `run` then paid one
+judge call per row and failed when it tried to save. The check now performs a
+real write inside a transaction that it rolls back. `BEGIN IMMEDIATE` on its own
+was tried first and passes both read-only cases, so it wasn't enough. 8 new
+tests cover a read-only file, a read-only directory, zero judge calls, and the
+CLI's exit 2.

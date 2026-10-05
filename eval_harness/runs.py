@@ -131,10 +131,24 @@ def check_db(path: str | Path) -> None:
     that is not a database, is a directory, or sits under a regular file used
     to fail only after a judge call per row. Raises the same ``sqlite3.Error``
     / ``OSError`` the real open would.
+
+    **And the same one the real write would** (#281). On an existing database
+    the schema's ``CREATE TABLE IF NOT EXISTS`` writes nothing, so a database the
+    process can read but not write -- a ``0444`` file, or a read-only directory
+    where the journal cannot be created -- passed, and ``write_run`` failed
+    after every row had been paid for. A real write inside a transaction that
+    is rolled back proves the path is writable and leaves no trace.
+    ``BEGIN IMMEDIATE`` on its own is not that proof: it succeeds on both
+    read-only shapes.
     """
     conn = connect(path)
     try:
         init_db_on(conn)
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            conn.execute("CREATE TABLE _check_db_write_probe (x INTEGER)")
+        finally:
+            conn.execute("ROLLBACK")
     finally:
         conn.close()
 
