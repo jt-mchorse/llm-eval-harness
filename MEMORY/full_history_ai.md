@@ -3334,3 +3334,23 @@ context_for_next_session:
   - FOUND_BY_THE_SECOND_ORDER_HUNT_OVER_THIS_RUNS_OWN_282_ASK_OF_EVERY_PREFLIGHT_WHICH_OTHER_OUTPUT_IS_WRITTEN_AFTER_THE_PAID_LOOP
 followups: []
 ---
+
+---
+session: 2026-10-05T07:57Z
+duration_min: 5   # plan comment 2026-10-05T07:54:35Z -> 07:57Z
+issue: 291
+branch: session/2026-10-05-0754-issue-291
+focus: THE_DELTA_COLUMN_WAS_PRINTED_AT_PLUS_DOT_3F_BESIDE_A_VERDICT_DECIDED_AGAINST_TWO_BOUNDARIES_two_rows_read_minus_0_100_one_FLAG_one_not
+phase: shipped
+delta:
+  files_changed: 4
+  tests_added: 8
+  suite: "2210 -> 2218 green; combined with #290 in a scratch worktree 2234 green; ruff, mypy clean"
+decisions_made: []
+measured: "x 0.8->0.6996 FLAG and y 0.8->0.7004 both '-0.100', z 0.5->0.50004 '+0.000 improved' on main; now -0.1004 / -0.0996 / +0.00004. Probes: ascii .3f 2 red, markdown .3f 2 red, flag-boundary-only neighbour 4 red, status-boundary-only neighbour 4 red"
+context_for_next_session:
+  - render_signed_classified_IS_D_028S_RULE_OVER_SEVERAL_BOUNDARIES_AT_ONCE_a_delta_has_TWO_the_flag_and_zero_neither_alone_suffices_both_neighbours_built_and_run
+  - ON_THIS_BRANCH_ALONE_AN_EXACT_ONE_DECIMAL_DROP_PRINTS_ITS_FLOAT_minus_0_09999999999999998_HONEST_BUT_UGLY_290_D_034_MAKES_IT_minus_0_1_MERGE_290_FIRST
+  - mean_delta_IN_THE_SUMMARY_IS_STILL_PLUS_DOT_3F_it_has_no_per_value_verdict_beside_it
+followups: []
+---
