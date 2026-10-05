@@ -437,12 +437,27 @@ def test_the_validated_half_of_the_pair_is_empty_here_and_says_so() -> None:
             continue
         # Names read as `self.<field>` in the body, by AST: a docstring or
         # comment mentioning a field is not a check on it.
+        #
+        # Except a read whose only use is `refuse_bare_string(..., self.<f>, ...)`
+        # (#278). That checks the type of the object *bound* to the field, and
+        # `frozen=True` already forbids rebinding; no mutation of a list can make
+        # it a `str`, so there is nothing for a copy to protect. Any other read of
+        # the same field in the same `__post_init__` still counts.
+        type_of_binding_only = {
+            id(arg)
+            for call in ast.walk(post_init)
+            if isinstance(call, ast.Call)
+            and isinstance(call.func, ast.Name)
+            and call.func.id == "refuse_bare_string"
+            for arg in call.args
+        }
         read = {
             n.attr
             for n in ast.walk(post_init)
             if isinstance(n, ast.Attribute)
             and isinstance(n.value, ast.Name)
             and n.value.id == "self"
+            and id(n) not in type_of_binding_only
         }
         owned = _owned_by_post_init(node)
         for stmt in node.body:

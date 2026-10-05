@@ -34,6 +34,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import html
+import io
 import json
 import math
 import re
@@ -43,6 +44,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from eval_harness.comparison import render_classified, render_comparison
+from eval_harness.dataset import refuse_bare_string
 from eval_harness.io_utils import atomic_write_text, find_unencodable
 from eval_harness.judge import clamp_judge_score
 
@@ -648,6 +650,12 @@ def compute_drift(
     D-017's split: a token-less input is representable and merely
     unembeddable, whereas this one cannot be written down.
     """
+    # First, ahead of the emptiness checks and of any judge call: a bare `str` is
+    # a `Sequence[str]`, so `compute_drift(golden, "Who wrote Macbeth?")` used to
+    # run as 27 one-character candidates, call a paid `judge_score_fn` once per
+    # character, and report letters as the representative examples (#278).
+    for name, value in (("golden_inputs", golden_inputs), ("candidate_inputs", candidate_inputs)):
+        refuse_bare_string(name, value, f"{name} must be a sequence of strings")
     if not golden_inputs:
         raise ValueError("golden_inputs must be non-empty")
     if not candidate_inputs:
@@ -1412,7 +1420,12 @@ def _load_inputs_jsonl(path: Path) -> list[str]:
     """Read a JSONL of inputs. Each row is a bare string OR an object with input/prompt/text."""
     out: list[str] = []
     raw = path.read_text(encoding="utf-8")
-    for lineno, line in enumerate(raw.splitlines(), start=1):
+    # Universal newlines -- `\n`, `\r\n`, `\r` -- the rule iterating a text file
+    # applies, and the one every other JSONL reader in this package uses (#285).
+    # `str.splitlines()` also breaks on U+2028/U+2029/U+0085 and U+000B/C,
+    # U+001C-1E, which `json.dumps(..., ensure_ascii=False)` writes unescaped
+    # INSIDE strings, so a valid row was cut in half and refused as invalid JSON.
+    for lineno, line in enumerate(io.StringIO(raw, newline=None), start=1):
         line = line.strip()
         if not line:
             continue
