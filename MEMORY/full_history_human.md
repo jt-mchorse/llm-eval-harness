@@ -3224,3 +3224,12 @@ inside a JSON string, so a valid row was cut in half and refused as invalid
 JSON. That happened even on a file the package's own writer produced and its
 own validator accepted. It now splits only on real line endings. 13 new tests,
 including dump → validate → drift on the same file.
+
+## 2026-10-02 — calibrate and run check their output path before paying the judge (#287)
+
+#276 and #282 made `run` check its database before scoring anything. The
+other output paths were still checked only at the end. `calibrate --report`
+into an unwritable directory paid for all 50 judge calls and then failed.
+`run --out` paid for every row before exiting 2. Both now check the path up
+front, doing exactly what the real writer does and leaving no file behind.
+5 new tests.
