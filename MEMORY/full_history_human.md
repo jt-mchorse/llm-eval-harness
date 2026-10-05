@@ -3215,3 +3215,12 @@ bar exactly was reported as FAIL and the CLI exited with an error. The same
 effect labelled an exact 0.4 as "fair" instead of "moderate". κ is now computed
 exactly from the integer counts and converted to a float once at the end. A new
 test checks every 2×2 table up to 30 rows against the exact value.
+
+## 2026-10-02 — drift reads JSONL the way the rest of the package does (#285)
+
+`drift` split its JSONL input with `str.splitlines()`, which also treats
+U+2028, U+2029 and U+0085 as line breaks. Those characters can appear raw
+inside a JSON string, so a valid row was cut in half and refused as invalid
+JSON. That happened even on a file the package's own writer produced and its
+own validator accepted. It now splits only on real line endings. 13 new tests,
+including dump → validate → drift on the same file.
