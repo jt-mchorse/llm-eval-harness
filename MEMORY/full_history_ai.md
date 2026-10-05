@@ -3334,3 +3334,21 @@ context_for_next_session:
   - FOUND_BY_THE_SECOND_ORDER_HUNT_OVER_THIS_RUNS_OWN_282_ASK_OF_EVERY_PREFLIGHT_WHICH_OTHER_OUTPUT_IS_WRITTEN_AFTER_THE_PAID_LOOP
 followups: []
 ---
+
+---
+session: 2026-10-05T09:27Z
+duration_min: 2   # computed
+issue: 297
+branch: session/2026-10-05-0927-issue-297
+focus: ENV_EXAMPLE_PLACEHOLDER_GITHUB_TOKEN_BEAT_A_REAL_GH_TOKEN_ONCE_LOADED
+phase: shipped
+delta:
+  files_changed: 2
+  tests_added: 1
+  suite: "2209 -> 2210 green; ruff clean"
+decisions_made: []
+measured: "_resolve_token returned ghp_your-token-here with only GH_TOKEN filled on main; 2 red against main's template"
+context_for_next_session:
+  - PLACEHOLDERS_ARE_FINE_FOR_A_REQUIRED_KEY_AND_WRONG_FOR_AN_OPTIONAL_OR_ALTERNATIVE_ONE_it_defeats_the_fallback
+followups: []
+---

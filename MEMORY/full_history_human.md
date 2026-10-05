@@ -3233,3 +3233,11 @@ into an unwritable directory paid for all 50 judge calls and then failed.
 `run --out` paid for every row before exiting 2. Both now check the path up
 front, doing exactly what the real writer does and leaving no file behind.
 5 new tests.
+
+## 2026-10-05 — the env template's GitHub token placeholder no longer wins (#297)
+
+The template shipped a fake value for `GITHUB_TOKEN` beside an empty
+`GH_TOKEN`. The code uses `GITHUB_TOKEN` first, so filling in only `GH_TOKEN`
+and loading the file sent the fake token. Both now ship empty, and a test
+loads the template and checks that whichever token you fill in is the one
+used.
