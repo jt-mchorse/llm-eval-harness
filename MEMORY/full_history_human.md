@@ -3233,3 +3233,12 @@ into an unwritable directory paid for all 50 judge calls and then failed.
 `run --out` paid for every row before exiting 2. Both now check the path up
 front, doing exactly what the real writer does and leaving no file behind.
 5 new tests.
+
+## 2026-10-05 — the missing-key error gives advice that works (#295)
+
+When `run` or `calibrate` couldn't find an Anthropic key, the error suggested
+`eval-harness drift --judge-stub`, which is a different command, and a flag
+the user's command doesn't accept. It now suggests setting a key, or using
+the library with your own backend as the bundled example does. The test used
+to check that the bad suggestion was present. It now checks that every flag
+the message mentions exists on those commands and every file it names exists.
