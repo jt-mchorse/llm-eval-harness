@@ -93,5 +93,35 @@ def test_the_key_is_a_placeholder() -> None:
     # placeholder must not look like one.
     listed = _names_listed()
     assert "your-key-here" in listed["ANTHROPIC_API_KEY"], listed["ANTHROPIC_API_KEY"]
-    assert "your-token-here" in listed["GITHUB_TOKEN"], listed["GITHUB_TOKEN"]
+    # The two GitHub tokens are alternatives and `GITHUB_TOKEN or GH_TOKEN`
+    # picks the first non-empty one, so a placeholder in either beats a real
+    # value in the other once the file is loaded (#297): both ship blank.
+    assert listed["GITHUB_TOKEN"] == "", "GITHUB_TOKEN is an alternative; leave it blank"
     assert listed["GH_TOKEN"] == "", "GH_TOKEN is the fallback; leave it blank in the example"
+
+
+def _loaded(text: str) -> dict[str, str]:
+    """What `set -a; . ./.env; set +a` exports for plain KEY=VALUE lines."""
+    out = {}
+    for line in text.splitlines():
+        line = line.strip()
+        if line and not line.startswith("#") and "=" in line:
+            key, value = line.split("=", 1)
+            out[key.strip()] = value.strip()
+    return out
+
+
+def test_filling_in_either_token_is_the_token_that_gets_used(monkeypatch) -> None:
+    """#297: the template shipped `GITHUB_TOKEN=ghp_your-token-here`, and
+    `GITHUB_TOKEN or GH_TOKEN` then sent the placeholder for a user who filled
+    in only GH_TOKEN."""
+    from eval_harness.comment import _resolve_token
+
+    template = _loaded(ENV_EXAMPLE.read_text(encoding="utf-8"))
+    for name in ("GITHUB_TOKEN", "GH_TOKEN"):
+        env = {**template, name: "ghp_the-real-one"}
+        for key in ("GITHUB_TOKEN", "GH_TOKEN"):
+            monkeypatch.delenv(key, raising=False)
+            if env.get(key):
+                monkeypatch.setenv(key, env[key])
+        assert _resolve_token(None) == "ghp_the-real-one", name
