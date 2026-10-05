@@ -3158,6 +3158,29 @@ cleanup are unchanged. 11 new tests cover umask 022 and 077, overwrites of
 `Dataset.dump_jsonl`. Reverting to main's helper turns 8 of them red. Part of
 portfolio-ops#81.
 
+## 2026-10-02 — a bare string is refused where a collection of strings is expected (#278)
+
+A `str` is a `Sequence[str]`, so three entry points accepted one and split it
+into letters. `compute_drift(golden, "Who wrote Macbeth?")` scored one
+candidate per character and called a paid judge once per letter.
+`Example(tags="geometry")` could not be selected by its own tag. And
+`filter_examples_by_tags(rows, "geometry")` selected every row tagged with one
+of those letters, so `run_suite` scored the wrong subset without complaint.
+One helper, `refuse_bare_string`, now raises `ValueError` at all three. The
+message names the parameter, shows the value, says it would be split into
+characters, and gives the working spelling. Every other collection behaves as
+before. 29 new tests; reverting each guard on its own turns 7, 4 and 4 of them
+red, and the 4 for the filter include an arm that goes through `run_suite`.
+
+Two existing locks needed attention. The `dump_jsonl` tests built
+`Example(tags="urgent")`, which the constructor now refuses, so they set the
+attribute past the constructor to keep the write-side guard covered. The
+frozen-record ownership lock flagged `Example.tags` as validated but not
+copied. The check only looks at the type of the object bound to the field,
+which `frozen=True` already protects, so the detector now ignores a read that is
+passed only to `refuse_bare_string`. Adding a second, element-level read beside
+it still turns the lock red.
+
 ## 2026-10-02 — the test session fails if any test rewrites a committed file (portfolio-ops#79)
 
 Ported from python-async-llm-pipelines#115, where a test overwrote a committed
