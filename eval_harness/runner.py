@@ -31,6 +31,7 @@ import math
 import subprocess
 from collections.abc import Container
 from dataclasses import dataclass, field
+from fractions import Fraction
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -846,7 +847,25 @@ def run_suite(
     )
 
 
-def _status_for(delta: float, threshold_drop: float) -> tuple[str, bool]:
+def _decimal(score: float) -> Fraction:
+    """The decimal value a float score stands for -- its shortest round-trip repr.
+
+    The regression gate compares a drop against `threshold_drop`, and both
+    come from decimals a judge or an operator wrote (`SCORE: 0.8`,
+    `--threshold-drop 0.1`). Subtracting the floats did not compare those:
+    `0.7 - 0.8` is `-0.10000000000000009` but `0.6 - 0.7` is
+    `-0.09999999999999998`, so a drop of exactly the threshold was flagged for
+    0.8 -> 0.7 and 0.4 -> 0.3 and passed for the other eight one-decimal steps
+    (#289). Exact arithmetic on the *binary* values does not help -- 0.7 and
+    0.8 are not representable, and `Fraction(0.7) - Fraction(0.8)` keeps the
+    same split. The decimal each float stands for does: `0.7 - 0.8` is exactly
+    `-1/10`. Cohen's kappa got the same treatment for the same reason (#283);
+    its inputs are integer counts, these are floats. (D-034)
+    """
+    return Fraction(repr(score))
+
+
+def _status_for(delta: float | Fraction, threshold_drop: float | Fraction) -> tuple[str, bool]:
     if delta < -threshold_drop:
         return "regressed", True
     if delta < 0:
@@ -878,6 +897,7 @@ def diff_runs(
     # Since #266 this is the one definition the delta reader and `DeltaReport`
     # share, so a report `diff_runs` would refuse to build cannot be read back.
     threshold_drop = _checked_threshold_drop(threshold_drop)
+    exact_threshold = _decimal(threshold_drop)
     if current.suite != baseline.suite:
         raise ValueError(
             f"cannot diff across suites: current={current.suite} baseline={baseline.suite}"
@@ -890,9 +910,11 @@ def diff_runs(
         cur = current.rows.get(ex_id)
         base = baseline.rows.get(ex_id)
         if cur is not None and base is not None:
-            delta = cur[0] - base[0]
-            status, flagged = _status_for(delta, threshold_drop)
-            rows.append(RowDelta(ex_id, base[0], cur[0], delta, status, flagged))
+            # Exact, so the verdict and the published delta agree with the
+            # decimals the scores and the threshold were written as (#289).
+            exact = _decimal(cur[0]) - _decimal(base[0])
+            status, flagged = _status_for(exact, exact_threshold)
+            rows.append(RowDelta(ex_id, base[0], cur[0], float(exact), status, flagged))
             if flagged:
                 n_flag += 1
             if status == "regressed":
