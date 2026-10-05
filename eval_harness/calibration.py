@@ -671,9 +671,12 @@ def render_report(
         # `md_table_cell` defensively so a future path can't regress the table).
         row_id = md_code_cell(row.id)
         reasoning = md_table_cell(js.reasoning)
-        lines.append(
-            f"| {row_id} | {row.human_score:.2f} | {js.score:.2f} | {abs(row.human_score - js.score):.2f} | {reasoning} |"
-        )
+        # `abs_diff` is the difference of the two numbers printed beside it
+        # (#293): taken from the unrounded scores, a judge's 0.625 printed as
+        # `0.62` beside a human 0.95 and an abs_diff of `0.32`.
+        human, judged = f"{row.human_score:.2f}", f"{js.score:.2f}"
+        abs_diff = abs(Fraction(human) - Fraction(judged))
+        lines.append(f"| {row_id} | {human} | {judged} | {float(abs_diff):.2f} | {reasoning} |")
     lines.append("")
     return "\n".join(lines)
 
