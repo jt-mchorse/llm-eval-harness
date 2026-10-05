@@ -22,7 +22,7 @@ import os
 from typing import Any
 from urllib import error, request
 
-from eval_harness.comparison import render_configured
+from eval_harness.comparison import render_configured, render_signed_classified
 from eval_harness.markdown import md_code_cell, md_code_span, md_table_cell
 from eval_harness.runner import DeltaReport, RowDelta
 
@@ -103,7 +103,7 @@ def render_delta_markdown(report: DeltaReport) -> str:
     lines.append("| status | example_id | baseline | current | Δ | flag |")
     lines.append("| ------ | ---------- | -------: | ------: | -: | :--: |")
     for row in report.rows:
-        lines.append(_row_to_md(row))
+        lines.append(_row_to_md(row, report.threshold_drop))
 
     lines.append("")
     lines.append(
@@ -114,11 +114,15 @@ def render_delta_markdown(report: DeltaReport) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _row_to_md(r: RowDelta) -> str:
+def _row_to_md(r: RowDelta, threshold_drop: float) -> str:
     def fmt(v: float | None) -> str:
         return "—" if v is None else f"{v:.3f}"
 
-    delta_str = "—" if r.delta is None else f"{r.delta:+.3f}"
+    # Beside its `:warning:` and its status, so it may not read as the other
+    # verdict: two rows both showing `-0.100`, one flagged (#291).
+    delta_str = (
+        "—" if r.delta is None else render_signed_classified(r.delta, (0.0, -threshold_drop))
+    )
     flag = ":warning:" if r.flagged else ""
     # Wrap example_id in `code` so multi-word IDs stay legible — but backticks
     # protect neither GFM table delimiter: a literal `|` injects an extra column
