@@ -182,7 +182,32 @@ def test_complete_retags_auth_failures_and_does_not_retry(exc: BaseException) ->
     assert sleeps == []
     assert excinfo.value.__cause__ is exc, "original exception preserved as __cause__"
     assert "ANTHROPIC_API_KEY" in str(excinfo.value)
-    assert "--judge-stub" in str(excinfo.value)
+    _assert_the_hint_is_followable(str(excinfo.value))
+
+
+def _assert_the_hint_is_followable(message: str) -> None:
+    """Every flag the hint names exists on the commands that raise it, and
+    every file it names exists (#295). It used to name `drift --judge-stub`,
+    which `run` and `calibrate` reject as an unrecognized argument."""
+    import contextlib
+    import io
+    import re
+    from pathlib import Path
+
+    from eval_harness import cli
+
+    for command in ("run", "calibrate"):
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out), pytest.raises(SystemExit):
+            cli.main([command, "--help"])
+        accepted = set(re.findall(r"--[a-z][a-z-]*", out.getvalue()))
+        assert "--db" in accepted or "--report" in accepted  # the help really was read
+        for flag in re.findall(r"(?<![\w-])--[a-z][a-z-]*", message):
+            assert flag in accepted, f"hint names {flag}, which `{command}` rejects"
+    root = Path(__file__).resolve().parent.parent
+    for named in re.findall(r"[\w./-]+\.py\b", message):
+        assert (root / named).is_file(), f"hint names {named}, which does not exist"
+    assert "examples/judge_calibration_stub.py" in message
 
 
 def test_judge_auth_error_is_a_valueerror() -> None:
