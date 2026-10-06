@@ -740,6 +740,20 @@ ValueError at render time. `rows` is shape-checked and copied to a tuple. The
 demo fixtures' `diff-json` (three thresholds) and sticky-comment output are
 byte-identical before and after.
 
+## Cross-cutting — the regression gate compares decimal values (#289, D-034)
+
+`diff_runs` subtracted the float scores, and the README's rule ("flagged when
+a row regresses by *more than* `--threshold-drop`") did not survive it:
+`0.7 - 0.8` is `-0.10000000000000009`, `0.6 - 0.7` is `-0.09999999999999998`.
+Of the ten one-decimal drops at the default 0.1, 0.8 -> 0.7 and 0.4 -> 0.3 were
+flagged and `run`'s auto-diff exited 1; the other eight passed. Each row's delta
+is now the exact difference of the two scores' *decimal* values
+(`Fraction(repr(x))`), compared against the threshold's decimal value, and the
+published `delta` is the nearest float to it -- `0.7 - 0.8` publishes `-0.1`.
+Exact arithmetic on the binary values keeps the same split, and a rounding
+tolerance stops flagging a drop one ULP past the threshold; both were built and
+run. Cohen's kappa got the same treatment for the same reason (#283).
+
 ## What's deliberately not in the harness
 
 - **Live model traffic in tests.** Backend is a Protocol; tests stub it.
