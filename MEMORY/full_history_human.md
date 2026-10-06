@@ -3283,3 +3283,13 @@ The template shipped a fake value for `GITHUB_TOKEN` beside an empty
 and loading the file sent the fake token. Both now ship empty, and a test
 loads the template and checks that whichever token you fill in is the one
 used.
+
+## 2026-10-06 — a rejected run no longer weakens the regression gate (#301)
+
+`eval-harness run` checked the `--threshold-drop` and `--baseline` options only
+after it had scored every row and saved the run. A typo such as a negative
+threshold made the command fail, but the run had already been stored, and the
+next run uses the latest stored run as its comparison point. So after fixing
+the typo, a drop from 0.9 to 0.2 was compared with the rejected 0.2 run and
+passed. Both options are now checked before any judge call; the corrected run
+in the same sequence now fails the gate as it should.
