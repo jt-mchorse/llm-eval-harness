@@ -3234,6 +3234,20 @@ into an unwritable directory paid for all 50 judge calls and then failed.
 front, doing exactly what the real writer does and leaving no file behind.
 5 new tests.
 
+## 2026-10-05 — the regression gate treats equal drops equally (#289, D-034)
+
+The CI gate flags a row when its score drops by more than `--threshold-drop`
+(0.1 by default). It subtracted the two scores as floats, and float rounding
+made 0.8 → 0.7 and 0.4 → 0.3 look slightly bigger than 0.1, while the other
+eight one-decimal drops looked slightly smaller. Those two drops failed CI and
+the rest passed, though all ten are exactly 0.1. The gate now compares the
+decimal values the scores stand for, so every drop of exactly 0.1 passes and a
+drop even a hair larger is still flagged. Doing exact arithmetic on the raw
+binary values would not have helped, and I checked: it flags the same two drops.
+The delta column is still printed at three decimals beside its flag, which can
+show two identical-looking deltas with different verdicts. That is filed
+separately.
+
 ## 2026-10-05 — the delta column can't contradict its own flag (#291)
 
 The diff table and the PR comment printed each row's score change to three
