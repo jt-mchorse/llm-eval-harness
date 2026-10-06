@@ -3275,3 +3275,11 @@ the user's command doesn't accept. It now suggests setting a key, or using
 the library with your own backend as the bundled example does. The test used
 to check that the bad suggestion was present. It now checks that every flag
 the message mentions exists on those commands and every file it names exists.
+
+## 2026-10-05 — the env template's GitHub token placeholder no longer wins (#297)
+
+The template shipped a fake value for `GITHUB_TOKEN` beside an empty
+`GH_TOKEN`. The code uses `GITHUB_TOKEN` first, so filling in only `GH_TOKEN`
+and loading the file sent the fake token. Both now ship empty, and a test
+loads the template and checks that whichever token you fill in is the one
+used.
