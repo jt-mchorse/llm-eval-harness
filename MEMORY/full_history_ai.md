@@ -3430,3 +3430,22 @@ context_for_next_session:
   - PLACEHOLDERS_ARE_FINE_FOR_A_REQUIRED_KEY_AND_WRONG_FOR_AN_OPTIONAL_OR_ALTERNATIVE_ONE_it_defeats_the_fallback
 followups: []
 ---
+
+---
+session: 2026-10-06T08:32Z
+duration_min: 1   # computed: plan comment 08:31:29Z -> 08:32Z (date -u); reproduced from ~08:30Z after a hunt agent's report
+issue: 303
+branch: session/2026-10-06-0831-issue-303
+focus: comment_DO_REQUEST_CAUGHT_ONLY_HTTPError_a_refused_connection_timeout_or_non_JSON_200_ESCAPED_AT_EXIT_1_THE_FINDINGS_CODE
+phase: shipped
+delta:
+  files_changed: 3
+  tests_added: 8
+  suite: "2238 -> 2246 passed; ruff, format, mypy clean"
+decisions_made: []
+measured: "refused proxy: main traceback exit 1; fixed one ::error:: line exit 2. Revert probe: 7 of 8 red, the HTTPError control green."
+context_for_next_session:
+  - THE_CLI_COMMENT_SCOPED_THE_TRANSLATED_SET_AS_A_GITHUB_API_HTTP_ERROR_and_HTTP_was_the_whole_coverage_A_SCOPED_TRUE_CLAIM_READ_AS_A_SURVEY
+  - SIBLING_SWEEP_PENDING_every_portfolio_urlopen_based_GitHub_poster_rag_run_eval_post_comment_first
+followups: []
+---

@@ -3283,3 +3283,11 @@ The template shipped a fake value for `GITHUB_TOKEN` beside an empty
 and loading the file sent the fake token. Both now ship empty, and a test
 loads the template and checks that whichever token you fill in is the one
 used.
+
+## 2026-10-06 — network failures in `comment` exit 2, not 1 (#303)
+
+`eval-harness comment` posts the results comment to GitHub. It turned GitHub
+error responses into a clean "exit 2" message, but a refused connection, a
+timeout or a non-JSON reply crashed with a traceback and exit code 1, which
+CI treats as "a regression was found". All of those now produce the same
+single error line and exit 2.
