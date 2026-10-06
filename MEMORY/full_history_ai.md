@@ -3393,3 +3393,22 @@ context_for_next_session:
   - THIRD_REPO_TONIGHT_WITH_A_DIFFERENCE_COMPUTED_FROM_UNROUNDED_OPERANDS_BESIDE_ROUNDED_ONES_lco_255_rag_264_leh_293
 followups: []
 ---
+
+---
+session: 2026-10-05T09:04Z
+duration_min: 2   # computed: started 09:02Z -> 09:04Z
+issue: 295
+branch: session/2026-10-05-0903-issue-295
+focus: THE_AUTH_ERROR_HINT_SENT_RUN_AND_CALIBRATE_USERS_TO_DRIFT_JUDGE_STUB_A_FLAG_THEY_REJECT
+phase: shipped
+delta:
+  files_changed: 2
+  tests_added: 0
+  suite: "2209 green (same collected count as main; my earlier PRs' 2210 baseline was off by one); ruff, mypy clean"
+decisions_made: []
+measured: "env -u ANTHROPIC_API_KEY eval-harness run ... printed the drift hint, exit 2; following it: unrecognized arguments. Claim-checking test: 4 red against main's message"
+context_for_next_session:
+  - RUN_THE_HINT_EVERY_PRINTED_INSTRUCTION_IS_A_CLAIM_trigger_it_then_follow_it
+  - A_TEST_THAT_ASSERTS_A_HINTS_SUBSTRING_PINS_THE_HINT_assert_its_claims_flags_accepted_files_exist
+followups: []
+---

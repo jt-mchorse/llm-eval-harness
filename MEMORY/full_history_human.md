@@ -3266,3 +3266,12 @@ difference, all to two decimals. The difference was computed from the
 unrounded scores, so with a judge that answers three-decimal scores, six of
 fifty rows didn't add up. It's now the difference of the two printed numbers.
 The committed report doesn't change.
+
+## 2026-10-05 — the missing-key error gives advice that works (#295)
+
+When `run` or `calibrate` couldn't find an Anthropic key, the error suggested
+`eval-harness drift --judge-stub`, which is a different command, and a flag
+the user's command doesn't accept. It now suggests setting a key, or using
+the library with your own backend as the bundled example does. The test used
+to check that the bad suggestion was present. It now checks that every flag
+the message mentions exists on those commands and every file it names exists.

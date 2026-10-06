@@ -409,13 +409,16 @@ class AnthropicBackend:
             # propagates untouched, including a genuine `TypeError` from our own
             # code: `is_auth_error` only claims one whose message names
             # credential resolution.
+            # The hint names only what works for the commands that reach here,
+            # `run` and `calibrate`. It used to suggest `eval-harness drift
+            # --judge-stub`: a different command, and a flag neither has (#295).
             if is_auth_error(exc):
                 raise JudgeAuthError(
                     "judge backend could not authenticate with the Anthropic API "
                     f"({type(exc).__name__}: {exc}). Set ANTHROPIC_API_KEY (or another "
-                    "credential the SDK accepts), or use the hermetic judge stub — "
-                    "`eval-harness drift --judge-stub`, or pass your own callable to "
-                    "the library API — which needs no key at all."
+                    "credential the SDK accepts). `run` and `calibrate` have no "
+                    "keyless mode; to score without a key, drive the library with your "
+                    "own Backend, as examples/judge_calibration_stub.py does."
                 ) from exc
             # An *operational* remote failure — the API rejected the request,
             # or a transient one outlasted the retry budget above (#220,
