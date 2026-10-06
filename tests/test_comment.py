@@ -16,7 +16,6 @@ Two surfaces here:
 from __future__ import annotations
 
 import json
-import os
 import re
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -25,6 +24,7 @@ from urllib.parse import urlparse
 
 import pytest
 
+from eval_harness import comment as comment_mod
 from eval_harness.cli import main as cli_main
 from eval_harness.comment import (
     STICKY_MARKER,
@@ -613,11 +613,22 @@ def test_cli_comment_dry_run(tmp_path: Path, capsys, monkeypatch: pytest.MonkeyP
 # ---------------------------------------------------------------------------
 
 
-def test_module_does_not_persist_token_globally() -> None:
+def test_module_does_not_persist_token_globally(monkeypatch: pytest.MonkeyPatch) -> None:
     # No module-level cache of the token; each call resolves fresh from env.
-    # (Sanity test against a regression where someone caches `GITHUB_TOKEN`
-    # at import time and tests pollute each other.)
-    assert os.environ.get("GITHUB_TOKEN") in (None, "env-token")  # one of the test states
+    # This used to assert `os.environ.get("GITHUB_TOKEN") in (None, "env-token")`
+    # -- a check on the HOST's environment, not the module: it failed for anyone
+    # with a token exported (`.env.example` tells you to load one), and an
+    # import-time cache passed it whenever the variable was unset (#305). Change
+    # the environment between two calls and require the second value.
+    monkeypatch.delenv("GH_TOKEN", raising=False)
+    monkeypatch.setenv("GITHUB_TOKEN", "first")
+    assert comment_mod._resolve_token(None) == "first"
+    monkeypatch.setenv("GITHUB_TOKEN", "second")
+    assert comment_mod._resolve_token(None) == "second"
+    # The GH_TOKEN fallback is read per call too.
+    monkeypatch.delenv("GITHUB_TOKEN")
+    monkeypatch.setenv("GH_TOKEN", "third")
+    assert comment_mod._resolve_token(None) == "third"
 
 
 # ---------------------------------------------------------------------------
