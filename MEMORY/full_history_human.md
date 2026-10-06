@@ -3283,3 +3283,12 @@ The template shipped a fake value for `GITHUB_TOKEN` beside an empty
 and loading the file sent the fake token. Both now ship empty, and a test
 loads the template and checks that whichever token you fill in is the one
 used.
+
+## 2026-10-06 — a token test that tested the machine (#305)
+
+A test meant to catch the GitHub token being cached when the module loads
+only checked that the developer's own shell had no token set. It failed for
+anyone with a token exported, which the repo's `.env.example` encourages, and
+it would not have noticed the caching bug it was named after. It now changes
+the token between two lookups and requires the second value, which catches a
+cached token and works whatever the shell has set.

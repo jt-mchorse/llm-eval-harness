@@ -3430,3 +3430,22 @@ context_for_next_session:
   - PLACEHOLDERS_ARE_FINE_FOR_A_REQUIRED_KEY_AND_WRONG_FOR_AN_OPTIONAL_OR_ALTERNATIVE_ONE_it_defeats_the_fallback
 followups: []
 ---
+
+---
+session: 2026-10-06T08:59Z
+duration_min: 2   # computed: plan comment 08:57:52Z -> 08:59Z (date -u)
+issue: 305
+branch: session/2026-10-06-0857-issue-305
+focus: test_module_does_not_persist_token_globally_ASSERTED_ON_THE_HOSTS_ENV_red_with_a_token_exported_and_green_against_the_import_time_cache_it_names
+phase: shipped
+delta:
+  files_changed: 1
+  tests_added: 0
+  suite: "2237 passed with and without GITHUB_TOKEN/GH_TOKEN exported; ruff clean"
+decisions_made: []
+measured: "old test: red with tokens exported, GREEN against a planted import-time cache with the var unset; new test: green exported, red against the cache."
+context_for_next_session:
+  - A_TEST_THAT_READS_os_environ_INSTEAD_OF_SETTING_IT_TESTS_THE_MACHINE_grep_tests_for_os_environ_get_in_asserts
+  - THIS_RUN_CLOSED_FIVE_leh_DEFECTS_FROM_ONE_HUNT_299_301_303_305_plus_rag_276_sibling
+followups: []
+---
