@@ -408,3 +408,16 @@
   reversibility: cheap
   related_issues: ["#266", "#264", "#262", "#230", "#228", "#190", "#164", "#42"]
   superseded_by: null
+
+- id: D-034
+  date: 2026-10-05
+  decision: diff_runs_DECIDES_THE_REGRESSION_FLAG_ON_THE_DECIMAL_VALUES_OF_THE_TWO_SCORES_AND_THE_THRESHOLD_Fraction_repr_x_AND_PUBLISHES_delta_AS_THE_NEAREST_FLOAT_TO_THAT_EXACT_DIFFERENCE
+  rationale: the_README_says_a_row_is_flagged_when_it_regresses_by_MORE_THAN_threshold_drop_and_the_float_subtraction_split_TEN_EQUAL_DROPS_0_7_minus_0_8_is_minus_0_10000000000000009_and_0_6_minus_0_7_is_minus_0_09999999999999998_so_0_8_to_0_7_and_0_4_to_0_3_were_flagged_and_the_other_eight_one_decimal_steps_passed_and_runs_auto_diff_THE_CI_GATE_exited_1
+  DECIMAL_NOT_BINARY: "exact arithmetic on the BINARY values does not fix it: 0.7 and 0.8 are not representable, and Fraction(0.7) - Fraction(0.8) < -Fraction(0.1) keeps the same two flagged. The decimal each float stands for -- its shortest round-trip repr, the SCORE: 0.8 a judge wrote and the --threshold-drop 0.1 an operator typed -- makes 0.7 - 0.8 exactly -1/10. Built and run: the binary neighbour is 5 red."
+  EXACT_NOT_A_TOLERANCE: "round(delta, 9) also splits nothing on the ten steps and was built and run: 2 red, because it stops flagging a drop ONE ULP past the threshold. #283 rejected a tolerance for kappa on the same ground."
+  THE_PUBLISHED_DELTA_MOVES_WITH_THE_VERDICT: "delta is float(exact), so 0.7 - 0.8 publishes -0.1 beside an unflagged row; publishing the old float beside the exact verdict was built and run (1 red)."
+  alternatives_rejected: ["EXACT_BINARY_Fraction_float_REJECTED_5_RED_keeps_the_split", "TOLERANCE_round_delta_9_REJECTED_2_RED_unflags_one_ULP_past", "KEEP_THE_FLOAT_DELTA_AND_FIX_ONLY_THE_FLAG_REJECTED_1_RED"]
+  measured: "ten one-decimal drops at 0.1: float flags 2, binary Fraction flags 2, decimal flags 0. CLI: run 0.8 then 0.7 with auto-diff exits 1 on main, 0 after; 0.8 then 0.69 exits 1 both. Suite 2210 -> 2225; ruff, mypy clean"
+  reversibility: cheap
+  related_issues: ["#289", "#283"]
+  superseded_by: null
