@@ -3283,3 +3283,11 @@ The template shipped a fake value for `GITHUB_TOKEN` beside an empty
 and loading the file sent the fake token. Both now ship empty, and a test
 loads the template and checks that whichever token you fill in is the one
 used.
+
+## 2026-10-06 — the delta table's columns line up (#307)
+
+The plain-text delta table that `run` and `diff` print had fixed column
+widths that matched neither the headers nor the data, so nothing lined up and
+the FLAG marker for a failing row appeared under the delta column. Each column
+is now as wide as its header and its widest value, with numbers aligned on the
+right.

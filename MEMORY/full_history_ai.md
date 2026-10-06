@@ -3430,3 +3430,21 @@ context_for_next_session:
   - PLACEHOLDERS_ARE_FINE_FOR_A_REQUIRED_KEY_AND_WRONG_FOR_AN_OPTIONAL_OR_ALTERNATIVE_ONE_it_defeats_the_fallback
 followups: []
 ---
+
+---
+session: 2026-10-06T09:09Z
+duration_min: 1   # computed: plan comment 09:08:41Z -> 09:09Z (date -u)
+issue: 307
+branch: session/2026-10-06-0908-issue-307
+focus: render_delta_ascii_NO_COLUMN_LINED_UP_fixed_9_12_pads_under_6_10_dash_headers_FLAG_under_delta
+phase: shipped
+delta:
+  files_changed: 2
+  tests_added: 2
+  suite: "2238 -> 2240 passed; ruff, format, mypy clean"
+decisions_made: []
+measured: "demo fixtures before/after in the PR; cut-at-dash-segments arms 2 of 2 red against main."
+context_for_next_session:
+  - TEST_A_TEXT_TABLE_BY_CUTTING_ROWS_AT_THE_DASH_LINES_SEGMENTS_and_requiring_each_cell_in_its_column
+followups: []
+---
