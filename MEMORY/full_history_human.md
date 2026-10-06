@@ -3258,3 +3258,11 @@ reads back on the same side of every boundary its verdict depends on: the
 threshold for the flag, and zero for regressed versus improved. A seeded search
 over 2,400 score pairs checks that every printed delta agrees with its row's
 verdict.
+
+## 2026-10-05 — the calibration report's difference column adds up (#293)
+
+The calibration report shows the human score, the judge score, and their
+difference, all to two decimals. The difference was computed from the
+unrounded scores, so with a judge that answers three-decimal scores, six of
+fifty rows didn't add up. It's now the difference of the two printed numbers.
+The committed report doesn't change.

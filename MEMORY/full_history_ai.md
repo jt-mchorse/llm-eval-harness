@@ -3375,3 +3375,21 @@ context_for_next_session:
   - mean_delta_IN_THE_SUMMARY_IS_STILL_PLUS_DOT_3F_it_has_no_per_value_verdict_beside_it
 followups: []
 ---
+
+---
+session: 2026-10-05T08:40Z
+duration_min: 2   # computed: started 08:39Z -> 08:40Z
+issue: 293
+branch: session/2026-10-05-0839-issue-293
+focus: CALIBRATION_REPORT_abs_diff_FROM_UNROUNDED_SCORES_BESIDE_DOT_2F_COLUMNS_6_OF_50_ROWS_DID_NOT_SUBTRACT
+phase: shipped
+delta:
+  files_changed: 2
+  tests_added: 1
+  suite: "2210 -> 2211 green; ruff, mypy clean"
+decisions_made: []
+measured: "three-decimal stub judge over fixtures/calibration.jsonl: 6/50 rows did not subtract on main, 0 after; revert 1 red"
+context_for_next_session:
+  - THIRD_REPO_TONIGHT_WITH_A_DIFFERENCE_COMPUTED_FROM_UNROUNDED_OPERANDS_BESIDE_ROUNDED_ONES_lco_255_rag_264_leh_293
+followups: []
+---
