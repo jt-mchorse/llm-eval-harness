@@ -3247,3 +3247,14 @@ binary values would not have helped, and I checked: it flags the same two drops.
 The delta column is still printed at three decimals beside its flag, which can
 show two identical-looking deltas with different verdicts. That is filed
 separately.
+
+## 2026-10-05 — the delta column can't contradict its own flag (#291)
+
+The diff table and the PR comment printed each row's score change to three
+decimals beside a verdict decided at full precision. So a drop of 0.1004
+(flagged) and one of 0.0996 (not flagged) both showed `-0.100`, and a tiny rise
+showed `+0.000` next to "improved". Both tables now widen a number until it
+reads back on the same side of every boundary its verdict depends on: the
+threshold for the flag, and zero for regressed versus improved. A seeded search
+over 2,400 score pairs checks that every printed delta agrees with its row's
+verdict.

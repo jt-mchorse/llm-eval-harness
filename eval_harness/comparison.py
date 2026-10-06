@@ -73,6 +73,8 @@ whether either operand survived the trip; asking it is D-029.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 #: Default starting width. Most messages in this package have always used three
 #: places, and still do whenever three is enough to tell the two numbers apart.
 #:
@@ -250,6 +252,37 @@ def render_classified(value: float, boundary: float, *, places: int = COMPARISON
         if _band(float(rendered), boundary) == target:
             return rendered
     return repr(value)
+
+
+def render_signed_classified(
+    value: float, boundaries: Sequence[float], *, places: int = COMPARISON_PLACES
+) -> str:
+    """:func:`render_classified` for a signed value judged against several boundaries.
+
+    A delta table publishes each row's delta beside a verdict decided against
+    **two** boundaries -- ``-threshold_drop`` for the flag and ``0`` for
+    regressed / unchanged / improved -- and both renderers printed it at
+    ``+.3f`` (#291)::
+
+        0.8 -> 0.6996   -0.100  FLAG
+        0.8 -> 0.7004   -0.100
+        0.5 -> 0.50004  +0.000  improved
+
+    The same rule as :func:`render_classified`, stated over every boundary at
+    once: widen until the rendered value, read back as a float, falls on the
+    same side of *each* boundary as the true value does. A value exactly at a
+    boundary keeps the starting width -- widening would imply a difference that
+    is not there -- and ``repr`` is the fallback. Signed, because a delta's
+    sign is part of what the reader is told; ``-0.000`` reads back as ``-0.0``,
+    which is *at* zero, so a tiny regression widens rather than printing it.
+    """
+    targets = [_band(value, b) for b in boundaries]
+    for width in range(places, COMPARISON_MAX_PLACES + 1):
+        rendered = f"{value:+.{width}f}"
+        back = float(rendered)
+        if [_band(back, b) for b in boundaries] == targets:
+            return rendered
+    return format(value, "+")
 
 
 def render_configured(value: float, *, places: int = COMPARISON_PLACES) -> str:

@@ -36,7 +36,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from eval_harness.calibration import _require_correlation_range
-from eval_harness.comparison import render_configured
+from eval_harness.comparison import render_configured, render_signed_classified
 from eval_harness.dataset import Dataset, Example, filter_examples_by_tags, load_jsonl
 from eval_harness.io_utils import copy_json_value
 from eval_harness.judge import FAITHFULNESS_RUBRIC, Judge, JudgeParseError, JudgeScore
@@ -1007,7 +1007,12 @@ def render_delta_ascii(report: DeltaReport) -> str:
     for r in report.rows:
         baseline = f"{r.baseline_score:.3f}" if r.baseline_score is not None else "  -  "
         current = f"{r.current_score:.3f}" if r.current_score is not None else "  -  "
-        delta = f"{r.delta:+.3f}" if r.delta is not None else "  -   "
+        # Beside its verdict, so it may not read as the other verdict (#291).
+        delta = (
+            render_signed_classified(r.delta, (0.0, -report.threshold_drop))
+            if r.delta is not None
+            else "  -   "
+        )
         flag = "FLAG" if r.flagged else "    "
         lines.append(
             sep.join([f"{r.status:9}", f"{r.example_id:12}", baseline, current, delta, flag])
