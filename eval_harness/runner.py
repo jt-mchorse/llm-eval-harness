@@ -1002,21 +1002,36 @@ def render_delta_ascii(report: DeltaReport) -> str:
         f"(suite={report.suite}, threshold_drop={render_configured(report.threshold_drop)})"
     )
     columns = ["status", "example_id", "baseline", "current", "delta", "flag"]
+    # Text columns read left to right, numbers line up on their last digit.
+    right = {"baseline", "current", "delta"}
     sep = "  "
-    lines = [header, "", sep.join(columns), sep.join("-" * len(c) for c in columns)]
+    cells: list[list[str]] = []
     for r in report.rows:
-        baseline = f"{r.baseline_score:.3f}" if r.baseline_score is not None else "  -  "
-        current = f"{r.current_score:.3f}" if r.current_score is not None else "  -  "
+        baseline = f"{r.baseline_score:.3f}" if r.baseline_score is not None else "-"
+        current = f"{r.current_score:.3f}" if r.current_score is not None else "-"
         # Beside its verdict, so it may not read as the other verdict (#291).
         delta = (
             render_signed_classified(r.delta, (0.0, -report.threshold_drop))
             if r.delta is not None
-            else "  -   "
+            else "-"
         )
-        flag = "FLAG" if r.flagged else "    "
-        lines.append(
-            sep.join([f"{r.status:9}", f"{r.example_id:12}", baseline, current, delta, flag])
+        cells.append(
+            [r.status, r.example_id, baseline, current, delta, "FLAG" if r.flagged else ""]
         )
+    # Each column as wide as its header and its widest cell (#307). The widths
+    # were fixed format pads (status 9, example_id 12) under headers sized to
+    # the column NAMES (6, 10), and real ids run past 12, so no column lined up
+    # with its header and the FLAG marker sat under `delta`.
+    widths = [max([len(c)] + [len(row[i]) for row in cells]) for i, c in enumerate(columns)]
+
+    def fmt(row: list[str]) -> str:
+        return sep.join(
+            v.rjust(w) if c in right else v.ljust(w)
+            for c, v, w in zip(columns, row, widths, strict=True)
+        ).rstrip()
+
+    lines = [header, "", fmt(columns), sep.join("-" * w for w in widths)]
+    lines.extend(fmt(row) for row in cells)
     s = report.summary
     # `DeltaReport.from_json` permits an empty/partial summary (its docstring:
     # "mean_delta may be legitimately absent or an explicit null ... coerces
