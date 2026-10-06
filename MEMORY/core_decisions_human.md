@@ -1175,3 +1175,17 @@ Found by widening the #262 sibling sweep: `RunResult.n_rows` beside `rows` looke
 **Reversibility:** Cheap.
 
 **Related issues:** #266, #264, #262, #230, #228, #190, #164, #42
+
+## D-034 — The regression gate compares the decimal values of the scores (2026-10-05)
+**Decision:** `diff_runs` decides whether a row is flagged using the exact difference between the two scores' decimal values (`Fraction(repr(x))`), compared against the threshold's decimal value. The published `delta` is the nearest float to that exact difference.
+
+**Why:** The README says a row is flagged when it drops by *more than* `--threshold-drop`. Subtracting the floats split ten identical drops: `0.7 - 0.8` is `-0.10000000000000009` but `0.6 - 0.7` is `-0.09999999999999998`. So at the default threshold of 0.1, a drop from 0.8 to 0.7 or from 0.4 to 0.3 failed the CI gate, and the other eight one-decimal drops passed. Scores and the threshold are decimals that someone wrote down (a judge's `SCORE: 0.8`, an operator's `--threshold-drop 0.1`), and the decimal each float stands for is its shortest round-trip representation. Using that, `0.7 - 0.8` is exactly `-1/10`.
+
+**Alternatives considered:**
+- Exact arithmetic on the binary values (`Fraction(0.7)`). Rejected: 0.7 and 0.8 aren't exactly representable, so the same two drops stay flagged. Built and run: 5 red.
+- Round the delta to 9 places. Rejected: it's a tolerance, and it stops flagging a drop one ULP past the threshold. Built and run: 2 red. #283 rejected a tolerance for kappa for the same reason.
+- Fix only the flag and keep publishing the float delta. Rejected: the table would show `-0.10000000000000009` beside an unflagged row.
+
+**Reversibility:** Cheap.
+
+**Related issues:** #289, #283
