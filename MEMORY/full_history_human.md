@@ -3337,3 +3337,13 @@ and an old comment with a stale verdict stayed on the PR. The comment now stays
 under the limit: when it can't show every row it keeps the flagged ones first,
 then the other changed rows, and says how many it left out. The full table is
 still available from `diff-json --format markdown`.
+## 2026-10-07 — the README's downstream workflow snippet runs (#309)
+
+The README shows other repos how to post the sticky eval-delta comment from
+their own CI. Copied as written, the block was not valid YAML, its multi-line
+commands collapsed into one broken line, and even fixed it would skip the
+comment on any PR with a regression, because `diff-json` exits 1 there and
+GitHub Actions stops at the first failing step. The block is rewritten so the
+comment is always posted and the job still goes red on a regression. A new
+test parses the block and runs each step the way a runner would. This repo's
+own `eval.yml` has a milder version of the same shape, filed as #310.
