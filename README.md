@@ -458,6 +458,11 @@ steps in their own workflow:
 files produced by `eval-harness run --out`. Action runners are
 ephemeral; making the diff a pure JSON operation matches that.
 
+The comment stays under GitHub's 65,536-character limit (#312). A suite
+too large to show every row keeps the flagged rows first, then the
+other changed rows, then unchanged ones, and says how many of each it
+left out. `diff-json --format markdown` always prints the full table.
+
 ### Drift detection on production traffic samples (#4)
 
 ```bash

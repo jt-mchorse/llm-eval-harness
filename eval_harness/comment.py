@@ -27,6 +27,23 @@ from eval_harness.markdown import md_code_cell, md_code_span, md_table_cell
 from eval_harness.runner import DeltaReport, RowDelta
 
 STICKY_MARKER = "<!-- eval-harness:sticky-comment -->"
+
+# GitHub refuses an issue comment longer than 65,536 characters with a 422
+# ("Body is too long"), on POST and on the PATCH that updates the sticky
+# comment in place (#312). The budget is measured in UTF-8 *bytes*, which is
+# never less than the character count however GitHub counts, with headroom
+# for the footer and the omission line.
+COMMENT_BODY_BUDGET = 65_000
+
+# Which rows a capped comment keeps first. The flagged rows are the verdict;
+# unchanged rows are the ones a reader loses least by not seeing.
+_KEEP_ORDER: dict[str, int] = {
+    "regressed": 1,
+    "new": 2,
+    "removed": 3,
+    "improved": 4,
+    "unchanged": 5,
+}
 """Hidden HTML marker the bot uses to find its prior comment.
 
 Lives inside the rendered comment body. The find-step does a substring
@@ -35,7 +52,7 @@ marker. Renaming the bot or rotating tokens doesn't break identity.
 """
 
 
-def render_delta_markdown(report: DeltaReport) -> str:
+def render_delta_markdown(report: DeltaReport, *, max_bytes: int | None = None) -> str:
     """Markdown for the sticky PR comment. Includes the marker.
 
     The shape:
@@ -43,6 +60,15 @@ def render_delta_markdown(report: DeltaReport) -> str:
       summary line (mean Δ + flagged + improved/regressed counts)
       table (status, example_id, baseline, current, delta, flag)
       either "no rows" callout or the per-row table
+
+    ``max_bytes`` caps the UTF-8 size of the result (``comment`` passes
+    :data:`COMMENT_BODY_BUDGET`; the ``diff-json`` markdown output is
+    uncapped). Under the cap the output is unchanged. Over it, rows are kept
+    flagged first, then regressed / new / removed / improved, then unchanged,
+    still rendered in their original order, and a line after the table says
+    how many rows of each status were left out (#312). Without it a suite of
+    roughly 1,100 rows could never post its comment, and a PR whose earlier,
+    smaller run had posted one kept that stale verdict.
     """
     summary = report.summary
     # `.get` defaults only on a MISSING key; a present-but-null mean_delta
@@ -102,16 +128,66 @@ def render_delta_markdown(report: DeltaReport) -> str:
 
     lines.append("| status | example_id | baseline | current | Δ | flag |")
     lines.append("| ------ | ---------- | -------: | ------: | -: | :--: |")
-    for row in report.rows:
-        lines.append(_row_to_md(row, report.threshold_drop))
-
-    lines.append("")
-    lines.append(
+    footer = [
+        "",
         "<sub>posted by "
         "[eval-harness](https://github.com/jt-mchorse/llm-eval-harness) · "
-        "this comment is updated in-place on every push</sub>"
+        "this comment is updated in-place on every push</sub>",
+    ]
+    rendered = [_row_to_md(row, report.threshold_drop) for row in report.rows]
+    full = "\n".join([*lines, *rendered, *footer]) + "\n"
+    if max_bytes is None or len(full.encode("utf-8")) <= max_bytes:
+        return full
+    kept = _rows_within_budget(report.rows, rendered, lines, footer, max_bytes)
+    omitted: dict[str, int] = {}
+    for i, row in enumerate(report.rows):
+        if i not in kept:
+            omitted[row.status] = omitted.get(row.status, 0) + 1
+    lines.extend(rendered[i] for i in sorted(kept))
+    lines.append("")
+    lines.append(_omission_line(omitted, len(report.rows)))
+    return "\n".join([*lines, *footer]) + "\n"
+
+
+def _omission_line(omitted: dict[str, int], n_rows: int) -> str:
+    parts = ", ".join(
+        f"{n} {status}"
+        for status, n in sorted(omitted.items(), key=lambda kv: _KEEP_ORDER.get(kv[0], 9))
     )
-    return "\n".join(lines) + "\n"
+    total = sum(omitted.values())
+    return (
+        f"_{total} of {n_rows} rows not shown ({parts}): GitHub caps a comment at "
+        "65,536 characters. `eval-harness diff-json --format markdown` prints the "
+        "full table._"
+    )
+
+
+def _rows_within_budget(
+    rows: list[RowDelta] | tuple[RowDelta, ...],
+    rendered: list[str],
+    head: list[str],
+    footer: list[str],
+    max_bytes: int,
+) -> set[int]:
+    """Indices of the rows to keep, highest priority first, within ``max_bytes``.
+
+    The omission line is reserved at its longest possible size first, so adding
+    it after the choice cannot push the body back over the cap.
+    """
+    worst_line = _omission_line({status: len(rows) for status in _KEEP_ORDER}, len(rows))
+    used = len(("\n".join([*head, "", worst_line, *footer]) + "\n").encode("utf-8"))
+    order = sorted(
+        range(len(rows)),
+        key=lambda i: (0 if rows[i].flagged else _KEEP_ORDER.get(rows[i].status, 9), i),
+    )
+    kept: set[int] = set()
+    for i in order:
+        cost = len(rendered[i].encode("utf-8")) + 1  # its newline
+        if used + cost > max_bytes:
+            break
+        kept.add(i)
+        used += cost
+    return kept
 
 
 def _row_to_md(r: RowDelta, threshold_drop: float) -> str:

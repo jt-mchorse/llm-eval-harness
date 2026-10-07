@@ -32,6 +32,7 @@ from eval_harness.calibration import (
     validate_calibration,
 )
 from eval_harness.comment import (
+    COMMENT_BODY_BUDGET,
     STICKY_MARKER,
     render_delta_markdown,
     upsert_sticky_comment,
@@ -739,7 +740,9 @@ def _run_comment(args: argparse.Namespace) -> int:
         return _fail(f"delta JSON missing required field: {e.args[0] if e.args else e}")
     except ValueError as e:
         return _fail(str(e))
-    body = render_delta_markdown(report)
+    # Capped to what GitHub will accept (#312); `--dry-run` prints the same
+    # body that would be posted.
+    body = render_delta_markdown(report, max_bytes=COMMENT_BODY_BUDGET)
     if args.dry_run:
         print(body, end="")
         return 0
