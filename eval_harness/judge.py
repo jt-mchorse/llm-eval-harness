@@ -358,7 +358,12 @@ class AnthropicBackend:
             ) from e
 
         self._anthropic_module = anthropic
-        self.client = anthropic.Anthropic()
+        # `max_retries=0`: `retry_call` below is this backend's one retry
+        # layer, with the documented `max_attempts` budget, its own transient
+        # classifier and the injectable `sleep`. The SDK's default of 2 retries
+        # nested inside it, so "unreachable after 4 attempts" was 12 requests
+        # and `max_attempts=1` still sent 3, sleeping on the SDK's clock (#299).
+        self.client = anthropic.Anthropic(max_retries=0)
         self.model = model or os.environ.get(
             "EVAL_HARNESS_JUDGE_MODEL", "claude-haiku-4-5-20251001"
         )

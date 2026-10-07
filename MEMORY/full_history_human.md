@@ -3283,3 +3283,13 @@ The template shipped a fake value for `GITHUB_TOKEN` beside an empty
 and loading the file sent the fake token. Both now ship empty, and a test
 loads the template and checks that whichever token you fill in is the one
 used.
+
+## 2026-10-06 — "4 attempts" now means four requests (#299)
+
+When the judge API kept failing, the harness reported "unreachable after 4
+attempts". Each of those attempts actually went through the Anthropic client,
+which retries twice on its own, so the harness had made twelve requests, and
+even a setting of one attempt made three. The client's own retries are now
+turned off, so the harness's documented retry budget is the real number of
+requests. Against a stub server that always reports overload, the same command
+now makes exactly four requests.
