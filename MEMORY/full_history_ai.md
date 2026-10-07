@@ -3549,6 +3549,11 @@ duration_min: 3   # computed from GitHub: plan comment 2026-10-07T07:26:24Z -> P
 issue: 309
 branch: session/2026-10-07-leh-readme-snippet
 focus: README_DOWNSTREAM_WORKFLOW_SNIPPET_DID_NOT_PARSE_FOLDED_ITS_COMMANDS_AND_SKIPPED_THE_COMMENT_ON_A_REGRESSION
+session: 2026-10-07T08:45Z
+duration_min: 6
+issue: 314
+branch: session/2026-10-07-leh-drift-marks
+focus: THE_DRIFT_TOKENIZER_DROPPED_COMBINING_MARKS_NFD_TEXT_READ_AS_DRIFTED
 phase: shipped
 delta:
   files_changed: 2
@@ -3560,4 +3565,11 @@ context_for_next_session:
   - A_YAML_BLOCK_IN_A_README_IS_CODE_parse_it_AND_RUN_IT_the_bash_fence_lock_scoped_itself_away_from_this_one_ON_PURPOSE_and_that_purpose_was_its_PATHS_not_its_validity
   - EXIT_1_MEANS_FINDINGS_IN_THIS_PORTFOLIO_so_ANY_DOCUMENTED_CI_STEP_RUNNING_A_FINDINGS_CLI_UNDER_bash_e_SKIPS_EVERYTHING_AFTER_IT_ON_EXACTLY_THE_RUN_THAT_FOUND_SOMETHING
 followups: ["#310"]
+  suite: "2276 passed (junitxml); ruff, format, mypy clean"
+decisions_made: []
+measured: "main: NFD cafe -> cafe, Devanagari split, cos(NFC,NFD)=0.667; fix 1.0. Documented drift report byte-identical (cmp). Revert main 6/7, no-NFC 2, no-marks 3."
+context_for_next_session:
+  - PYTHON_re_HAS_NO_p_M_and_[^\\W_]_IS_isalnum_WHICH_EXCLUDES_MARKS_sweep_other_python_tokenizers_rag_reranker_csl_semantic_for_the_same_class
+  - GOTCHA_ZSH_CHOKES_ON_UNICODE_TEST_IDS_IN_GREP_PIPES_count_with_junitxml
+followups: []
 ---
