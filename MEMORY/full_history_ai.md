@@ -3450,3 +3450,23 @@ context_for_next_session:
   - THE_SAME_HUNT_FOUND_3_MORE_leh_DEFECTS_usage_error_saves_the_run_before_exit_2_comment_traceback_on_URLError_test_fails_with_GITHUB_TOKEN_exported
 followups: []
 ---
+
+---
+session: 2026-10-06T08:30Z
+duration_min: 2   # computed: plan comment 08:28:49Z -> 08:30Z (date -u); reproduced from ~08:27Z after a hunt agent's report
+issue: 301
+branch: session/2026-10-06-0828-issue-301
+focus: run_CHECKED_threshold_drop_AND_baseline_ONLY_AFTER_SCORING_AND_SAVING_the_rejected_run_became_the_next_baseline_and_a_0_9_to_0_2_drop_PASSED_THE_GATE
+phase: shipped
+delta:
+  files_changed: 2
+  tests_added: 14
+  suite: "2238 -> 2252 passed; ruff, format, mypy clean"
+decisions_made: []
+measured: "stub judges 0.9/0.2: main step 2 exit 2 + 10 calls + saved, step 3 exit 0 regressed=0; fixed step 2 exit 2 + 0 calls + nothing saved, step 3 exit 1 regressed=10. Revert probe: 14 of 14 red (junit xml)."
+context_for_next_session:
+  - READ_THE_SCOPE_THE_LAST_FIX_WROTE_DOWN_AGAIN_287_SAID_THE_OTHER_OUTPUT_WRITTEN_AFTER_THE_PAID_LOOP_the_INPUTS_read_after_it_were_the_unswept_half
+  - AN_EXIT_2_THAT_ALREADY_PERSISTED_IS_NOT_A_REJECTION_it_mutates_the_default_baseline
+  - leh_addopts_q_HIDES_PASSED_LINES_count_red_green_from_junitxml_not_grep
+followups: []
+---
