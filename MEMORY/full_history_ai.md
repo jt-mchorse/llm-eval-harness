@@ -3432,6 +3432,26 @@ followups: []
 ---
 
 ---
+session: 2026-10-06T08:27Z
+duration_min: 2   # computed: plan comment 08:25:41Z -> 08:27Z (date -u); reproduced from ~08:24Z after a hunt agent's report
+issue: 299
+branch: session/2026-10-06-0825-issue-299
+focus: judge_UNREACHABLE_AFTER_4_ATTEMPTS_WAS_12_REQUESTS_the_SDK_client_kept_max_retries_2_inside_each_harness_attempt
+phase: shipped
+delta:
+  files_changed: 2
+  tests_added: 3
+  suite: "2241 passed; ruff, format, mypy clean"
+decisions_made: []
+measured: "529 stub counting x-stainless-retry-count: main 12 requests (0 1 2 x4) behind '4 attempts'; fixed 4. Revert probe: 3 of 3 red."
+context_for_next_session:
+  - TWO_RETRY_LAYERS_MULTIPLY_an_SDK_client_built_with_defaults_inside_a_harness_retry_loop_check_every_client_constructor_in_the_portfolio_for_max_retries
+  - CI_INSTALLS_ONLY_dev_SO_AN_importorskip_anthropic_ARM_IS_SKIPPED_THERE_pair_it_with_a_stand_in_module_arm_that_runs_everywhere
+  - THE_SAME_HUNT_FOUND_3_MORE_leh_DEFECTS_usage_error_saves_the_run_before_exit_2_comment_traceback_on_URLError_test_fails_with_GITHUB_TOKEN_exported
+followups: []
+---
+
+---
 session: 2026-10-06T08:30Z
 duration_min: 2   # computed: plan comment 08:28:49Z -> 08:30Z (date -u); reproduced from ~08:27Z after a hunt agent's report
 issue: 301
