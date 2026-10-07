@@ -3586,4 +3586,19 @@ measured: "step scripts under bash -e with a stub: main 0/0/0 for rc 0/1/2 (2 re
 context_for_next_session:
   - OR_ECHO_AFTER_A_FINDINGS_CLI_SWALLOWS_ITS_ERROR_CODE_TOO_grep_workflows_for_or_echo_and_or_true_after_tools_with_a_0_1_2_contract
 followups: []
+session: 2026-10-07T10:50Z
+duration_min: 6
+issue: 318
+branch: session/2026-10-07-leh-huge-int-score
+focus: FLOAT_OF_A_HUGE_INT_RAISED_OVERFLOWERROR_AND_DIFF_JSON_EXITED_1_THE_FINDINGS_CODE
+phase: shipped
+delta:
+  files_changed: 2
+  tests_added: 5
+  suite: "2274 passed (junitxml); ruff, format, mypy clean"
+decisions_made: []
+measured: "real CLI on a 401-digit score: main traceback exit 1; fix exit 2 one line. Revert 4/5 red."
+context_for_next_session:
+  - ALSO_FILED_317_JT_judge_clamp_of_out_of_scale_scores_to_1_0
+followups: ["#317"]
 ---
