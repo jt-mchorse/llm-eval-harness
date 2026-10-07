@@ -3545,7 +3545,7 @@ context_for_next_session:
   - sibling_check_for_next_run_rag_run_eval_post_comment_and_prs_aop_comment_posters_for_the_same_65536_cap
 followups: []
 session: 2026-10-07T07:28:53Z
-duration_min: 7   # computed from GitHub: plan comment 2026-10-07T07:26:24Z -> PR 2026-10-07T07:28:53Z
+duration_min: 3   # computed from GitHub: plan comment 2026-10-07T07:26:24Z -> PR 2026-10-07T07:28:53Z
 issue: 309
 branch: session/2026-10-07-leh-readme-snippet
 focus: README_DOWNSTREAM_WORKFLOW_SNIPPET_DID_NOT_PARSE_FOLDED_ITS_COMMANDS_AND_SKIPPED_THE_COMMENT_ON_A_REGRESSION
