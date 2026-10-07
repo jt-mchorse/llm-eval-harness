@@ -177,6 +177,19 @@ def _do_request(
         except Exception:
             err_body = ""
         raise RuntimeError(f"GitHub API {method} {url} -> {e.code}: {err_body}") from e
+    # The rest of what talking to GitHub can raise, onto the same RuntimeError
+    # the CLI translates to exit 2 (#303). Only HTTPError was caught, so a
+    # refused connection, a timeout or a proxy's HTML page under a 200 escaped
+    # as a traceback at exit 1 -- the code that means "a regression was
+    # flagged". After the HTTPError arm: HTTPError is a URLError, which is an
+    # OSError, as are TimeoutError and ConnectionResetError.
+    except OSError as e:
+        reason = e.reason if isinstance(e, error.URLError) else e
+        raise RuntimeError(f"GitHub API {method} {url} failed: {reason}") from e
+    except (UnicodeDecodeError, json.JSONDecodeError) as e:
+        raise RuntimeError(
+            f"GitHub API {method} {url} returned a body that is not JSON: {e}"
+        ) from e
 
 
 def find_sticky_comment(

@@ -3303,3 +3303,11 @@ next run uses the latest stored run as its comparison point. So after fixing
 the typo, a drop from 0.9 to 0.2 was compared with the rejected 0.2 run and
 passed. Both options are now checked before any judge call; the corrected run
 in the same sequence now fails the gate as it should.
+
+## 2026-10-06 — network failures in `comment` exit 2, not 1 (#303)
+
+`eval-harness comment` posts the results comment to GitHub. It turned GitHub
+error responses into a clean "exit 2" message, but a refused connection, a
+timeout or a non-JSON reply crashed with a traceback and exit code 1, which
+CI treats as "a regression was found". All of those now produce the same
+single error line and exit 2.
