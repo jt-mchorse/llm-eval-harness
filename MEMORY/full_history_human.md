@@ -3354,3 +3354,9 @@ accented text typed two visually identical ways looked "drifted", and Hindi or
 Arabic words broke into single letters. Text is now normalised and marks stay
 part of their word. The repo's documented drift example produces exactly the
 same report as before.
+## 2026-10-07 — the eval workflow stops on bad input (#310)
+
+The repo's own eval workflow ignored any failure from the diff step, so a
+missing fixture would carry on and try to post a comment from a file that was
+never written. It now continues only on "a regression was flagged" and stops on
+a real error.

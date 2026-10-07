@@ -3571,5 +3571,19 @@ measured: "main: NFD cafe -> cafe, Devanagari split, cos(NFC,NFD)=0.667; fix 1.0
 context_for_next_session:
   - PYTHON_re_HAS_NO_p_M_and_[^\\W_]_IS_isalnum_WHICH_EXCLUDES_MARKS_sweep_other_python_tokenizers_rag_reranker_csl_semantic_for_the_same_class
   - GOTCHA_ZSH_CHOKES_ON_UNICODE_TEST_IDS_IN_GREP_PIPES_count_with_junitxml
+session: 2026-10-07T09:26Z
+duration_min: 3
+issue: 310
+branch: session/2026-10-07-leh-eval-yml-rc
+focus: EVAL_YML_OR_ECHO_SWALLOWED_EXIT_2_AS_WELL_AS_1
+phase: shipped
+delta:
+  files_changed: 2
+  tests_added: 6
+  suite: "full suite green (junitxml)"
+decisions_made: []
+measured: "step scripts under bash -e with a stub: main 0/0/0 for rc 0/1/2 (2 red), fix 0/0/2."
+context_for_next_session:
+  - OR_ECHO_AFTER_A_FINDINGS_CLI_SWALLOWS_ITS_ERROR_CODE_TOO_grep_workflows_for_or_echo_and_or_true_after_tools_with_a_0_1_2_contract
 followups: []
 ---
