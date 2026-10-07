@@ -3432,6 +3432,46 @@ followups: []
 ---
 
 ---
+session: 2026-10-06T08:27Z
+duration_min: 2   # computed: plan comment 08:25:41Z -> 08:27Z (date -u); reproduced from ~08:24Z after a hunt agent's report
+issue: 299
+branch: session/2026-10-06-0825-issue-299
+focus: judge_UNREACHABLE_AFTER_4_ATTEMPTS_WAS_12_REQUESTS_the_SDK_client_kept_max_retries_2_inside_each_harness_attempt
+phase: shipped
+delta:
+  files_changed: 2
+  tests_added: 3
+  suite: "2241 passed; ruff, format, mypy clean"
+decisions_made: []
+measured: "529 stub counting x-stainless-retry-count: main 12 requests (0 1 2 x4) behind '4 attempts'; fixed 4. Revert probe: 3 of 3 red."
+context_for_next_session:
+  - TWO_RETRY_LAYERS_MULTIPLY_an_SDK_client_built_with_defaults_inside_a_harness_retry_loop_check_every_client_constructor_in_the_portfolio_for_max_retries
+  - CI_INSTALLS_ONLY_dev_SO_AN_importorskip_anthropic_ARM_IS_SKIPPED_THERE_pair_it_with_a_stand_in_module_arm_that_runs_everywhere
+  - THE_SAME_HUNT_FOUND_3_MORE_leh_DEFECTS_usage_error_saves_the_run_before_exit_2_comment_traceback_on_URLError_test_fails_with_GITHUB_TOKEN_exported
+followups: []
+---
+
+---
+session: 2026-10-06T08:30Z
+duration_min: 2   # computed: plan comment 08:28:49Z -> 08:30Z (date -u); reproduced from ~08:27Z after a hunt agent's report
+issue: 301
+branch: session/2026-10-06-0828-issue-301
+focus: run_CHECKED_threshold_drop_AND_baseline_ONLY_AFTER_SCORING_AND_SAVING_the_rejected_run_became_the_next_baseline_and_a_0_9_to_0_2_drop_PASSED_THE_GATE
+phase: shipped
+delta:
+  files_changed: 2
+  tests_added: 14
+  suite: "2238 -> 2252 passed; ruff, format, mypy clean"
+decisions_made: []
+measured: "stub judges 0.9/0.2: main step 2 exit 2 + 10 calls + saved, step 3 exit 0 regressed=0; fixed step 2 exit 2 + 0 calls + nothing saved, step 3 exit 1 regressed=10. Revert probe: 14 of 14 red (junit xml)."
+context_for_next_session:
+  - READ_THE_SCOPE_THE_LAST_FIX_WROTE_DOWN_AGAIN_287_SAID_THE_OTHER_OUTPUT_WRITTEN_AFTER_THE_PAID_LOOP_the_INPUTS_read_after_it_were_the_unswept_half
+  - AN_EXIT_2_THAT_ALREADY_PERSISTED_IS_NOT_A_REJECTION_it_mutates_the_default_baseline
+  - leh_addopts_q_HIDES_PASSED_LINES_count_red_green_from_junitxml_not_grep
+followups: []
+---
+
+---
 session: 2026-10-06T08:32Z
 duration_min: 1   # computed: plan comment 08:31:29Z -> 08:32Z (date -u); reproduced from ~08:30Z after a hunt agent's report
 issue: 303

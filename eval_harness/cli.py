@@ -51,6 +51,7 @@ from eval_harness.runner import (
     DatasetEchoSource,
     DeltaReport,
     RunSpec,
+    _checked_threshold_drop,
     diff_runs,
     load_baseline,
     load_run_result_from_json,
@@ -542,6 +543,28 @@ def _run_run(args: argparse.Namespace) -> int:
             check_writable(args.out)
         except OSError as e:
             return _fail(f"failed to write {args.out}: {e}")
+
+    # And the two INPUTS the post-run diff reads (#301). #275 and #287 moved
+    # the outputs ahead of the paid loop; `--threshold-drop` and `--baseline`
+    # were still checked only inside the diff, after every row was scored and
+    # the run SAVED. The command exited 2, but the saved run became the suite's
+    # latest -- the next run's default baseline -- so after fixing a typo'd
+    # `--threshold-drop -0.1`, a 0.9 -> 0.2 drop diffed against the rejected
+    # 0.2 run and passed the gate at exit 0. The value's domain is checked even
+    # under --no-diff: a usage error does not depend on whether it is used.
+    try:
+        _checked_threshold_drop(args.threshold_drop)
+    except ValueError as e:
+        return _fail(str(e))
+    if args.baseline is not None and not args.no_diff:
+        try:
+            with connect(args.db) as conn:
+                init_db_on(conn)
+                read_run(conn, args.baseline)
+        except KeyError as e:
+            return _fail(e.args[0] if e.args else str(e))
+        except (sqlite3.Error, OSError) as e:
+            return _db_fail(args.db, e)
 
     # Same construction-time `ImportError` as `_run_calibrate`. The comment on
     # the dataset-load seam above already reasons about this exception — it is
