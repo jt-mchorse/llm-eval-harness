@@ -51,6 +51,7 @@ from eval_harness.runner import (
     DatasetEchoSource,
     DeltaReport,
     RunSpec,
+    _checked_threshold_drop,
     diff_runs,
     load_baseline,
     load_run_result_from_json,
@@ -543,6 +544,28 @@ def _run_run(args: argparse.Namespace) -> int:
         except OSError as e:
             return _fail(f"failed to write {args.out}: {e}")
 
+    # And the two INPUTS the post-run diff reads (#301). #275 and #287 moved
+    # the outputs ahead of the paid loop; `--threshold-drop` and `--baseline`
+    # were still checked only inside the diff, after every row was scored and
+    # the run SAVED. The command exited 2, but the saved run became the suite's
+    # latest -- the next run's default baseline -- so after fixing a typo'd
+    # `--threshold-drop -0.1`, a 0.9 -> 0.2 drop diffed against the rejected
+    # 0.2 run and passed the gate at exit 0. The value's domain is checked even
+    # under --no-diff: a usage error does not depend on whether it is used.
+    try:
+        _checked_threshold_drop(args.threshold_drop)
+    except ValueError as e:
+        return _fail(str(e))
+    if args.baseline is not None and not args.no_diff:
+        try:
+            with connect(args.db) as conn:
+                init_db_on(conn)
+                read_run(conn, args.baseline)
+        except KeyError as e:
+            return _fail(e.args[0] if e.args else str(e))
+        except (sqlite3.Error, OSError) as e:
+            return _db_fail(args.db, e)
+
     # Same construction-time `ImportError` as `_run_calibrate`. The comment on
     # the dataset-load seam above already reasons about this exception — it is
     # why the dataset is validated *first* — and then let it escape once the
@@ -723,8 +746,9 @@ def _run_comment(args: argparse.Namespace) -> int:
     try:
         comment_id = upsert_sticky_comment(args.repo, args.pr, body)
     except RuntimeError as e:
-        # A missing GITHUB_TOKEN/GH_TOKEN (_resolve_token) and a GitHub API
-        # HTTP error (_do_request) both raise RuntimeError — pure usage / I-O
+        # A missing GITHUB_TOKEN/GH_TOKEN (_resolve_token) and any failed GitHub
+        # API request (_do_request: an HTTP error, a connection error or timeout,
+        # or a body that is not JSON -- #303) all raise RuntimeError — pure usage / I-O
         # failures, not crashes. This call sits outside the delta-load try above,
         # so the RuntimeError otherwise escaped as a raw traceback at exit 1,
         # breaking the `0 = clean / 1 = findings / 2 = I/O or usage error`

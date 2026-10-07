@@ -3284,6 +3284,34 @@ and loading the file sent the fake token. Both now ship empty, and a test
 loads the template and checks that whichever token you fill in is the one
 used.
 
+## 2026-10-06 — "4 attempts" now means four requests (#299)
+
+When the judge API kept failing, the harness reported "unreachable after 4
+attempts". Each of those attempts actually went through the Anthropic client,
+which retries twice on its own, so the harness had made twelve requests, and
+even a setting of one attempt made three. The client's own retries are now
+turned off, so the harness's documented retry budget is the real number of
+requests. Against a stub server that always reports overload, the same command
+now makes exactly four requests.
+
+## 2026-10-06 — a rejected run no longer weakens the regression gate (#301)
+
+`eval-harness run` checked the `--threshold-drop` and `--baseline` options only
+after it had scored every row and saved the run. A typo such as a negative
+threshold made the command fail, but the run had already been stored, and the
+next run uses the latest stored run as its comparison point. So after fixing
+the typo, a drop from 0.9 to 0.2 was compared with the rejected 0.2 run and
+passed. Both options are now checked before any judge call; the corrected run
+in the same sequence now fails the gate as it should.
+
+## 2026-10-06 — network failures in `comment` exit 2, not 1 (#303)
+
+`eval-harness comment` posts the results comment to GitHub. It turned GitHub
+error responses into a clean "exit 2" message, but a refused connection, a
+timeout or a non-JSON reply crashed with a traceback and exit code 1, which
+CI treats as "a regression was found". All of those now produce the same
+single error line and exit 2.
+
 ## 2026-10-06 — a token test that tested the machine (#305)
 
 A test meant to catch the GitHub token being cached when the module loads
