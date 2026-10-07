@@ -3320,3 +3320,11 @@ anyone with a token exported, which the repo's `.env.example` encourages, and
 it would not have noticed the caching bug it was named after. It now changes
 the token between two lookups and requires the second value, which catches a
 cached token and works whatever the shell has set.
+
+## 2026-10-06 — the delta table's columns line up (#307)
+
+The plain-text delta table that `run` and `diff` print had fixed column
+widths that matched neither the headers nor the data, so nothing lined up and
+the FLAG marker for a failing row appeared under the delta column. Each column
+is now as wide as its header and its widest value, with numbers aligned on the
+right.
