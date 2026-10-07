@@ -3311,3 +3311,12 @@ error responses into a clean "exit 2" message, but a refused connection, a
 timeout or a non-JSON reply crashed with a traceback and exit code 1, which
 CI treats as "a regression was found". All of those now produce the same
 single error line and exit 2.
+
+## 2026-10-06 — a token test that tested the machine (#305)
+
+A test meant to catch the GitHub token being cached when the module loads
+only checked that the developer's own shell had no token set. It failed for
+anyone with a token exported, which the repo's `.env.example` encourages, and
+it would not have noticed the caching bug it was named after. It now changes
+the token between two lookups and requires the second value, which catches a
+cached token and works whatever the shell has set.
