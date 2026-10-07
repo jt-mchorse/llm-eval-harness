@@ -39,6 +39,7 @@ silently accepting them, because eval semantics depend on the kind.
 from __future__ import annotations
 
 import json
+import re
 from collections import Counter
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -102,6 +103,17 @@ class ExpectedOutput:
             )
         if not isinstance(self.value, str):
             raise ValueError(f"expected_output.value must be str, got {type(self.value).__name__}")
+        # A `regex` value is documented as "a Python regex pattern" (#321), so a
+        # pattern Python cannot compile is a malformed row, caught here with the
+        # row's other schema errors rather than wherever a consumer first tries
+        # to use it. `validate_dataset` reported `(unclosed` as valid.
+        if self.kind == "regex":
+            try:
+                re.compile(self.value)
+            except re.error as e:
+                raise ValueError(
+                    f"expected_output regex {self.value!r} does not compile: {e}"
+                ) from None
 
     def to_dict(self) -> dict[str, str]:
         return {"kind": self.kind, "value": self.value}
