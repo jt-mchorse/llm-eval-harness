@@ -3372,3 +3372,14 @@ A dataset row could declare a "regex" expected answer that Python can't even
 compile, and validation called the file valid. It is now reported as an error
 on that row. Also filed #320 for JT: the dataset format documents "exact" and
 "regex" checks that the harness never actually runs.
+## 2026-10-08 — two more kinds of broken regex are reported, not crashed on (#332)
+
+Yesterday's fix (#321) made the dataset checker report a regex that doesn't
+compile, but it only caught one of the ways Python refuses a pattern. A
+huge repeat count like `a{4294967296}`, or thousands of nested brackets,
+still crashed the checker with exit code 1, which reads as "findings" for
+`validate` and "a row regressed" for `run`. Both are now reported as a
+problem on that row. Also filed #333: deeply nested JSON crashes every
+reader the same way. Also filed #331 for JT: the drift detector's
+embedding check can never fire when the golden set has only one distinct
+input.
