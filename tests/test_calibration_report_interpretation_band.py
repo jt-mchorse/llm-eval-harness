@@ -78,7 +78,9 @@ def test_pearson_end_to_end_through_calibrate() -> None:
     rows = load_calibration(_ROOT / "fixtures" / "calibration.jsonl")
     assert len(rows) == len(_JUDGE_SCORES_R_JUST_BELOW_0_7) == 50
     result = calibrate(Judge(_ScriptedBackend(_JUDGE_SCORES_R_JUST_BELOW_0_7)), rows)
-    assert result.pearson_r == 0.699736860811484
+    # A band, not the exact double: `sum` is compensated from Python 3.12 on, so
+    # 3.11 lands one ULP away (0.6997368608114839). Either is just below 0.7.
+    assert 0.6995 < result.pearson_r < 0.7
     _, (value, label), _ = _rows(render_report(result, judge_model="m"))
     assert label == "strong"
     assert value != "0.700"
