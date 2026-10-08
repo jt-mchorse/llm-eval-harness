@@ -28,6 +28,7 @@ standard going forward.
 from __future__ import annotations
 
 import contextlib
+import json
 import math
 import os
 import secrets
@@ -372,6 +373,32 @@ def find_unrepresentable(
                 for i, v in enumerate(node):
                     stack.append((f"{path}[{i}]", v, False))
     return None
+
+
+def loads_json(text: str) -> Any:
+    """`json.loads`, with input nested too deep to decode raised as a `JSONDecodeError`.
+
+    The one JSON reader every loader in this package goes through (#333).
+    `json.loads` raises `RecursionError` -- not `JSONDecodeError`, and not a
+    `ValueError` at all -- on nesting deeper than the interpreter's stack allows:
+    about 100,000 levels of ``[`` on 3.11/3.12, the interpreters CI and
+    `eval.yml` run. Every reader caught `JSONDecodeError` only, so that input
+    escaped as a traceback at exit 1, which is the code `diff-json` uses for
+    "a row regressed" and `validate` for "findings". `eval.yml` and the README's
+    downstream snippet only fail on ``rc > 1``, so a corrupt run JSON took the
+    regression path instead of the bad-input path (sibling of
+    rag-production-kit#299).
+
+    Re-raised as a `JSONDecodeError` so the handlers that already exist at each
+    site -- exit 2 in the CLI, a ``parse`` finding in the collecting
+    validators -- apply unchanged. Translating in one helper rather than at each
+    site is the point: the next reader cannot catch one of the two and miss the
+    other. A test pins that no module calls `json.loads` directly.
+    """
+    try:
+        return json.loads(text)
+    except RecursionError:
+        raise json.JSONDecodeError("nesting too deep to decode", text, 0) from None
 
 
 def _cap_base_for_temp(base: str) -> str:

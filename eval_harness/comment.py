@@ -23,6 +23,7 @@ from typing import Any
 from urllib import error, request
 
 from eval_harness.comparison import render_configured, render_signed_classified
+from eval_harness.io_utils import loads_json
 from eval_harness.markdown import md_code_cell, md_code_span, md_table_cell
 from eval_harness.runner import DeltaReport, RowDelta
 
@@ -246,7 +247,7 @@ def _do_request(
     try:
         with request.urlopen(req, timeout=30) as resp:
             raw = resp.read().decode("utf-8")
-            return json.loads(raw) if raw else {}
+            return loads_json(raw) if raw else {}
     except error.HTTPError as e:
         try:
             err_body = e.read().decode("utf-8")

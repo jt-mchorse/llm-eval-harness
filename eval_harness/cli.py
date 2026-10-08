@@ -39,7 +39,7 @@ from eval_harness.comment import (
 )
 from eval_harness.comparison import render_comparison
 from eval_harness.dataset import DatasetLoadError, load_jsonl, validate_dataset
-from eval_harness.io_utils import atomic_write_text, check_writable
+from eval_harness.io_utils import atomic_write_text, check_writable, loads_json
 from eval_harness.judge import (
     AnthropicBackend,
     Judge,
@@ -730,7 +730,7 @@ def _run_comment(args: argparse.Namespace) -> int:
         # DeltaReport.from_json: ValueError (non-finite threshold/mean_delta) and
         # KeyError (per-row example_id/status missing).
         raw = Path(args.delta_json).read_text(encoding="utf-8")
-        payload = json.loads(raw)
+        payload = loads_json(raw)
         report = DeltaReport.from_json(payload)
     except (FileNotFoundError, OSError) as e:
         return _fail(f"could not read delta JSON: {e}")

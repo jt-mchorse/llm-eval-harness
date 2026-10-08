@@ -21,7 +21,7 @@ from typing import Any
 
 from eval_harness.comparison import render_comparison
 from eval_harness.dataset import ValidationFinding, ValidationReport
-from eval_harness.io_utils import UNENCODABLE, copy_json_value, find_unrepresentable
+from eval_harness.io_utils import UNENCODABLE, copy_json_value, find_unrepresentable, loads_json
 from eval_harness.judge import Judge, JudgeParseError, JudgeScore
 from eval_harness.markdown import md_code_cell, md_code_span, md_table_cell
 
@@ -154,7 +154,7 @@ def load_calibration(path: str | Path) -> list[CalibrationRow]:
                 # the loader doesn't silently swallow data.
                 raise CalibrationLoadError(line_no, "unexpected blank line")
             try:
-                obj = json.loads(line)
+                obj = loads_json(line)
             except json.JSONDecodeError as e:
                 raise CalibrationLoadError(line_no, f"invalid JSON: {e.msg}") from e
             if not isinstance(obj, dict):
@@ -301,7 +301,7 @@ def validate_calibration(path: str | Path) -> ValidationReport:
                 )
                 continue
             try:
-                parsed = json.loads(stripped)
+                parsed = loads_json(stripped)
             except json.JSONDecodeError as e:
                 findings.append(
                     ValidationFinding(
