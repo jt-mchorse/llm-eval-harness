@@ -3372,3 +3372,11 @@ A dataset row could declare a "regex" expected answer that Python can't even
 compile, and validation called the file valid. It is now reported as an error
 on that row. Also filed #320 for JT: the dataset format documents "exact" and
 "regex" checks that the harness never actually runs.
+## 2026-10-08 — the calibration report's numbers agree with their labels (#329)
+
+The calibration report prints Cohen's κ and Pearson r next to a word label
+("strong", "fair" and so on). A value just under a cutoff was rounded up to the
+cutoff, so the report could read "0.700 | strong" when its own scale calls
+0.700 "very strong". It happens with ordinary judge scores on the shipped
+50-row set. Those cells now show an extra digit when needed (`0.6997`), and
+every other value prints the same as before.

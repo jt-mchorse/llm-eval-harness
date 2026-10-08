@@ -3617,3 +3617,20 @@ context_for_next_session:
   - FILED_320_JT_exact_regex_kinds_documented_never_evaluated_three_options
 followups: ["#320"]
 ---
+session: 2026-10-08T08:05Z
+duration_min: 25
+issue: 329
+branch: session/2026-10-08-w3-issue-329
+focus: CALIBRATION_REPORT_KAPPA_AND_PEARSON_PRINTED_AT_A_LADDER_BOUNDARY_BESIDE_THE_LABEL_FOR_THE_BAND_BELOW
+phase: shipped
+delta:
+  files_changed: 2
+  tests_added: 169
+  suite: "full suite green; ruff, format, mypy clean"
+decisions_made: []
+measured: "r=0.69974 end to end through calibrate on the shipped 50 rows rendered '0.700 | strong'; kappa 0.19974 at n=50 rendered '0.200 | slight'; 782 kappa values n<=80 collide. Revert 64/169 red."
+context_for_next_session:
+  - D_028_POPULATION_ARM_KEYS_ON_STATUS_NAMES_A_LABEL_FROM_A_FUNCTION_CALL_interpret_WAS_INVISIBLE_new_arm_keys_on_interpret_calls
+  - STDOUT_calibration_n_kappa_pearson_LINE_STAYS_3F_standalone_readout_no_label
+followups: []
+---
