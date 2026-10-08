@@ -3601,4 +3601,19 @@ measured: "real CLI on a 401-digit score: main traceback exit 1; fix exit 2 one 
 context_for_next_session:
   - ALSO_FILED_317_JT_judge_clamp_of_out_of_scale_scores_to_1_0
 followups: ["#317"]
+session: 2026-10-07T10:56Z
+duration_min: 4
+issue: 321
+branch: session/2026-10-07-leh-regex-validate
+focus: A_REGEX_EXPECTED_OUTPUT_THAT_DOES_NOT_COMPILE_PASSED_VALIDATION
+phase: shipped
+delta:
+  files_changed: 2
+  tests_added: 8
+  suite: "2277 passed (junitxml); ruff, format clean"
+decisions_made: []
+measured: "main: (unclosed constructs; validate_dataset ok. Revert 5/8 red."
+context_for_next_session:
+  - FILED_320_JT_exact_regex_kinds_documented_never_evaluated_three_options
+followups: ["#320"]
 ---
