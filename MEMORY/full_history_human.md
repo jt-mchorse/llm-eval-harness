@@ -3354,3 +3354,11 @@ accented text typed two visually identical ways looked "drifted", and Hindi or
 Arabic words broke into single letters. Text is now normalised and marks stay
 part of their word. The repo's documented drift example produces exactly the
 same report as before.
+
+## 2026-10-08 — `list --limit 0` is an error whether or not a database exists (#325)
+
+`eval-harness list` only checked `--limit` once it had opened the database. If
+the database did not exist yet it printed "no runs" and exited 0 first, so
+`--limit 0` or `--limit -3` looked fine on a fresh machine and only failed
+(exit 2) after a run had been recorded. The check now runs before anything
+else, in text and JSON mode alike, using the same rule `list_runs` uses.
