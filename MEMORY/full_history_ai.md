@@ -3526,3 +3526,22 @@ context_for_next_session:
   - TEST_A_TEXT_TABLE_BY_CUTTING_ROWS_AT_THE_DASH_LINES_SEGMENTS_and_requiring_each_cell_in_its_column
 followups: []
 ---
+
+---
+session: 2026-10-07T07:53Z
+duration_min: 2   # computed from GitHub: plan comment 07:51:56Z -> PR ~07:53Z
+issue: 312
+branch: session/2026-10-07-leh-comment-cap
+focus: THE_STICKY_COMMENT_HAD_NO_SIZE_CAP_SO_A_LARGE_SUITE_COULD_NEVER_POST_AND_A_STALE_VERDICT_STAYED
+phase: shipped
+delta:
+  files_changed: 4
+  tests_added: 15
+  suite: "2284 passed (junitxml); ruff, format, mypy clean"
+decisions_made: []
+measured: "revert: main collection error; char-measure 1 red; no omission-line reservation 5; priority-order render 1; no flagged-first 1 (after adding the unflagged-regressions arm)."
+context_for_next_session:
+  - MY_FLAGGED_FIRST_ARM_WAS_VACUOUS_every_flagged_fixture_was_also_regressed_which_ranks_first_anyway_A_RANK_KEY_NEEDS_A_FIXTURE_WHERE_ONLY_THAT_KEY_SEPARATES
+  - sibling_check_for_next_run_rag_run_eval_post_comment_and_prs_aop_comment_posters_for_the_same_65536_cap
+followups: []
+---

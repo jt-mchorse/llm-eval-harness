@@ -3328,3 +3328,12 @@ widths that matched neither the headers nor the data, so nothing lined up and
 the FLAG marker for a failing row appeared under the delta column. Each column
 is now as wide as its header and its widest value, with numbers aligned on the
 right.
+
+## 2026-10-07 — the sticky PR comment fits GitHub's size limit (#312)
+
+GitHub rejects comments over 65,536 characters, and the eval-delta comment
+listed every row, so a suite of roughly 1,100 rows or more could never post it
+and an old comment with a stale verdict stayed on the PR. The comment now stays
+under the limit: when it can't show every row it keeps the flagged ones first,
+then the other changed rows, and says how many it left out. The full table is
+still available from `diff-json --format markdown`.
