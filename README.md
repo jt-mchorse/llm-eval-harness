@@ -443,16 +443,37 @@ Downstream repos that import `eval-harness` use the same two CLI
 steps in their own workflow:
 
 ```yaml
-- run: eval-harness diff-json \
-    --current  results/current.json \
-    --baseline fixtures/main-baseline.json \
-    --format json --out /tmp/delta.json
-- run: eval-harness comment \
-    --repo ${{ github.repository }} \
-    --pr   ${{ github.event.pull_request.number }} \
-    --delta-json /tmp/delta.json
-  env: { GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} }
+- name: Diff against the baseline
+  id: diff
+  run: |
+    # diff-json exits 1 when a row is flagged and 2 on bad input. Post the
+    # comment on a 1, which is the PR it matters for; fail now on anything else.
+    rc=0
+    eval-harness diff-json \
+      --current  results/current.json \
+      --baseline fixtures/main-baseline.json \
+      --format json --out /tmp/delta.json || rc=$?
+    echo "rc=$rc" >> "$GITHUB_OUTPUT"
+    [ "$rc" -le 1 ] || exit "$rc"
+- name: Post the sticky comment
+  env:
+    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  run: |
+    eval-harness comment \
+      --repo ${{ github.repository }} \
+      --pr   ${{ github.event.pull_request.number }} \
+      --delta-json /tmp/delta.json
+- name: Fail the job on a flagged row
+  if: steps.diff.outputs.rc == '1'
+  run: exit 1
 ```
+
+Each `run:` is a `|` block, so the line continuations reach bash
+intact. Actions runs each step under `bash -e`, which is why the diff
+step catches its own exit code: a bare `diff-json` that flags a row
+would stop the job before the comment step, on exactly the PR the
+comment is for. `tests/test_readme_workflow_snippet.py` parses this
+block and runs each step against the demo fixtures (#309).
 
 `diff-json` is SQLite-free (D-010) — it diffs two `RunResult` JSON
 files produced by `eval-harness run --out`. Action runners are

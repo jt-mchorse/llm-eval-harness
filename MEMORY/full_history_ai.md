@@ -3544,4 +3544,20 @@ context_for_next_session:
   - MY_FLAGGED_FIRST_ARM_WAS_VACUOUS_every_flagged_fixture_was_also_regressed_which_ranks_first_anyway_A_RANK_KEY_NEEDS_A_FIXTURE_WHERE_ONLY_THAT_KEY_SEPARATES
   - sibling_check_for_next_run_rag_run_eval_post_comment_and_prs_aop_comment_posters_for_the_same_65536_cap
 followups: []
+session: 2026-10-07T07:28:53Z
+duration_min: 3   # computed from GitHub: plan comment 2026-10-07T07:26:24Z -> PR 2026-10-07T07:28:53Z
+issue: 309
+branch: session/2026-10-07-leh-readme-snippet
+focus: README_DOWNSTREAM_WORKFLOW_SNIPPET_DID_NOT_PARSE_FOLDED_ITS_COMMANDS_AND_SKIPPED_THE_COMMENT_ON_A_REGRESSION
+phase: shipped
+delta:
+  files_changed: 2
+  tests_added: 7
+  suite: "full suite green; ruff check + ruff format --check clean"
+decisions_made: []
+measured: "main's block: ParserError; folded run: argparse rc 2; diff-json on demo fixtures rc 1 (flagged), missing baseline rc 2. Revert probes (-rA, 7 tests): main 4 red, eval.yml-style '|| echo' 2 red, bare diff-json in | blocks 1 red, fix 0."
+context_for_next_session:
+  - A_YAML_BLOCK_IN_A_README_IS_CODE_parse_it_AND_RUN_IT_the_bash_fence_lock_scoped_itself_away_from_this_one_ON_PURPOSE_and_that_purpose_was_its_PATHS_not_its_validity
+  - EXIT_1_MEANS_FINDINGS_IN_THIS_PORTFOLIO_so_ANY_DOCUMENTED_CI_STEP_RUNNING_A_FINDINGS_CLI_UNDER_bash_e_SKIPS_EVERYTHING_AFTER_IT_ON_EXACTLY_THE_RUN_THAT_FOUND_SOMETHING
+followups: ["#310"]
 ---
