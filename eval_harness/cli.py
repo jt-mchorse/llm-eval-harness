@@ -658,6 +658,13 @@ def _run_run(args: argparse.Namespace) -> int:
 
 
 def _run_diff(args: argparse.Namespace) -> int:
+    # `diff` only reads, so a `--db` that does not exist has no runs to diff.
+    # `connect` would `mkdir -p` the parent and `init_db_on` would write the
+    # schema, so a typo'd path left a new empty database behind before
+    # "no run with id" was reported (#323). `list` already refuses to create
+    # one; this is the same rule for `diff`.
+    if not Path(args.db).exists():
+        return _fail(f"cannot use --db {args.db}: no database at that path")
     try:
         with connect(args.db) as conn:
             init_db_on(conn)
