@@ -3347,3 +3347,10 @@ GitHub Actions stops at the first failing step. The block is rewritten so the
 comment is always posted and the job still goes red on a regression. A new
 test parses the block and runs each step the way a runner would. This repo's
 own `eval.yml` has a milder version of the same shape, filed as #310.
+## 2026-10-07 — drift detection handles accents and Indic/Arabic scripts (#314)
+
+The drift detector's tokenizer threw away accent and vowel marks. The same
+accented text typed two visually identical ways looked "drifted", and Hindi or
+Arabic words broke into single letters. Text is now normalised and marks stay
+part of their word. The repo's documented drift example produces exactly the
+same report as before.

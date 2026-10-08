@@ -39,6 +39,7 @@ import json
 import math
 import re
 import sys
+import unicodedata
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -348,7 +349,33 @@ _HASH_TOKEN_RE = re.compile(r"[^\W_]+")
 
 
 def _tokens(text: str) -> list[str]:
-    return _HASH_TOKEN_RE.findall(text.lower())
+    r"""Lowercased tokens: runs of alphanumerics AND the combining marks on them.
+
+    #108 widened tokens from ASCII to every `[^\W_]` character, which is
+    exactly `str.isalnum()`. That class has no combining marks (Unicode `M*`),
+    so a mark still ended its token and was thrown away (#314): NFD `café` became
+    `cafe` (identical to the unaccented word), Devanagari `नमस्ते दुनिया` became
+    `['नमस', 'त', 'द', 'न', 'य']`, and Arabic with vowel marks fell apart into
+    single letters. Text is NFC-normalized first, so the two encodings of one
+    rendered string tokenize identically: before, the NFC and NFD forms of a
+    40-sentence golden set scored embedding drift 0.150, `drifted`.
+
+    ASCII input takes the old regex unchanged (marks are never ASCII), so every
+    ASCII token, and every committed number built from one, is byte-identical.
+    """
+    if text.isascii():
+        return _HASH_TOKEN_RE.findall(text.lower())
+    out: list[str] = []
+    current: list[str] = []
+    for ch in unicodedata.normalize("NFC", text).lower():
+        if ch.isalnum() or unicodedata.category(ch).startswith("M"):
+            current.append(ch)
+        elif current:
+            out.append("".join(current))
+            current = []
+    if current:
+        out.append("".join(current))
+    return out
 
 
 def has_embeddable_content(text: str) -> bool:
