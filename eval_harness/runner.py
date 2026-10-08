@@ -163,6 +163,22 @@ class RunSpec:
         _checked_judge_kappa(self.judge_kappa)
 
 
+def _require_float(value: Any, field_name: str) -> float:
+    """``float(_require_number(value))``, with an int too large for a double as a ValueError (#318).
+
+    ``float(10**400)`` raises ``OverflowError``, which no reader catch block
+    translates. A RunResult JSON whose ``score`` was a 401-digit integer literal
+    escaped ``diff-json`` as a traceback at exit **1** -- the "a row was flagged
+    as a regression" code -- while the same file with ``1e400`` gave the clean
+    ``non-finite score`` error at exit 2. #190 closed ``int()`` on infinity; this
+    is ``float()`` on a huge int, at every site that converts a payload number.
+    """
+    try:
+        return float(_require_number(value, field_name))
+    except OverflowError:
+        raise ValueError(f"{field_name} is an integer too large to be a finite number") from None
+
+
 def _require_number(value: Any, field_name: str) -> int | float | str:
     """Reject a JSON container/null before a bare ``float()``/``int()`` coercion.
 
@@ -249,7 +265,7 @@ def _finite_or_none(value: Any, field_name: str, example_id: Any) -> float | Non
     """
     if value is None:
         return value
-    f = float(_require_number(value, field_name))
+    f = _require_float(value, field_name)
     if not math.isfinite(f):
         raise ValueError(
             f"non-finite {field_name} {value} for example_id {example_id!r} in delta JSON; "
@@ -288,7 +304,7 @@ def _checked_threshold_drop(value: Any) -> float:
     so nothing is ever flagged (#42). The reader refused the second and read
     back the first (#266).
     """
-    threshold_drop = float(_require_number(value, "threshold_drop"))
+    threshold_drop = _require_float(value, "threshold_drop")
     if not math.isfinite(threshold_drop):
         raise ValueError(
             f"non-finite threshold_drop {threshold_drop}; threshold_drop must be a "
@@ -353,9 +369,7 @@ def _check_delta_summary(summary: dict[str, Any]) -> None:
     # `mean_delta` may be legitimately absent or an explicit null (an
     # undefined mean Δ, e.g. an all-new suite — the renderer coerces that
     # to 0.0). Only a present, non-null, non-finite value is corruption.
-    if mean_delta is not None and not math.isfinite(
-        float(_require_number(mean_delta, "mean_delta"))
-    ):
+    if mean_delta is not None and not math.isfinite(_require_float(mean_delta, "mean_delta")):
         raise ValueError(
             f"non-finite mean_delta {mean_delta} in delta JSON summary; mean_delta must be "
             "finite — a NaN/Infinity value renders as '+nan' in the posted PR comment"
@@ -1095,7 +1109,7 @@ def _check_unique_example_id(example_id: str, seen: Container[str]) -> None:
 
 
 def _checked_row_score(value: Any, example_id: str) -> float:
-    score = float(_require_number(value, "score"))
+    score = _require_float(value, "score")
     if not math.isfinite(score):
         raise ValueError(
             f"non-finite score {score} for example_id {example_id!r}; scores must be "
@@ -1117,7 +1131,7 @@ def _check_n_rows(declared: Any, actual: int) -> int:
 
 
 def _checked_mean_score(value: Any) -> float:
-    mean_score = float(_require_number(value, "mean_score"))
+    mean_score = _require_float(value, "mean_score")
     if not math.isfinite(mean_score):
         raise ValueError(
             f"non-finite mean_score {mean_score}; mean_score must be finite — a "
@@ -1145,7 +1159,7 @@ def _checked_judge_kappa(value: Any) -> float | None:
     """
     if value is None:
         return None
-    kappa = float(_require_number(value, "judge_kappa"))
+    kappa = _require_float(value, "judge_kappa")
     if not math.isfinite(kappa):
         raise ValueError(
             f"non-finite judge_kappa {kappa}; judge_kappa must be finite when "

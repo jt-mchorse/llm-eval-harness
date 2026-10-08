@@ -3360,3 +3360,9 @@ The repo's own eval workflow ignored any failure from the diff step, so a
 missing fixture would carry on and try to post a comment from a file that was
 never written. It now continues only on "a regression was flagged" and stops on
 a real error.
+## 2026-10-07 — an absurdly large number in a results file is bad input, not a regression (#318)
+
+A results file with a score written as a 400-digit integer crashed the diff
+tool with exit code 1, which this repo uses to mean "a regression was found".
+It now reports the bad value cleanly with the bad-input code (2). Also filed
+#317 for JT: a judge answering "7" (out of 10) is clamped to a perfect 1.0.
