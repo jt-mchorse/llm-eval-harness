@@ -3573,3 +3573,21 @@ context_for_next_session:
   - GOTCHA_ZSH_CHOKES_ON_UNICODE_TEST_IDS_IN_GREP_PIPES_count_with_junitxml
 followups: []
 ---
+
+---
+session: 2026-10-08T07:20Z
+duration_min: 12   # computed: plan comment ~07:20Z -> PR (date -u)
+issue: 323
+branch: session/2026-10-08-issue-323
+focus: diff_ON_A_MISSING_db_CREATED_THE_PARENT_DIRS_AND_AN_EMPTY_DATABASE_before_no_run_with_id_list_already_refused_to
+phase: shipped
+delta:
+  files_changed: 2
+  tests_added: 5
+  suite: "2293 -> 2298 passed (junitxml); ruff, format, mypy clean"
+decisions_made: []
+measured: "main: diff --db /tmp/x/typo/runs.db -> exit 2 'no run with id' and typo/runs.db created; fixed: exit 2 'no database at that path', nothing created. Revert probe: 4 of 5 red, the existing-db control green."
+context_for_next_session:
+  - A_GUARD_WRITTEN_ON_ONE_READ_SUBCOMMAND_list_avoid_the_side_effect_WAS_NEVER_PORTED_TO_ITS_TWIN_diff
+followups: []
+---

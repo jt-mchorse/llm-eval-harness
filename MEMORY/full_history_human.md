@@ -3354,3 +3354,12 @@ accented text typed two visually identical ways looked "drifted", and Hindi or
 Arabic words broke into single letters. Text is now normalised and marks stay
 part of their word. The repo's documented drift example produces exactly the
 same report as before.
+
+## 2026-10-08 — `diff` no longer creates a database it was only asked to read (#323)
+
+`eval-harness diff` only reads the run history, but when `--db` pointed at a
+path that did not exist it created the missing directories and an empty
+database there, then reported that the run id was unknown. A typo in the path
+left a stray `runs.db` behind. `list` already refused to create a database; now
+`diff` does the same. It exits 2 with a message saying no database exists at
+that path, and leaves the filesystem unchanged.
