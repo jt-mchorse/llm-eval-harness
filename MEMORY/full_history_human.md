@@ -3372,3 +3372,12 @@ A dataset row could declare a "regex" expected answer that Python can't even
 compile, and validation called the file valid. It is now reported as an error
 on that row. Also filed #320 for JT: the dataset format documents "exact" and
 "regex" checks that the harness never actually runs.
+## 2026-10-08 — writing to a symlinked --out updates the linked file (#327)
+
+When `--out` (or `--report`/`--output`) was a symlink, the atomic writer
+replaced the link with a plain file and left the file it pointed at
+unchanged. It now writes through the link, the way a plain write does,
+and keeps that file's permissions. The "is this output writable?" check
+that runs before paid judge calls now looks at the same file, so a link
+into a read-only folder is caught before any money is spent. Same fix as
+python-async-llm-pipelines #157.
