@@ -3372,3 +3372,16 @@ A dataset row could declare a "regex" expected answer that Python can't even
 compile, and validation called the file valid. It is now reported as an error
 on that row. Also filed #320 for JT: the dataset format documents "exact" and
 "regex" checks that the harness never actually runs.
+
+## 2026-10-08 — Issue #333: JSON nested too deep to decode is bad input, not a crash
+**Duration:** ~25 min · **Branch:** session/2026-10-08-issue-333
+
+- Every JSON reader in the package caught `JSONDecodeError` only, but `json.loads` raises `RecursionError` on deep nesting (100k levels on the 3.11/3.12 CI interpreters). `diff-json`, `comment`, `validate`, `validate --calibration` and `drift` all escaped with a traceback at exit 1 — the code `diff-json` uses for "a row regressed", which `eval.yml` treats as "post the comment".
+- One helper, `io_utils.loads_json`, now re-raises it as a `JSONDecodeError`, and all eight reader sites go through it, so each site's existing handler applies: exit 2 in the CLI, a `parse` finding in the collecting validators (which now keep going past the bad line). A test pins that no module calls `json.loads` directly.
+- 14 new tests; with the call sites reverted (helper kept), 9 go red.
+
+**Why this work, this session:** filed earlier tonight by the wave-3 hunt as the leh side of rag-production-kit#299.
+
+**Open questions / blockers:** none
+
+**Next session:** merge in Phase A.
