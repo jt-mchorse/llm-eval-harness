@@ -3635,3 +3635,21 @@ context_for_next_session:
   - A_GUARD_WRITTEN_ON_ONE_READ_SUBCOMMAND_list_avoid_the_side_effect_WAS_NEVER_PORTED_TO_ITS_TWIN_diff
 followups: []
 ---
+
+---
+session: 2026-10-08T07:30Z
+duration_min: 10   # computed: plan comment ~07:28Z -> PR (date -u)
+issue: 325
+branch: session/2026-10-08-issue-325
+focus: list_VALIDATED_limit_ONLY_INSIDE_list_runs_WHICH_THE_MISSING_db_EARLY_RETURN_NEVER_REACHED_limit_0_exited_0_on_a_fresh_machine
+phase: shipped
+delta:
+  files_changed: 3
+  tests_added: 12
+  suite: "2301 -> 2313 passed (junitxml); ruff, format, mypy clean"
+decisions_made: []
+measured: "main: list --db missing.db --limit 0 -> exit 0 '# no runs'; with the db present -> exit 2. Fixed: exit 2 both ways. Revert probe (cli.py only): 5 of 12 red, controls and check_limit arms green."
+context_for_next_session:
+  - AN_EARLY_RETURN_AHEAD_OF_THE_VALIDATOR_MAKES_A_USAGE_ERROR_DEPEND_ON_STATE_the_existing_lock_built_the_db_first_so_it_only_saw_one_branch
+followups: []
+---

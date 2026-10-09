@@ -63,6 +63,7 @@ from eval_harness.runner import (
 from eval_harness.runs import (
     RunSummary,
     check_db,
+    check_limit,
     connect,
     init_db_on,
     list_runs,
@@ -781,6 +782,13 @@ def _run_list(args: argparse.Namespace) -> int:
     ``diff``, ``diff-json``.
     """
     db_path = Path(args.db)
+    # Before the missing-database answer below, which never reaches
+    # `list_runs`: a bad `--limit` exited 0 with "no runs" there and 2 only
+    # once a database existed (#325).
+    try:
+        check_limit(args.limit)
+    except ValueError as e:
+        return _fail(str(e))
     if not db_path.exists():
         # No DB on disk yet — equivalent to no runs. Don't auto-create
         # here (init_db is what `run` does); avoid the side effect.
