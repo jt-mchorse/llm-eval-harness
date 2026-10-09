@@ -104,7 +104,7 @@ def render_delta_markdown(report: DeltaReport, *, max_bytes: int | None = None) 
     lines.append(f"# Eval delta · {md_code_span(report.suite)}")
     headline_status = "[X]" if n_flag > 0 else "[!]" if n_reg > 0 else "[+]" if n_imp > 0 else "[=]"
     lines.append(
-        f"{headline_status} mean Δ **{mean_delta:+.3f}** · "
+        f"{headline_status} mean Δ **{render_signed_classified(mean_delta, (0.0,))}** · "
         f"flagged **{n_flag}** · regressed {n_reg} · improved {n_imp} · "
         f"unchanged {n_same} · new {n_new} · removed {n_rem}"
     )
