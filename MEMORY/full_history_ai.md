@@ -3725,3 +3725,22 @@ context_for_next_session:
   - SIBLING_OF_rag_production_kit_299_which_found_the_exit_1_collision_from_the_caller_side
 followups: []
 ---
+
+---
+session: 2026-10-09T08:40Z
+duration_min: 6   # computed: issue filed 2026-10-09T08:38:48Z -> PR 2026-10-09T08:40:59Z (gh createdAt); hunt-agent lead re-measured on the venv's SDK first
+issue: 338
+branch: session/2026-10-09-0845-issue-338
+focus: A_BAD_ANTHROPIC_PROFILE_FAILS_IN_THE_SDK_CONSTRUCTOR_BEFORE_THE_194_REQUEST_TIME_AUTH_PATH_TRACEBACK_AT_EXIT_1
+phase: shipped
+delta:
+  files_changed: 3
+  tests_added: 7
+  suite: "2557 -> 2564 passed; ruff, format, mypy clean"
+decisions_made: []
+measured: "anthropic 0.116.0, no key, empty HOME, ANTHROPIC_PROFILE=nope, eval-harness run: main AnthropicError traceback rc=1 (control rc=2); branch one ::error:: line rc=2. Revert 6 red / 1 control."
+context_for_next_session:
+  - THE_CLASS_NAME_DIFFERS_BY_SDK_VERSION_AnthropicError_on_0_116_CredentialsError_on_1_x_so_classify_the_SEAM_constructor_not_the_name
+  - CI_DEV_EXTRA_HAS_NO_anthropic_the_real_SDK_arms_skip_there_the_stub_arms_carry_the_lock
+followups: []
+---

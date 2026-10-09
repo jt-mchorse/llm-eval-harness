@@ -419,7 +419,8 @@ def _run_calibrate(args: argparse.Namespace) -> int:
     # the definition of a usage error; translate it at the construction site.
     try:
         backend = AnthropicBackend(model=args.model)
-    except ImportError as e:
+    except (ImportError, JudgeAuthError) as e:
+        # JudgeAuthError: the SDK client could not be built (#338).
         return _fail(str(e))
     judge = Judge(backend=backend)
     try:
@@ -574,7 +575,8 @@ def _run_run(args: argparse.Namespace) -> int:
     # dataset was valid (#218).
     try:
         backend = AnthropicBackend(model=args.model)
-    except ImportError as e:
+    except (ImportError, JudgeAuthError) as e:
+        # JudgeAuthError: the SDK client could not be built (#338).
         return _fail(str(e))
     judge = Judge(backend=backend)
     spec = RunSpec(
