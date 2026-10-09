@@ -63,6 +63,7 @@ from eval_harness.runner import (
 from eval_harness.runs import (
     RunSummary,
     check_db,
+    check_limit,
     connect,
     init_db_on,
     list_runs,
@@ -658,6 +659,13 @@ def _run_run(args: argparse.Namespace) -> int:
 
 
 def _run_diff(args: argparse.Namespace) -> int:
+    # `diff` only reads, so a `--db` that does not exist has no runs to diff.
+    # `connect` would `mkdir -p` the parent and `init_db_on` would write the
+    # schema, so a typo'd path left a new empty database behind before
+    # "no run with id" was reported (#323). `list` already refuses to create
+    # one; this is the same rule for `diff`.
+    if not Path(args.db).exists():
+        return _fail(f"cannot use --db {args.db}: no database at that path")
     try:
         with connect(args.db) as conn:
             init_db_on(conn)
@@ -774,6 +782,13 @@ def _run_list(args: argparse.Namespace) -> int:
     ``diff``, ``diff-json``.
     """
     db_path = Path(args.db)
+    # Before the missing-database answer below, which never reaches
+    # `list_runs`: a bad `--limit` exited 0 with "no runs" there and 2 only
+    # once a database existed (#325).
+    try:
+        check_limit(args.limit)
+    except ValueError as e:
+        return _fail(str(e))
     if not db_path.exists():
         # No DB on disk yet — equivalent to no runs. Don't auto-create
         # here (init_db is what `run` does); avoid the side effect.

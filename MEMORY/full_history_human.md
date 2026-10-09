@@ -3373,6 +3373,51 @@ compile, and validation called the file valid. It is now reported as an error
 on that row. Also filed #320 for JT: the dataset format documents "exact" and
 "regex" checks that the harness never actually runs.
 
+## 2026-10-08 — `diff` no longer creates a database it was only asked to read (#323)
+
+`eval-harness diff` only reads the run history, but when `--db` pointed at a
+path that did not exist it created the missing directories and an empty
+database there, then reported that the run id was unknown. A typo in the path
+left a stray `runs.db` behind. `list` already refused to create a database; now
+`diff` does the same. It exits 2 with a message saying no database exists at
+that path, and leaves the filesystem unchanged.
+
+## 2026-10-08 — `list --limit 0` is an error whether or not a database exists (#325)
+
+`eval-harness list` only checked `--limit` once it had opened the database. If
+the database did not exist yet it printed "no runs" and exited 0 first, so
+`--limit 0` or `--limit -3` looked fine on a fresh machine and only failed
+(exit 2) after a run had been recorded. The check now runs before anything
+else, in text and JSON mode alike, using the same rule `list_runs` uses.
+## 2026-10-08 — writing to a symlinked --out updates the linked file (#327)
+
+When `--out` (or `--report`/`--output`) was a symlink, the atomic writer
+replaced the link with a plain file and left the file it pointed at
+unchanged. It now writes through the link, the way a plain write does,
+and keeps that file's permissions. The "is this output writable?" check
+that runs before paid judge calls now looks at the same file, so a link
+into a read-only folder is caught before any money is spent. Same fix as
+python-async-llm-pipelines #157.
+## 2026-10-08 — the calibration report's numbers agree with their labels (#329)
+
+The calibration report prints Cohen's κ and Pearson r next to a word label
+("strong", "fair" and so on). A value just under a cutoff was rounded up to the
+cutoff, so the report could read "0.700 | strong" when its own scale calls
+0.700 "very strong". It happens with ordinary judge scores on the shipped
+50-row set. Those cells now show an extra digit when needed (`0.6997`), and
+every other value prints the same as before.
+## 2026-10-08 — two more kinds of broken regex are reported, not crashed on (#332)
+
+Yesterday's fix (#321) made the dataset checker report a regex that doesn't
+compile, but it only caught one of the ways Python refuses a pattern. A
+huge repeat count like `a{4294967296}`, or thousands of nested brackets,
+still crashed the checker with exit code 1, which reads as "findings" for
+`validate` and "a row regressed" for `run`. Both are now reported as a
+problem on that row. Also filed #333: deeply nested JSON crashes every
+reader the same way. Also filed #331 for JT: the drift detector's
+embedding check can never fire when the golden set has only one distinct
+input.
+
 ## 2026-10-08 — Issue #333: JSON nested too deep to decode is bad input, not a crash
 **Duration:** ~25 min · **Branch:** session/2026-10-08-issue-333
 
