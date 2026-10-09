@@ -3354,6 +3354,24 @@ accented text typed two visually identical ways looked "drifted", and Hindi or
 Arabic words broke into single letters. Text is now normalised and marks stay
 part of their word. The repo's documented drift example produces exactly the
 same report as before.
+## 2026-10-07 — the eval workflow stops on bad input (#310)
+
+The repo's own eval workflow ignored any failure from the diff step, so a
+missing fixture would carry on and try to post a comment from a file that was
+never written. It now continues only on "a regression was flagged" and stops on
+a real error.
+## 2026-10-07 — an absurdly large number in a results file is bad input, not a regression (#318)
+
+A results file with a score written as a 400-digit integer crashed the diff
+tool with exit code 1, which this repo uses to mean "a regression was found".
+It now reports the bad value cleanly with the bad-input code (2). Also filed
+#317 for JT: a judge answering "7" (out of 10) is clamped to a perfect 1.0.
+## 2026-10-07 — a broken regex in a dataset is caught at validation (#321)
+
+A dataset row could declare a "regex" expected answer that Python can't even
+compile, and validation called the file valid. It is now reported as an error
+on that row. Also filed #320 for JT: the dataset format documents "exact" and
+"regex" checks that the harness never actually runs.
 
 ## 2026-10-08 — `diff` no longer creates a database it was only asked to read (#323)
 
