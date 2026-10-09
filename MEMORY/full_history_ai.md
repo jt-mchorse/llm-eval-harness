@@ -3728,7 +3728,7 @@ followups: []
 
 ---
 session: 2026-10-09T07:51Z
-duration_min: 8   # computed: issue filed 2026-10-09T07:48:10Z -> PR 2026-10-09T07:51:37Z (gh createdAt)
+duration_min: 4   # computed: issue filed 2026-10-09T07:48:10Z -> PR 2026-10-09T07:51:37Z (gh createdAt)
 issue: 336
 branch: session/2026-10-09-0755-issue-336
 focus: SUMMARY_MEAN_DELTA_WAS_THE_FLOAT_DIFFERENCE_OF_TWO_FLOAT_MEANS_EQUAL_DECIMAL_MEANS_PRINTED_MINUS_0_000_D_034_291_SIBLING
