@@ -3372,3 +3372,12 @@ A dataset row could declare a "regex" expected answer that Python can't even
 compile, and validation called the file valid. It is now reported as an error
 on that row. Also filed #320 for JT: the dataset format documents "exact" and
 "regex" checks that the harness never actually runs.
+
+## 2026-10-08 — `diff` no longer creates a database it was only asked to read (#323)
+
+`eval-harness diff` only reads the run history, but when `--db` pointed at a
+path that did not exist it created the missing directories and an empty
+database there, then reported that the run id was unknown. A typo in the path
+left a stray `runs.db` behind. `list` already refused to create a database; now
+`diff` does the same. It exits 2 with a message saying no database exists at
+that path, and leaves the filesystem unchanged.
