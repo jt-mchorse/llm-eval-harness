@@ -3725,3 +3725,22 @@ context_for_next_session:
   - SIBLING_OF_rag_production_kit_299_which_found_the_exit_1_collision_from_the_caller_side
 followups: []
 ---
+
+---
+session: 2026-10-09T09:02Z
+duration_min: 6   # computed: probe ~08:57Z, issue filed 2026-10-09T08:59:01Z, PR 2026-10-09T09:02:28Z (gh createdAt)
+issue: 340
+branch: session/2026-10-09-0910-issue-340
+focus: SINCE_299_THE_HARNESS_IS_THE_ONLY_RETRY_LAYER_ITS_HAND_WRITTEN_SET_FAILED_520_524_ON_ATTEMPT_ONE_AND_IGNORED_X_SHOULD_RETRY
+phase: shipped
+delta:
+  files_changed: 2
+  tests_added: 29
+  suite: "2554 -> 2583 passed; ruff, format, mypy clean"
+decisions_made: []
+measured: "real SDK max_attempts=3 vs loopback stub, main (worktree, change stashed, PYTHONPATH=.): 503 3 req, 520/522/524 1 req, 400+x-should-retry:true 1, 503+false 3. Branch: 3/3/3, 3, 1. Revert 12 red / 17 old-set controls."
+context_for_next_session:
+  - TURNING_OFF_A_LIBRARYS_RETRIES_MEANS_YOUR_CLASSIFIER_MUST_MATCH_ITS_RULE_read_the_installed_SDKs_should_retry_not_a_remembered_list
+  - GOTCHA_python_SCRIPT_PATH_PUTS_THE_SCRIPTS_DIR_ON_sys_path_NOT_CWD_my_first_probe_imported_the_editable_install_of_another_checkout_use_PYTHONPATH_dot_and_print_module_file
+followups: []
+---
