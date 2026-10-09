@@ -46,9 +46,9 @@ def _run(tmp_path: Path, *extra: str) -> int:
 @pytest.mark.parametrize(
     "argv",
     [
-        ["--suite", "nightly-\udcff"],
-        ["--suite", "\ud800"],
-        ["--suite", "ok", "--model", "claude-\udcff"],
+        ["--suite", "nightly-" + chr(0xDCFF)],
+        ["--suite", chr(0xD800)],
+        ["--suite", "ok", "--model", "claude-" + chr(0xDCFF)],
     ],
     ids=["suite-escaped-byte", "suite-lone-high", "model"],
 )
