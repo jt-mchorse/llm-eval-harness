@@ -3398,3 +3398,11 @@ and keeps that file's permissions. The "is this output writable?" check
 that runs before paid judge calls now looks at the same file, so a link
 into a read-only folder is caught before any money is spent. Same fix as
 python-async-llm-pipelines #157.
+## 2026-10-08 — the calibration report's numbers agree with their labels (#329)
+
+The calibration report prints Cohen's κ and Pearson r next to a word label
+("strong", "fair" and so on). A value just under a cutoff was rounded up to the
+cutoff, so the report could read "0.700 | strong" when its own scale calls
+0.700 "very strong". It happens with ordinary judge scores on the shipped
+50-row set. Those cells now show an extra digit when needed (`0.6997`), and
+every other value prints the same as before.
