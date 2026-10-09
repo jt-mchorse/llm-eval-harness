@@ -3571,6 +3571,68 @@ measured: "main: NFD cafe -> cafe, Devanagari split, cos(NFC,NFD)=0.667; fix 1.0
 context_for_next_session:
   - PYTHON_re_HAS_NO_p_M_and_[^\\W_]_IS_isalnum_WHICH_EXCLUDES_MARKS_sweep_other_python_tokenizers_rag_reranker_csl_semantic_for_the_same_class
   - GOTCHA_ZSH_CHOKES_ON_UNICODE_TEST_IDS_IN_GREP_PIPES_count_with_junitxml
+session: 2026-10-07T09:26Z
+duration_min: 3
+issue: 310
+branch: session/2026-10-07-leh-eval-yml-rc
+focus: EVAL_YML_OR_ECHO_SWALLOWED_EXIT_2_AS_WELL_AS_1
+phase: shipped
+delta:
+  files_changed: 2
+  tests_added: 6
+  suite: "full suite green (junitxml)"
+decisions_made: []
+measured: "step scripts under bash -e with a stub: main 0/0/0 for rc 0/1/2 (2 red), fix 0/0/2."
+context_for_next_session:
+  - OR_ECHO_AFTER_A_FINDINGS_CLI_SWALLOWS_ITS_ERROR_CODE_TOO_grep_workflows_for_or_echo_and_or_true_after_tools_with_a_0_1_2_contract
+followups: []
+session: 2026-10-07T10:50Z
+duration_min: 6
+issue: 318
+branch: session/2026-10-07-leh-huge-int-score
+focus: FLOAT_OF_A_HUGE_INT_RAISED_OVERFLOWERROR_AND_DIFF_JSON_EXITED_1_THE_FINDINGS_CODE
+phase: shipped
+delta:
+  files_changed: 2
+  tests_added: 5
+  suite: "2274 passed (junitxml); ruff, format, mypy clean"
+decisions_made: []
+measured: "real CLI on a 401-digit score: main traceback exit 1; fix exit 2 one line. Revert 4/5 red."
+context_for_next_session:
+  - ALSO_FILED_317_JT_judge_clamp_of_out_of_scale_scores_to_1_0
+followups: ["#317"]
+session: 2026-10-07T10:56Z
+duration_min: 4
+issue: 321
+branch: session/2026-10-07-leh-regex-validate
+focus: A_REGEX_EXPECTED_OUTPUT_THAT_DOES_NOT_COMPILE_PASSED_VALIDATION
+phase: shipped
+delta:
+  files_changed: 2
+  tests_added: 8
+  suite: "2277 passed (junitxml); ruff, format clean"
+decisions_made: []
+measured: "main: (unclosed constructs; validate_dataset ok. Revert 5/8 red."
+context_for_next_session:
+  - FILED_320_JT_exact_regex_kinds_documented_never_evaluated_three_options
+followups: ["#320"]
+---
+
+---
+session: 2026-10-08T07:20Z
+duration_min: 12   # computed: plan comment ~07:20Z -> PR (date -u)
+issue: 323
+branch: session/2026-10-08-issue-323
+focus: diff_ON_A_MISSING_db_CREATED_THE_PARENT_DIRS_AND_AN_EMPTY_DATABASE_before_no_run_with_id_list_already_refused_to
+phase: shipped
+delta:
+  files_changed: 2
+  tests_added: 5
+  suite: "2293 -> 2298 passed (junitxml); ruff, format, mypy clean"
+decisions_made: []
+measured: "main: diff --db /tmp/x/typo/runs.db -> exit 2 'no run with id' and typo/runs.db created; fixed: exit 2 'no database at that path', nothing created. Revert probe: 4 of 5 red, the existing-db control green."
+context_for_next_session:
+  - A_GUARD_WRITTEN_ON_ONE_READ_SUBCOMMAND_list_avoid_the_side_effect_WAS_NEVER_PORTED_TO_ITS_TWIN_diff
 followups: []
 ---
 

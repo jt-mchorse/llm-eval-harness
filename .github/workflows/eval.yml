@@ -46,22 +46,27 @@ jobs:
         run: pip install -e .
       - name: Diff demo fixtures
         run: |
+          # Exit 1 means a row was flagged: post the comment anyway. Exit 2 means
+          # bad input (a missing or unreadable fixture), and there is no delta to
+          # post, so the job stops here (#310). `|| echo` used to swallow both.
+          rc=0
           eval-harness diff-json \
             --current fixtures/demo_current.json \
             --baseline fixtures/demo_baseline.json \
             --format json \
-            --out /tmp/delta.json \
-            || echo "diff-json exited non-zero (regression flagged) — continuing to post comment"
+            --out /tmp/delta.json || rc=$?
+          [ "$rc" -le 1 ] || exit "$rc"
       - name: Render markdown (preview in logs)
         # Same non-zero-on-regression behavior as diff-json's exit code;
         # the comment step runs unconditionally below so the preview's
         # rc doesn't gate posting.
         run: |
+          rc=0
           eval-harness diff-json \
             --current fixtures/demo_current.json \
             --baseline fixtures/demo_baseline.json \
-            --format markdown \
-            || echo "(preview exited non-zero — regression flagged — continuing)"
+            --format markdown || rc=$?
+          [ "$rc" -le 1 ] || exit "$rc"
       - name: Upsert sticky PR comment
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
