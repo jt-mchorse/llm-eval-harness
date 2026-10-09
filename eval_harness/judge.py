@@ -102,15 +102,39 @@ def is_transient_error(exc: BaseException) -> bool:
     around it — run without the `judge` extra installed. A `status_code` that
     is present but outside the transient set (e.g. 400/401) returns False so a
     permanent client error fails fast.
+
+    The rule is the SDK's own `_should_retry`, which #299 switched off by
+    building the client with `max_retries=0` and so made this the ONLY retry
+    layer (#340): the server's `x-should-retry` header decides when it says
+    `true` or `false`; otherwise 408/409/429 and every status >= 500 are
+    transient. The hand-written set alone retried 503 but failed 520-524 on
+    the first attempt, and ignored the header both ways.
     """
+    flag = _should_retry_header(exc)
+    if flag is not None:
+        return flag
     status = getattr(exc, "status_code", None)
     if isinstance(status, bool):
         # `bool` subclasses `int`; a truthy status would falsely compare into
         # the int branch. No real status code is a bool — treat as "no status".
         status = None
     if isinstance(status, int):
-        return status in _TRANSIENT_STATUS_CODES
+        return status in _TRANSIENT_STATUS_CODES or status >= 500
     return type(exc).__name__ in _TRANSIENT_EXC_NAMES
+
+
+def _should_retry_header(exc: BaseException) -> bool | None:
+    """The response's `x-should-retry` verdict (`true`/`false`), or None (#340)."""
+    headers = getattr(getattr(exc, "response", None), "headers", None)
+    getter = getattr(headers, "get", None)
+    if not callable(getter):
+        return None
+    value = getter("x-should-retry")
+    if value == "true":
+        return True
+    if value == "false":
+        return False
+    return None
 
 
 #: Credential failures. 401 is a missing/invalid key, 403 a key without
