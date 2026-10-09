@@ -310,6 +310,23 @@ class RunSummary:
     git_sha: str | None
 
 
+def check_limit(limit: object) -> None:
+    """Raise ``ValueError`` unless ``limit`` is a positive ``int`` (not a bool).
+
+    The one definition of ``list_runs``' ``limit`` rule, also called by the
+    ``list`` CLI before it looks for the database (#325): the CLI answers a
+    missing ``--db`` with "no runs" without calling ``list_runs``, so a bad
+    ``--limit`` exited 0 there and 2 only once a database existed.
+
+    Pre-#42 the sign-only ``limit <= 0`` accepted NaN (NaN <= 0 is false) and
+    floats (``0.5`` silently truncates to ``0`` in SQLite's LIMIT integer
+    coercion -> no rows returned; ``NaN`` propagates into the LIMIT bind and
+    surfaces as a cryptic sqlite3.InterfaceError). Require int + positive.
+    """
+    if not isinstance(limit, int) or isinstance(limit, bool) or limit <= 0:
+        raise ValueError(f"limit must be a positive integer, got {limit!r}")
+
+
 def list_runs(
     conn: sqlite3.Connection,
     *,
@@ -333,12 +350,7 @@ def list_runs(
     operator's history depending on write order. See
     `latest_run_id_for_suite` for why the key is `run_id` and not `rowid`.
     """
-    # Pre-#42 the sign-only `limit <= 0` accepted NaN (NaN <= 0 is false) and
-    # floats (`0.5` silently truncates to `0` in SQLite's LIMIT integer
-    # coercion → no rows returned; `NaN` propagates into the LIMIT bind and
-    # surfaces as a cryptic sqlite3.InterfaceError). Require int + positive.
-    if not isinstance(limit, int) or isinstance(limit, bool) or limit <= 0:
-        raise ValueError(f"limit must be a positive integer, got {limit!r}")
+    check_limit(limit)
     query = (
         "SELECT run_id, started_at, suite, dataset_version, judge_model, "
         "       judge_kappa, mean_score, n_rows, git_sha "
