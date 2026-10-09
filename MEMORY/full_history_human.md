@@ -3430,3 +3430,11 @@ input.
 **Open questions / blockers:** none
 
 **Next session:** merge in Phase A.
+
+## 2026-10-09 — A suite name the database cannot store is refused before judging (#344)
+
+`run` saves the `--suite` name with the results. A name containing a byte that
+is not valid UTF-8 (possible from a shell variable or a script) passed every
+check and was only rejected by the database at the very end, after all the
+paid judge calls, with a crash at exit 1. The name, and the model name, are
+now checked first, with a clean error at exit 2.

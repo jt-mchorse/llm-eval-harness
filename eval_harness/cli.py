@@ -39,7 +39,7 @@ from eval_harness.comment import (
 )
 from eval_harness.comparison import render_comparison
 from eval_harness.dataset import DatasetLoadError, load_jsonl, validate_dataset
-from eval_harness.io_utils import atomic_write_text, check_writable, loads_json
+from eval_harness.io_utils import atomic_write_text, check_writable, find_unencodable, loads_json
 from eval_harness.judge import (
     AnthropicBackend,
     Judge,
@@ -514,6 +514,18 @@ def _run_run(args: argparse.Namespace) -> int:
     # ImportError in a minimal (no `judge` extra) install — hence the
     # load-before-backend ordering `_run_calibrate` also uses. `load_jsonl` is
     # the same loader `run_suite` uses downstream (runner._load).
+    #
+    # `--suite` and `--model` are stored in the run record, and a non-UTF-8
+    # argv byte arrives as a lone surrogate (`\xff` -> '\udcff') that the
+    # SQLite insert refuses -- after every row had been judged, as a traceback
+    # at exit 1 (#344). Refused first, by the #215 helper.
+    for flag, value in (("--suite", args.suite), ("--model", args.model)):
+        bad = find_unencodable(value) if isinstance(value, str) else None
+        if bad is not None:
+            return _fail(
+                f"{flag} {value!r} contains {bad[0]!r} at index {bad[1]}, which has no "
+                "UTF-8 encoding; the run record cannot store it"
+            )
     try:
         list(load_jsonl(args.dataset))
     except FileNotFoundError as e:

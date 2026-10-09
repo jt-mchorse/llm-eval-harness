@@ -3725,3 +3725,21 @@ context_for_next_session:
   - SIBLING_OF_rag_production_kit_299_which_found_the_exit_1_collision_from_the_caller_side
 followups: []
 ---
+
+---
+session: 2026-10-09T09:43Z
+duration_min: 7   # computed: issue filed 2026-10-09T09:42:49Z -> PR 2026-10-09T09:43:51Z (gh createdAt) + the chr() follow-up commit
+issue: 344
+branch: session/2026-10-09-1000-issue-344
+focus: A_NON_UTF8_ARGV_BYTE_IN_SUITE_SURVIVED_THE_JUDGE_LOOP_AND_SQLITE_REFUSED_IT_LAST_TRACEBACK_AT_EXIT_1
+phase: shipped
+delta:
+  files_changed: 2
+  tests_added: 6
+  suite: "2554 -> 2560 passed; ruff, format, mypy clean"
+decisions_made: []
+measured: "counting backend, 10-row sample: main --suite 'nightly-\\udcff' raised UnicodeEncodeError after 10 judge calls; branch exit 2, 0 calls, no db. Revert 3 red / 3 controls."
+context_for_next_session:
+  - THE_PR_WAS_OPENED_WITH_ONE_RED_TEST_test_source_representability_forbids_literal_lone_surrogates_in_test_source_build_them_with_chr_fixed_in_a_follow_up_commit
+followups: []
+---
