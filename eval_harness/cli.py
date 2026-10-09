@@ -27,6 +27,7 @@ from pathlib import Path
 
 from eval_harness.calibration import (
     calibrate,
+    checked_threshold_kappa,
     load_calibration,
     render_report,
     validate_calibration,
@@ -404,6 +405,13 @@ def _run_calibrate(args: argparse.Namespace) -> int:
     # extra / API key needed) and reports exit 2 with a clean ::error:: line.
     if not rows:
         return _fail(f"no rows to calibrate against in {args.calibration}")
+    # The gate, before any judge call (#342): it was checked only by
+    # `render_report`, after every row had been scored, and its ValueError
+    # escaped at exit 1 -- this command's "kappa below threshold" code.
+    try:
+        checked_threshold_kappa(args.threshold_kappa)
+    except ValueError as e:
+        return _fail(f"--threshold-kappa: {e}")
     # `--report` is written after the judge has scored every row; an unwritable
     # path used to cost the whole calibration run and then fail (#287).
     try:

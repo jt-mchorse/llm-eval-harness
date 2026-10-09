@@ -593,6 +593,27 @@ def _require_correlation_range(value: float, label: str) -> None:
         raise ValueError(f"{label} must be in [-1, 1]; got {value!r}")
 
 
+def checked_threshold_kappa(threshold_kappa: object) -> float:
+    """`threshold_kappa` as `render_report` requires it: a finite number in [-1, 1].
+
+    One definition for the report and for `calibrate`'s CLI, which checks it
+    before the judge is built (#342). It used to be checked only here, after
+    `calibrate(judge, rows)` had scored every row: an invalid
+    `--threshold-kappa` cost a judge call per row and then escaped as a
+    traceback at exit 1, the code that command reserves for kappa below threshold.
+    """
+    if (
+        not isinstance(threshold_kappa, (int, float))
+        or isinstance(threshold_kappa, bool)
+        or math.isnan(threshold_kappa)
+        or math.isinf(threshold_kappa)
+    ):
+        raise ValueError(f"threshold_kappa must be a finite number; got {threshold_kappa!r}")
+    if not -1.0 <= threshold_kappa <= 1.0:
+        raise ValueError(f"threshold_kappa must be in [-1, 1]; got {threshold_kappa!r}")
+    return float(threshold_kappa)
+
+
 def render_report(
     result: CalibrationResult, *, judge_model: str, threshold_kappa: float = 0.6
 ) -> str:
@@ -618,15 +639,7 @@ def render_report(
     because `_interpret_kappa` falls through its whole `<` ladder on `NaN`.
     Guarding only the threshold left the gate half-checked.
     """
-    if (
-        not isinstance(threshold_kappa, (int, float))
-        or isinstance(threshold_kappa, bool)
-        or math.isnan(threshold_kappa)
-        or math.isinf(threshold_kappa)
-    ):
-        raise ValueError(f"threshold_kappa must be a finite number; got {threshold_kappa!r}")
-    if not -1.0 <= threshold_kappa <= 1.0:
-        raise ValueError(f"threshold_kappa must be in [-1, 1]; got {threshold_kappa!r}")
+    checked_threshold_kappa(threshold_kappa)
     _require_correlation_range(result.cohens_kappa, "result.cohens_kappa")
     _require_correlation_range(result.pearson_r, "result.pearson_r")
     # The verdict is decided here at full precision and the two numbers behind it
