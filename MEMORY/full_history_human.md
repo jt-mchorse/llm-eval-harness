@@ -3430,3 +3430,13 @@ input.
 **Open questions / blockers:** none
 
 **Next session:** merge in Phase A.
+
+## 2026-10-09 — The judge retries the same failures the SDK used to (#340)
+
+An earlier fix switched off the Anthropic SDK's built-in retries so that the
+harness's own retry setting would be exact. That made the harness's list of
+"retry this" errors the only one in play, and it was shorter than the SDK's.
+It skipped several server-side 5xx errors, including the 520–524 timeouts, and
+ignored the API's explicit "retry / don't retry" header. The harness now uses
+the SDK's rule: follow the header when present, otherwise retry rate limits,
+timeouts and any 5xx.
