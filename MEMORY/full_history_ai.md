@@ -3653,3 +3653,21 @@ context_for_next_session:
   - AN_EARLY_RETURN_AHEAD_OF_THE_VALIDATOR_MAKES_A_USAGE_ERROR_DEPEND_ON_STATE_the_existing_lock_built_the_db_first_so_it_only_saw_one_branch
 followups: []
 ---
+
+---
+session: 2026-10-08T00:55Z
+duration_min: 12
+issue: 327
+branch: session/2026-10-08-issue-327
+focus: atomic_write_text_os_replace_RENAMED_ONTO_A_SYMLINKED_OUT_and_check_writable_MUST_RESOLVE_THE_SAME_WAY_sibling_of_pyasync_157
+phase: shipped
+delta:
+  files_changed: 2
+  tests_added: 13
+  suite: "2336 passed, re-run after commit; ruff, format, mypy clean"
+decisions_made: []
+measured: "main: atomic_write_text('link.md') -> islink False, real file still 'old'; validate --out v.txt rc 0, link replaced, linked file still 'old'. Revert probe: 13 collected, 8 red, 5 green controls. Partial revert (writer fixed, check_writable not): 3 red, run --out into a link to a read-only dir paid the judge before failing."
+context_for_next_session:
+  - A_PREFLIGHT_THAT_PROMISES_PARITY_WITH_A_WRITER_MUST_MOVE_WITH_EVERY_WRITER_FIX_check_writable_resolves_and_stats_like_the_writer
+followups: []
+---
