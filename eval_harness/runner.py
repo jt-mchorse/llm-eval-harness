@@ -38,7 +38,7 @@ from typing import Any, Protocol
 from eval_harness.calibration import _require_correlation_range
 from eval_harness.comparison import render_configured, render_signed_classified
 from eval_harness.dataset import Dataset, Example, filter_examples_by_tags, load_jsonl
-from eval_harness.io_utils import copy_json_value
+from eval_harness.io_utils import copy_json_value, loads_json
 from eval_harness.judge import FAITHFULNESS_RUBRIC, Judge, JudgeParseError, JudgeScore
 from eval_harness.runs import (
     StoredRun,
@@ -1179,7 +1179,7 @@ def load_run_result_from_json(path: str | Path) -> StoredRun:
     GitHub Action needs since the action runner is ephemeral.
     """
     raw = Path(path).read_text(encoding="utf-8")
-    payload = json.loads(raw)
+    payload = loads_json(raw)
     # `json.loads` returns whatever JSON the file holds — a bare list, number,
     # string, or null are all valid JSON but not the `RunResult.to_json()` object
     # shape. Without this guard `payload.get(...)` raised a raw `AttributeError`

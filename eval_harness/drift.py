@@ -46,7 +46,7 @@ from pathlib import Path
 
 from eval_harness.comparison import render_classified, render_comparison
 from eval_harness.dataset import refuse_bare_string
-from eval_harness.io_utils import atomic_write_text, find_unencodable
+from eval_harness.io_utils import atomic_write_text, find_unencodable, loads_json
 from eval_harness.judge import clamp_judge_score
 
 # ----------------------------------------------------------------------
@@ -1457,7 +1457,7 @@ def _load_inputs_jsonl(path: Path) -> list[str]:
         if not line:
             continue
         try:
-            row = json.loads(line)
+            row = loads_json(line)
         except json.JSONDecodeError as e:
             raise ValueError(f"{path}:{lineno}: invalid JSON: {e}") from e
         if isinstance(row, str):

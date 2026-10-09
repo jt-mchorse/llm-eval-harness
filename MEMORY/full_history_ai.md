@@ -3705,3 +3705,23 @@ context_for_next_session:
   - FILED_331_JT_drift_embedding_axis_vacuous_with_one_distinct_centroid
 followups: ["#331", "#333"]
 ---
+
+---
+session: 2026-10-08T08:00Z
+duration_min: 25
+issue: 333
+branch: session/2026-10-08-issue-333
+focus: JSON_NESTED_TOO_DEEP_RAISED_RECURSIONERROR_PAST_EVERY_JSONDECODEERROR_HANDLER_EXIT_1_THE_REGRESSION_CODE
+phase: shipped
+delta:
+  files_changed: 8
+  tests_added: 14
+  suite: "full suite green; ruff, format, mypy clean"
+decisions_made: []
+measured: "1M-deep [ ]: json.loads raises RecursionError on 3.11/3.12 (at 100k) and 3.14 (at 1M). Revert probe (helper kept, the eight call sites restored to main): 9 of 14 red; the 5 green are the helper unit arms, the precondition and the seam-test sanity arm."
+context_for_next_session:
+  - ONE_HELPER_io_utils_loads_json_RE_RAISES_RecursionError_AS_JSONDecodeError_SO_EVERY_EXISTING_HANDLER_APPLIES_A_TEST_PINS_NO_DIRECT_json_loads_IN_THE_PACKAGE
+  - A_REVERT_THAT_REMOVES_THE_HELPER_IS_A_COLLECTION_ERROR_NOT_A_PROBE_REVERT_THE_CALL_SITES_AND_KEEP_THE_HELPER
+  - SIBLING_OF_rag_production_kit_299_which_found_the_exit_1_collision_from_the_caller_side
+followups: []
+---

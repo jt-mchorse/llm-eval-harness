@@ -55,6 +55,7 @@ from eval_harness.io_utils import (
     atomic_write_text,
     copy_json_value,
     find_unrepresentable,
+    loads_json,
 )
 
 
@@ -704,7 +705,7 @@ def load_jsonl(path: str | Path) -> Dataset:
                     line_no, "blank line; dataset must have one JSON object per line"
                 )
             try:
-                parsed = json.loads(stripped)
+                parsed = loads_json(stripped)
             except json.JSONDecodeError as e:
                 raise DatasetLoadError(line_no, f"invalid JSON: {e.msg}") from None
 
@@ -886,7 +887,7 @@ def validate_dataset(path: str | Path) -> ValidationReport:
                 )
                 continue
             try:
-                parsed = json.loads(stripped)
+                parsed = loads_json(stripped)
             except json.JSONDecodeError as e:
                 findings.append(
                     ValidationFinding(
