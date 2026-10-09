@@ -3725,3 +3725,22 @@ context_for_next_session:
   - SIBLING_OF_rag_production_kit_299_which_found_the_exit_1_collision_from_the_caller_side
 followups: []
 ---
+
+---
+session: 2026-10-09T09:08Z
+duration_min: 6   # computed: issue filed 2026-10-09T09:06:24Z -> PR 2026-10-09T09:08:35Z (gh createdAt); hunt-agent lead re-measured first
+issue: 342
+branch: session/2026-10-09-0915-issue-342
+focus: CALIBRATE_THRESHOLD_KAPPA_CHECKED_ONLY_IN_RENDER_REPORT_AFTER_EVERY_JUDGE_CALL_THEN_A_TRACEBACK_AT_EXIT_1
+phase: shipped
+delta:
+  files_changed: 3
+  tests_added: 15
+  suite: "2554 -> 2569 passed; ruff, format, mypy clean"
+decisions_made: []
+measured: "counting backend, 50 rows: main nan/inf/2/-1.5 raised ValueError after 50 judge calls; branch exit 2 after 0; 0.6 control rc=1 after 50 both. Revert 12 red / 3 controls."
+context_for_next_session:
+  - ARGPARSE_READS_MINUS_INF_AS_AN_OPTION_pass_negative_non_numbers_as_flag_equals_value_in_CLI_tests
+  - THE_GATE_INPUT_IS_THE_LAST_ONE_LEFT_BEHIND_THE_PAID_LOOP_ask_of_every_paid_command_which_flag_is_validated_only_by_the_renderer
+followups: []
+---
