@@ -3688,3 +3688,20 @@ context_for_next_session:
   - STDOUT_calibration_n_kappa_pearson_LINE_STAYS_3F_standalone_readout_no_label
 followups: []
 ---
+session: 2026-10-08T08:20Z
+duration_min: 15
+issue: 332
+branch: session/2026-10-08-w3-issue-332
+focus: RE_COMPILE_REFUSES_WITH_OVERFLOWERROR_AND_RECURSIONERROR_NOT_ONLY_RE_ERROR_321_SIBLING
+phase: shipped
+delta:
+  files_changed: 2
+  tests_added: 12
+  suite: "2335 passed; ruff, format, mypy clean"
+decisions_made: []
+measured: "main: validate and run on a{4294967296} -> OverflowError traceback rc=1; 2000-deep groups -> RecursionError rc=1 on 3.11/3.12/3.14. Revert 10/12 red (2 green are anti-vacuity arms asserting re.compile itself raises non-re.error)."
+context_for_next_session:
+  - FILED_333_json_loads_RecursionError_on_deep_nesting_escapes_every_CLI_reader_at_exit_1_on_3_11_3_12
+  - FILED_331_JT_drift_embedding_axis_vacuous_with_one_distinct_centroid
+followups: ["#331", "#333"]
+---

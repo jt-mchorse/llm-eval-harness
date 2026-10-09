@@ -110,7 +110,11 @@ class ExpectedOutput:
         if self.kind == "regex":
             try:
                 re.compile(self.value)
-            except re.error as e:
+            # `re.error` is not the only refusal (#332): a repeat count at or
+            # above MAXREPEAT (`a{4294967296}`) raises OverflowError and deeply
+            # nested groups raise RecursionError. Both escaped the collecting
+            # validator as a traceback at exit 1, the findings code.
+            except (re.error, OverflowError, RecursionError) as e:
                 raise ValueError(
                     f"expected_output regex {self.value!r} does not compile: {e}"
                 ) from None
