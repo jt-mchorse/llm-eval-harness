@@ -393,8 +393,11 @@ def atomic_write_text(path: str | Path, text: str, encoding: str = "utf-8") -> N
     Parent directories are created with `mkdir(parents=True, exist_ok=True)`
     so callers don't have to gate on `.parent.mkdir(...)` themselves; this is
     the shape every existing caller used before promotion.
+
+    A symlinked destination is written THROUGH, as `Path.write_text` does
+    (#327): see `_resolve_symlinked_target`.
     """
-    target = Path(path)
+    target = _resolve_symlinked_target(Path(path))
     target.parent.mkdir(parents=True, exist_ok=True)
     tmp_path: Path | None = None
     try:
@@ -433,10 +436,19 @@ def check_writable(path: str | Path) -> None:
     removes the temp file again, so a path passes exactly when the real write
     would get that far. A target that is an existing directory is refused too:
     the writer's final `os.replace` onto it would fail.
+
+    A symlinked target is resolved exactly as the writer resolves it (#327),
+    so the temp file is tried beside the file that will actually be written:
+    a link in a writable directory pointing into a read-only one would
+    otherwise pass here and fail after the paid loop. The target is then
+    stat'ed as `_copy_existing_mode` stats it, so a link loop (left
+    unresolved by non-strict `realpath`) raises its ELOOP here too.
     """
-    target = Path(path)
+    target = _resolve_symlinked_target(Path(path))
     if target.is_dir():
         raise IsADirectoryError(21, "Is a directory", str(target))
+    with contextlib.suppress(FileNotFoundError):
+        os.stat(target)
     target.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp_path = _open_temp(target)
     os.close(fd)
@@ -463,6 +475,30 @@ def _open_temp(target: Path) -> tuple[int, Path]:
             continue
         return fd, candidate
     raise FileExistsError(f"could not create a unique temp file beside {target}")
+
+
+def _resolve_symlinked_target(target: Path) -> Path:
+    """The file a write to *target* lands in: through a symlink, as `write_text` does (#327).
+
+    `os.replace` renames onto the LINK, not the file it points at. So a
+    symlinked `--out` became a regular file and the linked file kept its old
+    contents, while the `Path.write_text` this helper replaced writes through
+    the link. `_copy_existing_mode` already followed the link (`os.stat`), so
+    the linked file's mode was copied onto a file that then replaced the link
+    instead (sibling of python-async-llm-pipelines#157).
+
+    Resolving here also places the temp file beside the RESOLVED file, which
+    keeps the rename on one filesystem when the link points at a different
+    one, and hands `_open_temp` the resolved basename to cap. A dangling link
+    resolves to the path it names, and the write creates that file, as
+    `write_text` would. With a link loop, non-strict `realpath` returns the
+    path unresolved, and the `os.stat` in `_copy_existing_mode` raises
+    `OSError` (ELOOP), which `_write_output` translates to exit 2. A plain
+    path comes back unchanged.
+    """
+    if not target.is_symlink():
+        return target
+    return Path(os.path.realpath(target))
 
 
 def _copy_existing_mode(target: Path, tmp_path: Path) -> None:

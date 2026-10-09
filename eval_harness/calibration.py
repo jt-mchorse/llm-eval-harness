@@ -13,13 +13,17 @@ from __future__ import annotations
 
 import json
 import math
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
-from eval_harness.comparison import render_comparison
+from eval_harness.comparison import (
+    COMPARISON_MAX_PLACES,
+    COMPARISON_PLACES,
+    render_comparison,
+)
 from eval_harness.dataset import ValidationFinding, ValidationReport
 from eval_harness.io_utils import UNENCODABLE, copy_json_value, find_unrepresentable
 from eval_harness.judge import Judge, JudgeParseError, JudgeScore
@@ -635,9 +639,14 @@ def render_report(
     # back as itself and not merely differ from κ: the pairwise loop stops at
     # three places, which published a configured 0.6004 as `0.600` in the line
     # that states this report's policy (#257).
-    rendered_kappa, rendered_threshold = render_comparison(
-        result.cohens_kappa, threshold_kappa, exact_other=True
-    )
+    #
+    # Both numbers in the table also sit beside an interpretation label decided at
+    # full precision, which is D-028's class: a κ of 0.19974 printed `0.200 | slight`
+    # and an r of 0.69974 printed `0.700 | strong`, where the ladders call 0.200
+    # "fair" and 0.700 "very strong" (#329). So the width must also make the
+    # rendered value read back into the label printed beside it.
+    rendered_kappa, rendered_threshold = _render_kappa_pair(result.cohens_kappa, threshold_kappa)
+    rendered_pearson = _render_interpreted(result.pearson_r, _interpret_pearson)
     lines = [
         "# Judge calibration report",
         "",
@@ -649,7 +658,7 @@ def render_report(
         "| metric | value | interpretation |",
         "|--------|-------|----------------|",
         f"| Cohen's κ (binarized at 0.5) | {rendered_kappa} | {_interpret_kappa(result.cohens_kappa)} |",
-        f"| Pearson r (continuous)       | {result.pearson_r:.3f} | {_interpret_pearson(result.pearson_r)} |",
+        f"| Pearson r (continuous)       | {rendered_pearson} | {_interpret_pearson(result.pearson_r)} |",
         "",
         "## Per-row scores",
         "",
@@ -679,6 +688,42 @@ def render_report(
         lines.append(f"| {row_id} | {human} | {judged} | {float(abs_diff):.2f} | {reasoning} |")
     lines.append("")
     return "\n".join(lines)
+
+
+def _render_interpreted(
+    value: float, interpret: Callable[[float], str], *, places: int = COMPARISON_PLACES
+) -> str:
+    """Render *value* so it reads back into the label *interpret* gives it (#329).
+
+    `render_classified` applies the same rule against a single boundary. The
+    interpretation ladders have four or five boundaries, and Pearson's is on
+    `abs(r)`, so the label itself is the band: widen from *places* until
+    `interpret(float(rendered)) == interpret(value)`. A value that isn't near a
+    boundary keeps its `.3f` text. `repr` round-trips, so it is the terminal
+    fallback and classifies exactly.
+    """
+    target = interpret(value)
+    for width in range(places, COMPARISON_MAX_PLACES + 1):
+        rendered = f"{value:.{width}f}"
+        if interpret(float(rendered)) == target:
+            return rendered
+    return repr(value)
+
+
+def _render_kappa_pair(kappa: float, threshold_kappa: float) -> tuple[str, str]:
+    """`render_comparison` for κ vs the threshold, also kept inside κ's own label (#329).
+
+    κ is published twice over: against `--threshold-kappa` (the PASS/FAIL, #252,
+    #257) and beside `_interpret_kappa`'s label. `render_comparison` only knows
+    about the first. Raising its starting width keeps both strings at one shared
+    precision (D-026) while widening until the second holds too.
+    """
+    target = _interpret_kappa(kappa)
+    for places in range(COMPARISON_PLACES, COMPARISON_MAX_PLACES + 1):
+        pair = render_comparison(kappa, threshold_kappa, places=places, exact_other=True)
+        if _interpret_kappa(float(pair[0])) == target:
+            return pair
+    return (repr(kappa), repr(threshold_kappa))
 
 
 def _interpret_kappa(k: float) -> str:
