@@ -3430,3 +3430,12 @@ input.
 **Open questions / blockers:** none
 
 **Next session:** merge in Phase A.
+
+## 2026-10-09 — calibrate checks its threshold before judging anything (#342)
+
+`calibrate` sends every row to the judge, which costs one paid call per row,
+and then writes a report. The `--threshold-kappa` value was only checked while
+the report was being written. A typo such as `nan` or `2` therefore cost the
+whole run, and then crashed with exit 1, the code that means "agreement too
+low". The threshold is now checked first: an invalid value exits 2 with a clear
+message before any judge call.
