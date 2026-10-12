@@ -879,6 +879,23 @@ def _decimal(score: float) -> Fraction:
     return Fraction(repr(score))
 
 
+def _decimal_mean(run: StoredRun) -> Fraction:
+    """The decimal mean a run's float `mean_score` stands for (#336).
+
+    `mean_score` is a float `sum / len`, so `[0.2, 0.1]` records
+    `0.15000000000000002` and `[0.3, 0.0]` records `0.15`, and the two runs'
+    float difference published `mean_delta` -2.8e-17 -- printed `-0.000`, a
+    fall that did not happen. When the rows reproduce `mean_score` the way
+    the runner computed it, they are its source, and the exact mean of their
+    D-034 decimals is what it stands for. Otherwise the field is what the run
+    says, and it is read as its own decimal.
+    """
+    scores = [score for score, _ in run.rows.values()]
+    if scores and sum(scores) / len(scores) == run.mean_score:
+        return sum((_decimal(score) for score in scores), Fraction(0)) / len(scores)
+    return _decimal(run.mean_score)
+
+
 def _status_for(delta: float | Fraction, threshold_drop: float | Fraction) -> tuple[str, bool]:
     if delta < -threshold_drop:
         return "regressed", True
@@ -948,7 +965,7 @@ def diff_runs(
     summary = {
         "mean_score_current": current.mean_score,
         "mean_score_baseline": baseline.mean_score,
-        "mean_delta": current.mean_score - baseline.mean_score,
+        "mean_delta": float(_decimal_mean(current) - _decimal_mean(baseline)),
         "n_flagged": n_flag,
         "n_regressed": n_reg,
         "n_improved": n_imp,
@@ -1068,7 +1085,7 @@ def render_delta_ascii(report: DeltaReport) -> str:
 
     lines.append("")
     lines.append(
-        f"summary: mean Δ={mean_delta:+.3f}  "
+        f"summary: mean Δ={render_signed_classified(mean_delta, (0.0,))}  "
         f"regressed={_count('n_regressed')} (flagged={_count('n_flagged')})  "
         f"improved={_count('n_improved')}  unchanged={_count('n_unchanged')}  "
         f"new={_count('n_new')}  removed={_count('n_removed')}"

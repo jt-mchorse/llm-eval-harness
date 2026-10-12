@@ -3430,3 +3430,13 @@ input.
 **Open questions / blockers:** none
 
 **Next session:** merge in Phase A.
+
+## 2026-10-09 — The diff headline no longer reports a fall that did not happen (#336)
+
+The eval-delta PR comment opens with the change in the mean score. Each run's
+mean is stored as an ordinary floating-point average, so two runs with the same
+true mean (say 0.15) could differ in the last binary digit. The headline then
+printed "−0.000", which reads as a drop. The difference is now worked out from
+the scores' decimal values, as the per-row deltas already were. It also uses the
+same sign-aware formatting as the rows, so a genuinely tiny change shows its
+digits rather than reading as zero.

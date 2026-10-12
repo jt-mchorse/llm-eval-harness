@@ -3725,3 +3725,22 @@ context_for_next_session:
   - SIBLING_OF_rag_production_kit_299_which_found_the_exit_1_collision_from_the_caller_side
 followups: []
 ---
+
+---
+session: 2026-10-09T07:51Z
+duration_min: 4   # computed: issue filed 2026-10-09T07:48:10Z -> PR 2026-10-09T07:51:37Z (gh createdAt)
+issue: 336
+branch: session/2026-10-09-0755-issue-336
+focus: SUMMARY_MEAN_DELTA_WAS_THE_FLOAT_DIFFERENCE_OF_TWO_FLOAT_MEANS_EQUAL_DECIMAL_MEANS_PRINTED_MINUS_0_000_D_034_291_SIBLING
+phase: shipped
+delta:
+  files_changed: 3
+  tests_added: 28
+  suite: "2554 -> 2582 passed; ruff, format, mypy clean"
+decisions_made: []
+measured: "diff-json [0.2,0.1] vs [0.3,0.0]: main mean_delta -2.7755575615628914e-17, ascii -0.000, markdown **-0.000**; branch 0.0 / +0.000 / **+0.000**. One-decimal grid: 22 two-row and 265 three-row pairs main got wrong. Revert: arithmetic 25 red, rendering 1 red, no-reproduce-check 1 red."
+context_for_next_session:
+  - SUM_IS_COMPENSATED_ON_312_so_HAND_PICKED_EQUAL_MEAN_PAIRS_CAN_HAVE_EQUAL_FLOAT_MEANS_TOO_two_of_my_first_four_tested_nothing_SEARCH_THE_GRID
+  - THE_ROWS_ARE_THE_SOURCE_ONLY_WHEN_THEY_REPRODUCE_mean_score_otherwise_the_recorded_field_stays_load_bearing
+followups: []
+---
