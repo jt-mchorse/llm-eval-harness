@@ -3878,3 +3878,23 @@ context_for_next_session:
   - THE_PAIR_RULE_IS_ON_THE_RENDERED_DIFFERENCE_IN_EXACT_DECIMALS_not_float_subtraction_which_would_widen_every_exact_threshold_row
 followups: []
 ---
+
+---
+session: 2026-10-12T08:44:07Z
+duration_min: 1   # computed: plan comment 2026-10-12T08:44:07Z -> PR 2026-10-12T08:45:55Z (gh createdAt)
+issue: 352
+branch: session/2026-10-12-0844-issue-352
+focus: JUDGE_200_WITH_A_NON_MESSAGE_BODY_STR_BADJSON_CONTENT_NONE_ESCAPED_AT_EXIT_1_THE_303_CLASS_AT_THE_JUDGE_SEAM
+phase: shipped
+delta:
+  files_changed: 2
+  tests_added: 8
+  suite: "2647 -> 2655 passed; ruff + mypy clean"
+decisions_made: []
+measured: "real SDK over MockTransport, anthropic 0.116.0 and 1.13.0: html/badjson/{}/content-null/error-envelope 200 -> AttributeError/JSONDecodeError/TypeError on main; JudgeBackendError on branch. Revert 7 red / 1 green."
+context_for_next_session:
+  - THE_LOCKED_OUR_OWN_BUG_CASE_content_object_IS_NARROWER_THAN_IT_LOOKS_classify_by_what_only_the_remote_can_produce_str_result_content_None_JSONDecodeError_from_create
+  - REPO_VENV_HAS_anthropic_0_116_HUNT_VENV_HAD_1_13_run_SDK_probes_on_both_httpx_vs_httpx2
+  - THE_JUDGE_EXTRA_IS_NOT_IN_CI_so_SDK_arms_skip_there_keep_SDK_free_arms_for_the_same_rule
+followups: []
+---
