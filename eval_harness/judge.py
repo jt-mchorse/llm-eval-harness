@@ -121,7 +121,18 @@ _AUTH_STATUS_CODES = frozenset({401, 403})
 #: Matched by class name for the same reason ``_TRANSIENT_EXC_NAMES`` is:
 #: the classifier must stay import-free so it works (and is testable)
 #: without the optional ``judge`` extra installed.
-_AUTH_EXC_NAMES = frozenset({"AuthenticationError", "PermissionDeniedError"})
+#: `CredentialsError` / `IdentityTokenFileError` / `WorkloadIdentityError` are
+#: the profile and workload-identity channels' own failures in newer SDKs
+#: (#338), which can surface at request time once a profile was resolved.
+_AUTH_EXC_NAMES = frozenset(
+    {
+        "AuthenticationError",
+        "PermissionDeniedError",
+        "CredentialsError",
+        "IdentityTokenFileError",
+        "WorkloadIdentityError",
+    }
+)
 
 #: The SDK raises a bare ``TypeError`` — no status code, no dedicated class —
 #: when it cannot resolve *any* credential, because that happens while
@@ -363,7 +374,23 @@ class AnthropicBackend:
         # classifier and the injectable `sleep`. The SDK's default of 2 retries
         # nested inside it, so "unreachable after 4 attempts" was 12 requests
         # and `max_attempts=1` still sent 3, sleeping on the SDK's clock (#299).
-        self.client = anthropic.Anthropic(max_retries=0)
+        #
+        # A failure of the constructor itself is client configuration (#338):
+        # it sends nothing, and a named `ANTHROPIC_PROFILE` that does not
+        # resolve fails right here -- `anthropic.AnthropicError: Config file not
+        # found ... (profile 'nope')` on 0.116, `CredentialsError` on 1.x --
+        # before the request-time path `is_auth_error` classifies (#194). Both
+        # CLI construction sites caught only `ImportError`, so it escaped at
+        # exit 1, the code `run` reserves for a regressed row.
+        try:
+            self.client = anthropic.Anthropic(max_retries=0)
+        except Exception as exc:
+            raise JudgeAuthError(
+                "judge backend could not set up its Anthropic client "
+                f"({type(exc).__name__}: {exc}). Check ANTHROPIC_PROFILE / "
+                "ANTHROPIC_CONFIG_DIR, or set ANTHROPIC_API_KEY (or another credential "
+                "the SDK accepts)."
+            ) from exc
         self.model = model or os.environ.get(
             "EVAL_HARNESS_JUDGE_MODEL", "claude-haiku-4-5-20251001"
         )

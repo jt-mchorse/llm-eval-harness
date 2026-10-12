@@ -3440,3 +3440,12 @@ printed "−0.000", which reads as a drop. The difference is now worked out from
 the scores' decimal values, as the per-row deltas already were. It also uses the
 same sign-aware formatting as the rows, so a genuinely tiny change shows its
 digits rather than reading as zero.
+
+## 2026-10-09 — A misconfigured Anthropic profile is a clean exit 2 (#338)
+
+The harness already turned a missing or invalid API key into a clear error at
+exit 2. The SDK also supports named profiles. When the profile named in
+`ANTHROPIC_PROFILE` does not exist, the failure happens earlier, while the SDK
+client is being created. That case crashed with a traceback at exit 1, the code
+that means "a test regressed". The harness now reports it like the other
+credential problems: one clear error line and exit 2.
