@@ -22,7 +22,11 @@ import os
 from typing import Any
 from urllib import error, request
 
-from eval_harness.comparison import render_configured, render_signed_classified
+from eval_harness.comparison import (
+    render_configured,
+    render_score_pair,
+    render_signed_classified,
+)
 from eval_harness.io_utils import loads_json
 from eval_harness.markdown import md_code_cell, md_code_span, md_table_cell
 from eval_harness.runner import DeltaReport, RowDelta
@@ -215,7 +219,12 @@ def _row_to_md(r: RowDelta, threshold_drop: float) -> str:
     # NOT wrapped in a code span, so `md_table_cell` (no backtick pass) suffices.
     example_id = md_code_cell(r.example_id)
     status = md_table_cell(r.status)
-    return f"| {status} | {example_id} | {fmt(r.baseline_score)} | {fmt(r.current_score)} | {delta_str} | {flag} |"
+    if r.baseline_score is not None and r.current_score is not None:
+        # As a pair, so the two cells cannot read as the other verdict (#350).
+        baseline, current = render_score_pair(r.baseline_score, r.current_score, threshold_drop)
+    else:
+        baseline, current = fmt(r.baseline_score), fmt(r.current_score)
+    return f"| {status} | {example_id} | {baseline} | {current} | {delta_str} | {flag} |"
 
 
 # ---------------------------------------------------------------------------

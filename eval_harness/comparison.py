@@ -74,6 +74,7 @@ whether either operand survived the trip; asking it is D-029.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from fractions import Fraction
 
 #: Default starting width. Most messages in this package have always used three
 #: places, and still do whenever three is enough to tell the two numbers apart.
@@ -283,6 +284,38 @@ def render_signed_classified(
         if [_band(back, b) for b in boundaries] == targets:
             return rendered
     return format(value, "+")
+
+
+def _decimal_band(delta: Fraction, threshold_drop: Fraction) -> int:
+    """A delta row's verdict band: flagged, regressed, unchanged or improved."""
+    if delta < -threshold_drop:
+        return -2
+    if delta < 0:
+        return -1
+    return 0 if delta == 0 else 1
+
+
+def render_score_pair(
+    baseline: float, current: float, threshold_drop: float, *, places: int = COMPARISON_PLACES
+) -> tuple[str, str]:
+    """Render a delta row's two scores so their difference reads as the row's verdict (#350).
+
+    #291 widened the Δ cell, but the baseline and current cells beside it
+    stayed at ``.3f``, and a reader subtracts them too: ``0.500 | 0.500``
+    beside ``improved``. The row's verdict
+    is decided on the scores' decimal difference against ``threshold_drop``
+    (D-034), so the pair widens, at one shared width, until the difference of
+    the two *rendered* decimals falls in the same band as the true one. Scores
+    with three or fewer decimals render as before.
+    """
+    threshold = Fraction(repr(threshold_drop))
+    target = _decimal_band(Fraction(repr(current)) - Fraction(repr(baseline)), threshold)
+    for width in range(places, COMPARISON_MAX_PLACES + 1):
+        rendered = (f"{baseline:.{width}f}", f"{current:.{width}f}")
+        shown = Fraction(rendered[1]) - Fraction(rendered[0])
+        if _decimal_band(shown, threshold) == target:
+            return rendered
+    return (repr(baseline), repr(current))
 
 
 def render_configured(value: float, *, places: int = COMPARISON_PLACES) -> str:
