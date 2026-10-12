@@ -3493,3 +3493,12 @@ The `list` table shortened each run id to 12 characters. `diff` and
 README's example didn't match what the command printed either. The table now
 shows the full id, and the README example is the renderer's own output, checked
 by a test.
+
+## 2026-10-12 — Delta tables don't show two equal scores beside "improved" (#350)
+
+The delta tables show each example's baseline score, current score, change
+and status. An earlier fix made the change column precise enough to agree
+with the status, but the two score columns still rounded to three decimals.
+A row going from 0.5 to 0.5004 therefore read "improved: 0.500 → 0.500". The
+two scores are now printed together, precise enough that their difference
+agrees with the row's status. Ordinary scores look exactly as before.
