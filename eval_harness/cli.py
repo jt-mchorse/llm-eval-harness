@@ -583,11 +583,19 @@ def _run_run(args: argparse.Namespace) -> int:
         try:
             with connect(args.db) as conn:
                 init_db_on(conn)
-                read_run(conn, args.baseline)
+                stored_baseline = read_run(conn, args.baseline)
         except KeyError as e:
             return _fail(e.args[0] if e.args else str(e))
         except (sqlite3.Error, OSError) as e:
             return _db_fail(args.db, e)
+        # An id that exists but belongs to another suite (#346) is the same
+        # trap: `diff_runs` refuses it only after the run is paid for and
+        # saved. `list` shows every suite's runs in one table, so pasting the
+        # wrong suite's id is the likely slip. Same wording as `diff_runs`.
+        if stored_baseline.suite != args.suite:
+            return _fail(
+                f"cannot diff across suites: current={args.suite} baseline={stored_baseline.suite}"
+            )
 
     # Same construction-time `ImportError` as `_run_calibrate`. The comment on
     # the dataset-load seam above already reasons about this exception — it is

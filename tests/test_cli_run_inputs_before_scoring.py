@@ -6,16 +6,22 @@ latest -- the next run's default baseline. Measured with stub judges: a 0.9
 baseline, then a 0.2 run with a typo'd ``--threshold-drop -0.1`` (exit 2, 10
 judge calls, saved), then the same 0.2 run with the typo fixed: it diffed
 against the rejected run and passed the gate at exit 0.
+
+#346: a ``--baseline`` id that exists but belongs to another suite got past
+the existence check and fell into the same trap, refused by ``diff_runs``
+after the run was saved.
 """
 
 from __future__ import annotations
 
+import itertools
 import sqlite3
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
+from eval_harness import runner
 from eval_harness.cli import main
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -43,10 +49,17 @@ def _at_repo_root(monkeypatch: pytest.MonkeyPatch) -> None:
     _Counting.score = 0.9
 
 
-def _run(db: Path, *extra: str, score: float = 0.9) -> int:
+def _run(db: Path, *extra: str, score: float = 0.9, suite: str = "s") -> int:
     _Counting.score = score
     with patch("eval_harness.cli.AnthropicBackend", _Counting):
-        return main(["run", "--suite", "s", "--dataset", DATASET, "--db", str(db), *extra])
+        return main(["run", "--suite", suite, "--dataset", DATASET, "--db", str(db), *extra])
+
+
+def _latest_run_id(db: Path, suite: str) -> str:
+    with sqlite3.connect(db) as conn:
+        return conn.execute(
+            "SELECT run_id FROM runs WHERE suite = ? ORDER BY rowid DESC LIMIT 1", (suite,)
+        ).fetchone()[0]
 
 
 def _saved_runs(db: Path) -> int:
@@ -89,3 +102,47 @@ def test_the_gate_still_fails_after_a_rejected_typo(tmp_path: Path) -> None:
     assert _run(db, score=0.9) == 0
     assert _run(db, "--threshold-drop", "-0.1", score=0.2) == 2
     assert _run(db, "--threshold-drop", "0.1", score=0.2) == 1
+
+
+def test_another_suites_baseline_costs_nothing_and_saves_nothing(tmp_path: Path, capsys) -> None:
+    db = tmp_path / "runs.db"
+    assert _run(db, suite="alpha") == 0
+    assert _run(db, suite="s") == 0
+    other = _latest_run_id(db, "alpha")
+    capsys.readouterr()
+    calls = _Counting.calls
+    assert _run(db, "--baseline", other, score=0.2) == 2
+    assert "cannot diff across suites: current=s baseline=alpha" in capsys.readouterr().err
+    assert _Counting.calls == calls, "the judge was paid for a run that was going to be rejected"
+    assert _saved_runs(db) == 2, "a rejected run was saved and would become the next baseline"
+
+
+def test_the_gate_still_fails_after_a_rejected_cross_suite_baseline(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The measured #346 sequence: a 0.9 -> 0.2 drop must not diff against the
+    # run the cross-suite baseline was rejected on. Each run gets its own
+    # second, so "latest" means the last one saved, not a same-second tie-break.
+    ticks = itertools.count(1)
+    monkeypatch.setattr(runner, "utc_now_iso", lambda: f"2026-10-12T08:00:{next(ticks):02d}Z")
+    db = tmp_path / "runs.db"
+    assert _run(db, suite="alpha") == 0
+    assert _run(db, score=0.9) == 0
+    assert _run(db, "--baseline", _latest_run_id(db, "alpha"), score=0.2) == 2
+    assert _run(db, score=0.2) == 1
+
+
+def test_a_same_suite_baseline_still_diffs(tmp_path: Path) -> None:
+    # Control: the suite check refuses only a mismatch.
+    db = tmp_path / "runs.db"
+    assert _run(db, score=0.9) == 0
+    base = _latest_run_id(db, "s")
+    assert _run(db, score=0.9) == 0
+    assert _run(db, "--baseline", base, score=0.2) == 1
+
+
+def test_no_diff_still_ignores_the_baseline(tmp_path: Path) -> None:
+    # Unchanged: under --no-diff the baseline is never read, so it is not checked.
+    db = tmp_path / "runs.db"
+    assert _run(db, suite="alpha") == 0
+    assert _run(db, "--no-diff", "--baseline", _latest_run_id(db, "alpha")) == 0
