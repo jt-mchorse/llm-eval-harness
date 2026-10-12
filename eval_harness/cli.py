@@ -889,14 +889,19 @@ def _run_summary_to_json(r: RunSummary) -> dict[str, object]:
 def _render_runs_table(runs: list[RunSummary]) -> str:
     """Fixed-width text table for `eval-harness list` default output.
 
-    Columns: started_at, run_id (truncated to 12), suite, mean_score,
-    n_rows, judge_model. Widths sized from the widest cell so the table
-    fits whatever the actual history looks like.
+    Columns: started_at, run_id, suite, mean_score, n_rows, judge_model.
+    Widths sized from the widest cell so the table fits whatever the actual
+    history looks like.
+
+    The run_id is printed whole (#348). It was cut to 12 characters plus
+    an ellipsis, and `diff --current/--baseline` and `run --baseline` match
+    an id exactly, so an id copied from this table was refused with
+    "no run with id".
     """
     rows = [
         [
             r.started_at,
-            (r.run_id[:12] + ("…" if len(r.run_id) > 12 else "")),
+            r.run_id,
             r.suite,
             f"{r.mean_score:.3f}",
             str(r.n_rows),

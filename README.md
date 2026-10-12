@@ -383,10 +383,10 @@ with `--db`); two tables, `runs` and `rows`, with a foreign key from
 
 ```bash
 $ eval-harness list --limit 5
-started_at            run_id        suite         mean   rows  judge_model
---------------------  ------------  ------------  -----  ----  -----------
-2026-05-16T08:42:00Z  a1b2c3d4e5f6  faithfulness  0.910  8     claude-haiku-4-5
-2026-05-15T19:15:00Z  9f8e7d6c5b4a  faithfulness  0.895  8     claude-haiku-4-5
+started_at            run_id                            suite         mean   rows  judge_model
+--------------------  --------------------------------  ------------  -----  ----  ----------------
+2026-05-16T08:42:00Z  a1b2c3d4e5f60718293a4b5c6d7e8f90  faithfulness  0.910  8     claude-haiku-4-5
+2026-05-15T19:15:00Z  9f8e7d6c5b4a39281706f5e4d3c2b1a0  faithfulness  0.895  8     claude-haiku-4-5
 ...
 ```
 
