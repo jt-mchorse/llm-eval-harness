@@ -3485,3 +3485,11 @@ suite was only refused after every row had been judged and the run saved. That
 saved run then became the suite's default baseline, so the next run could hide
 a real drop from 0.9 to 0.2 and pass. The pre-check now refuses the mismatch
 up front, with no judge calls and nothing saved.
+
+## 2026-10-12 — `list` prints run ids that `diff` accepts (#348)
+
+The `list` table shortened each run id to 12 characters. `diff` and
+`run --baseline` need the full id, so pasting an id from the table failed. The
+README's example didn't match what the command printed either. The table now
+shows the full id, and the README example is the renderer's own output, checked
+by a test.
