@@ -3859,3 +3859,22 @@ context_for_next_session:
   - THE_README_SAMPLE_IS_NOW_LOCKED_TO_THE_RENDERER_header_rule_and_first_row
 followups: []
 ---
+
+---
+session: 2026-10-12T08:29:44Z
+duration_min: 1   # computed: plan comment 2026-10-12T08:29:44Z -> PR 2026-10-12T08:31:42Z (gh createdAt)
+issue: 350
+branch: session/2026-10-12-0829-issue-350
+focus: DELTA_TABLE_BASELINE_CURRENT_CELLS_STAYED_DOT_3F_SO_0_5_TO_0_5004_PRINTED_0_500_0_500_BESIDE_IMPROVED_291_WIDENED_ONLY_DELTA
+phase: shipped
+delta:
+  files_changed: 4
+  tests_added: 42
+  suite: "2647 -> 2689 passed; ruff + mypy clean"
+decisions_made: []
+measured: "main: | improved | r2 | 0.500 | 0.500 | +0.0004 |; branch 0.5000 | 0.5004. Revert 9 red. Committed artifacts unchanged."
+context_for_next_session:
+  - I_FILED_A_SECOND_ROW_AS_CONTRADICTORY_AND_IT_WAS_NOT_the_gate_is_strict_so_a_printed_drop_equal_to_the_threshold_reads_unflagged_CORRECTED_IN_THE_ISSUE_check_the_gates_strictness_before_calling_a_boundary_rendering_wrong
+  - THE_PAIR_RULE_IS_ON_THE_RENDERED_DIFFERENCE_IN_EXACT_DECIMALS_not_float_subtraction_which_would_widen_every_exact_threshold_row
+followups: []
+---
