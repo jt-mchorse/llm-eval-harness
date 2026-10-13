@@ -1221,11 +1221,11 @@ def _truncate_text(text: str, limit: int = _CELL_TEXT_CAP) -> str:
     reproduce from a rounded repro. Slicing first makes a split reference
     unconstructible rather than merely unlikely.
 
-    Three siblings in this package already slice the source: `cli.py`'s
-    `run_id[:12] + ("\u2026" if ...)`, `judge.py`'s `group(1)[:32]` then
-    `\u2026`, and `comment.py`'s `md_code_span(run_id[:8])` (until #355 printed
-    the whole id) -- which is the same ordering rule for the Markdown escape. `render_html` was the one site that
-    escaped first.
+    Three siblings in this package sliced the source: `cli.py`'s
+    `run_id[:12] + ("\u2026" if ...)` (until #348 printed the whole id),
+    `judge.py`'s `group(1)[:32]` then `\u2026`, and `comment.py`'s
+    `md_code_span(run_id[:8])` (until #355) -- which is the same ordering rule
+    for the Markdown escape. `render_html` was the one site that escaped first.
 
     The marker is appended rather than fitted inside *limit*: it is not part of
     the input, so counting it against the input's budget would make the visible
