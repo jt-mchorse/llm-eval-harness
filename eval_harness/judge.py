@@ -12,6 +12,7 @@ deterministic stub without an API key. The production backend is
 
 from __future__ import annotations
 
+import json
 import math
 import os
 import re
@@ -231,6 +232,13 @@ def is_auth_error(exc: BaseException) -> bool:
 _REMOTE_EXC_NAMES = _TRANSIENT_EXC_NAMES | _AUTH_EXC_NAMES
 
 
+#: The body is never echoed: it may be a gateway's page or anything else.
+_NOT_A_MESSAGE = (
+    "judge backend answered 200 with {what}, not a Message; this is not a result. "
+    "Check ANTHROPIC_BASE_URL and any proxy in front of the API."
+)
+
+
 class JudgeBackendError(ValueError):
     """The judge backend failed *operationally*: the remote said no, or was unreachable.
 
@@ -430,12 +438,30 @@ class AnthropicBackend:
         # `run_suite` (#73). Permanent client errors (400/401/...) are not
         # transient and re-raise immediately via `retry_call`.
         def _once() -> str:
-            msg = self.client.messages.create(
-                model=self.model,
-                max_tokens=self.max_tokens,
-                system=system,
-                messages=[{"role": "user", "content": user}],
-            )
+            try:
+                msg = self.client.messages.create(
+                    model=self.model,
+                    max_tokens=self.max_tokens,
+                    system=system,
+                    messages=[{"role": "user", "content": user}],
+                )
+            except json.JSONDecodeError as exc:
+                raise JudgeBackendError(
+                    _NOT_A_MESSAGE.format(what="a body that is not JSON")
+                ) from exc
+            # A 200 whose body is not a Message (#352): the SDK hands back the
+            # raw text as a `str` when the body is not JSON (a gateway's HTML
+            # page), and builds a Message with `content=None` from JSON that
+            # lacks it (`{}`, an error envelope sent with 200). Both are the
+            # remote's failure, and escaped as AttributeError / TypeError at
+            # exit 1 -- "a row regressed". A real Message whose content our loop
+            # cannot read is still our bug and keeps its traceback.
+            if isinstance(msg, str):
+                raise JudgeBackendError(
+                    _NOT_A_MESSAGE.format(what=f"{len(msg)} characters of text")
+                )
+            if hasattr(msg, "content") and msg.content is None:
+                raise JudgeBackendError(_NOT_A_MESSAGE.format(what="a message with no content"))
             # `content` is a list of content blocks; concatenate text blocks.
             out: list[str] = []
             for block in msg.content:

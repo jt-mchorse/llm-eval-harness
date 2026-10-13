@@ -3502,3 +3502,12 @@ with the status, but the two score columns still rounded to three decimals.
 A row going from 0.5 to 0.5004 therefore read "improved: 0.500 → 0.500". The
 two scores are now printed together, precise enough that their difference
 agrees with the row's status. Ordinary scores look exactly as before.
+
+## 2026-10-12 — A judge reply that isn't a message is a clear error (#352)
+
+If the judge endpoint answered "200 OK" with something other than a model
+reply (a proxy's login page, broken JSON, an error notice sent with a success
+code), the harness crashed with a raw Python error at exit code 1. In CI that
+code means "the quality got worse". It now reports that the backend answered
+with something that isn't a message, without repeating the body, and exits
+with code 2, the code for a setup or connection problem.
