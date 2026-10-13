@@ -3529,3 +3529,14 @@ average 0.77. Every PR comment therefore headlined a mean change of -0.050,
 while the table below it added up to -0.070. The demo file now records 0.77.
 A test checks that each committed demo run's average matches its own scores,
 and that the demo comparison shows -0.070.
+
+## 2026-10-13 — A huge whole-number label in the calibration file is a clear finding (#359)
+
+A calibration row could give its human score as an integer too large for the
+computer's number type, for example a 401-digit number. When it did, checking
+the file (`validate --calibration`) or running `calibrate` crashed with a raw
+Python error at exit code 1. For `calibrate`, that code means "the judge's
+agreement is below the bar". The same fix had already been made for run files
+on 10-08, but not for the calibration reader. Such a row is now reported like
+any other out-of-range score. The checker keeps going and lists the rest of the
+file, and `calibrate` exits with code 2 for bad input.
