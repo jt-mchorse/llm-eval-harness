@@ -3540,3 +3540,13 @@ agreement is below the bar". The same fix had already been made for run files
 on 10-08, but not for the calibration reader. Such a row is now reported like
 any other out-of-range score. The checker keeps going and lists the rest of the
 file, and `calibrate` exits with code 2 for bad input.
+
+## 2026-10-13 — Calibration report rows agree with the κ above them (#361)
+
+The calibration report computes κ by sorting each score into pass or fail at
+0.5. The per-row table showed scores to two decimals, so a judge score of
+0.497 showed up as `0.50` and looked like a pass, even though κ had counted it
+as a fail. In one example the report said FAIL at κ 0.546, but working κ out
+from the table's own numbers gave 0.798. The two scores in a row now get as
+many decimals as they need to land on the right side of 0.5 (here `0.497`).
+Rows that were already correct look exactly as before.
