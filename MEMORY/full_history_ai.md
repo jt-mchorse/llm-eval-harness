@@ -3840,3 +3840,22 @@ context_for_next_session:
   - FOLLOWUP_list_table_prints_12_char_run_id_prefixes_that_diff_cannot_resolve_filed_low
 followups: []
 ---
+
+---
+session: 2026-10-12T07:37:14Z
+duration_min: 1   # computed: plan comment 2026-10-12T07:37:14Z -> PR 2026-10-12T07:38:19Z (gh createdAt)
+issue: 348
+branch: session/2026-10-12-0737-issue-348
+focus: LIST_TABLE_PRINTED_12_CHAR_RUN_ID_PREFIXES_THAT_DIFF_AND_BASELINE_CANNOT_RESOLVE_README_SAMPLE_DID_NOT_MATCH_THE_RENDERER
+phase: shipped
+delta:
+  files_changed: 3
+  tests_added: 2
+  suite: "2554 -> 2556 passed; ruff clean"
+decisions_made: []
+measured: "main: diff --current <12-char id from list> -> ::error::no run with id, rc 2. Branch: ids from the table diff at rc 0. README sample now the renderer's output (its judge_model rule was 11 dashes, renderer prints 16). Revert 2 of 2 red."
+context_for_next_session:
+  - FULL_ID_OVER_PREFIX_RESOLUTION_because_read_run_is_exact_match_for_every_caller_and_a_prefix_rule_needs_an_ambiguity_policy
+  - THE_README_SAMPLE_IS_NOW_LOCKED_TO_THE_RENDERER_header_rule_and_first_row
+followups: []
+---
