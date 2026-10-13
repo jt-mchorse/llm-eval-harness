@@ -3976,3 +3976,22 @@ context_for_next_session:
   - TWO_CLASSES_NOT_THREE_BANDS_0_503_PRINTED_0_50_IS_STILL_IN_ITS_CLASS_widen_only_0_495_to_0_5
 followups: []
 ---
+
+---
+session: 2026-10-13T08:01Z
+duration_min: 7   # computed: plan comment 08:01Z -> commit 08:08Z (date -u)
+issue: 363
+branch: session/2026-10-13-0801-issue-363
+focus: THRESHOLD_DROP_ABOVE_1_ACCEPTED_AND_FLAGS_NOTHING_WHILE_INF_WAS_REFUSED_FOR_FLAGGING_NOTHING
+phase: shipped
+delta:
+  files_changed: 2
+  tests_added: 16
+  suite: "2687 -> 2703 passed; ruff, ruff format, mypy clean"
+decisions_made: []
+measured: "main: diff-json over demo_baseline vs every-row-0.0 at --threshold-drop 0.1 exit 1 flagged=5; at 5 exit 0 flagged=0; at inf exit 2 'flags nothing'. DeltaReport.from_json accepted 5.0. Branch: exit 2 at 5 on diff-json, run (no judge call), diff_runs and the reader. Revert 12 of 16 red."
+context_for_next_session:
+  - THE_GUARDS_OWN_REASON_flags_nothing_COVERED_A_FINITE_NEIGHBOUR_it_refused_only_the_infinite_one
+  - ONE_POINT_ZERO_STILL_ACCEPTED_matching_40s_inclusive_bound_for_drift_it_also_flags_nothing_a_decision_not_a_bug
+followups: []
+---
