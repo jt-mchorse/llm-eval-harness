@@ -301,12 +301,12 @@ DELTA_ROW_STATUSES: tuple[str, ...] = ("improved", "regressed", "unchanged", "ne
 
 
 def _checked_threshold_drop(value: Any) -> float:
-    """A finite ``threshold_drop >= 0`` -- ``diff_runs``' rule, now everyone's.
+    """A ``threshold_drop`` in ``[0, 1]`` -- ``diff_runs``' rule, now everyone's.
 
     ``_status_for`` flips the sign (``delta < -threshold_drop``), so a negative
     value inverts regression detection, and a NaN makes every comparison false
     so nothing is ever flagged (#42). The reader refused the second and read
-    back the first (#266).
+    back the first (#266). Above 1 nothing can be flagged either (#363).
     """
     threshold_drop = _require_float(value, "threshold_drop")
     if not math.isfinite(threshold_drop):
@@ -320,6 +320,17 @@ def _checked_threshold_drop(value: Any) -> float:
             f"threshold_drop must be a finite number >= 0.0; got {threshold_drop} — "
             "the regression test is `delta < -threshold_drop`, so a negative value "
             "inverts it"
+        )
+    # The upper half of "flags nothing" (#363). Scores are in [0, 1], so a delta
+    # is in [-1, 1] and `delta < -threshold_drop` cannot hold past 1: the guard
+    # above refused `inf` for flagging nothing while `--threshold-drop 5` (a
+    # percentage typed as a number) passed a run whose every row collapsed to 0
+    # at exit 0. `1.0` stays accepted, the inclusive bound #40 gave the drift
+    # thresholds.
+    if threshold_drop > 1.0:
+        raise ValueError(
+            f"threshold_drop must be in [0.0, 1.0]; got {threshold_drop} — scores are "
+            "in [0, 1], so a row's delta is in [-1, 1] and a larger threshold flags nothing"
         )
     return threshold_drop
 
