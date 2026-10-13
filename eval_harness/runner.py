@@ -406,7 +406,7 @@ def _check_delta_run_id(label: str, value: Any) -> str:
     if not isinstance(value, str):
         raise ValueError(
             f"{label} must be a string when present; got {value!r} — a null value "
-            f"crashes the delta renderer's {label}[:8] slice with a raw TypeError"
+            f"crashes the PR-comment renderer's code span with a raw AttributeError"
         )
     return value
 
@@ -700,7 +700,7 @@ class DeltaReport:
         _check_delta_summary(summary)
         # `.get` defaults only fire on a MISSING key; a present-but-null
         # current_run_id/baseline_run_id passes None straight to the renderers,
-        # where `current_run_id[:8]` raises a raw TypeError (exit 1) instead of the
+        # where the PR comment's code span raised a raw error (exit 1) instead of the
         # documented exit-2 clean failure — the run-id sibling of the present-null
         # mean_delta guard above. Reject a non-string value here.
         current_run_id = payload.get("current_run_id", "current")
@@ -1032,8 +1032,14 @@ def render_delta_ascii(report: DeltaReport) -> str:
     # (#257). `render_configured` widens until the rendering reads back as the
     # value that was set; the starting width moves 2 -> 3 so this surface and
     # the PR comment share one precision without narrowing the comment (D-029).
+    #
+    # The run ids are printed whole (#355). They were cut to 8 characters, and
+    # when `run` picks the suite's latest run as its baseline this header is the
+    # only place that run is named -- but `diff` and `run --baseline` match an
+    # id exactly, so the id shown here was refused with "no run with id" (the
+    # #348 class, fixed for the `list` table the same way).
     header = (
-        f"# delta {report.current_run_id[:8]} vs {report.baseline_run_id[:8]} "
+        f"# delta {report.current_run_id} vs {report.baseline_run_id} "
         f"(suite={report.suite}, threshold_drop={render_configured(report.threshold_drop)})"
     )
     columns = ["status", "example_id", "baseline", "current", "delta", "flag"]
@@ -1171,7 +1177,7 @@ def _checked_run_id(value: Any) -> str:
     if not isinstance(value, str) or not value:
         raise ValueError(
             f"run_id must be a non-empty string; got {value!r} — a null/empty run_id "
-            "crashes the delta renderers' run_id[:8] slice with a raw TypeError"
+            "crashes the PR-comment renderer's code span with a raw AttributeError"
         )
     return value
 
@@ -1300,7 +1306,8 @@ def load_run_result_from_json(path: str | Path) -> StoredRun:
     # `run_id` is required (bracket access → KeyError → exit 2 when missing), but
     # a present-but-null value passed straight through to `StoredRun.run_id`, then
     # to `DeltaReport.current_run_id`, where `render_delta_ascii`/`render_delta_markdown`
-    # slice it (`run_id[:8]`) and raise a raw `TypeError` (exit 1) — bypassing the
+    # print it (the `[:8]` slice raised `TypeError` until #355 dropped it; the
+    # markdown code span still raises `AttributeError`) at exit 1 — bypassing the
     # documented exit-2 clean-failure contract the CLI catch blocks honor for
     # ValueError/KeyError but not TypeError. Reject a non-string/empty run_id loudly,
     # same finiteness-style loader guard as `mean_score`/`n_rows` above.

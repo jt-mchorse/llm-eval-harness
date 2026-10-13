@@ -1223,8 +1223,8 @@ def _truncate_text(text: str, limit: int = _CELL_TEXT_CAP) -> str:
 
     Three siblings in this package already slice the source: `cli.py`'s
     `run_id[:12] + ("\u2026" if ...)`, `judge.py`'s `group(1)[:32]` then
-    `\u2026`, and `comment.py`'s `md_code_span(run_id[:8])` -- which is the same
-    ordering rule for the Markdown escape. `render_html` was the one site that
+    `\u2026`, and `comment.py`'s `md_code_span(run_id[:8])` (until #355 printed
+    the whole id) -- which is the same ordering rule for the Markdown escape. `render_html` was the one site that
     escaped first.
 
     The marker is appended rather than fitted inside *limit*: it is not part of
