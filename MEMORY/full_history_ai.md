@@ -3819,3 +3819,24 @@ context_for_next_session:
   - THE_PR_WAS_OPENED_WITH_ONE_RED_TEST_test_source_representability_forbids_literal_lone_surrogates_in_test_source_build_them_with_chr_fixed_in_a_follow_up_commit
 followups: []
 ---
+
+---
+session: 2026-10-12T07:24:18Z
+duration_min: 2   # computed: plan comment 2026-10-12T07:24:18Z -> PR 2026-10-12T07:26:33Z (gh createdAt)
+issue: 346
+branch: session/2026-10-12-0724-issue-346
+focus: RUN_BASELINE_FROM_ANOTHER_SUITE_PASSED_THE_301_EXISTENCE_PREFLIGHT_AND_WAS_REFUSED_ONLY_AFTER_THE_RUN_WAS_SAVED_SO_THE_NEXT_RUN_LAUNDERED_A_REGRESSION
+phase: shipped
+delta:
+  files_changed: 2
+  tests_added: 4
+  suite: "2553 -> 2557 passed; ruff + format + mypy gate clean"
+decisions_made: []
+measured: "stub judge: alpha 0.9, beta 0.9, beta 0.2 --baseline <alpha> rc 2 calls 10 SAVED, beta 0.2 rc 0 mean delta +0.000. Fixed: rc 2, 0 calls, not saved; next run rc 1. Revert 2 red / 2 controls green."
+context_for_next_session:
+  - A_PREFLIGHT_THAT_CHECKS_EXISTENCE_IS_NOT_THE_CHECK_THE_CONSUMER_RUNS_diff_runs_also_requires_the_SAME_SUITE_read_the_consumers_refusals_and_port_ALL_of_them
+  - GOTCHA_FOUR_RUNS_IN_ONE_SECOND_FALL_TO_THE_LATEST_RUN_TIE_BREAK_my_end_to_end_arm_PASSED_ON_MAIN_until_utc_now_iso_was_pinned_to_one_tick_per_run
+  - GOTCHA_THE_MYPY_GATE_TEST_caught_a_name_reuse_baseline_is_assigned_StoredRun_or_None_later_in_the_function
+  - FOLLOWUP_list_table_prints_12_char_run_id_prefixes_that_diff_cannot_resolve_filed_low
+followups: []
+---

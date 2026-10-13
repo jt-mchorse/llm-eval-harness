@@ -3476,3 +3476,12 @@ is not valid UTF-8 (possible from a shell variable or a script) passed every
 check and was only rejected by the database at the very end, after all the
 paid judge calls, with a crash at exit 1. The name, and the model name, are
 now checked first, with a clean error at exit 2.
+
+## 2026-10-12 — `run` refuses a baseline from another suite before judging (#346)
+
+`run --baseline <id>` checked that the id existed before paying for any
+judging, but not that it belonged to the same suite. A pasted id from another
+suite was only refused after every row had been judged and the run saved. That
+saved run then became the suite's default baseline, so the next run could hide
+a real drop from 0.9 to 0.2 and pass. The pre-check now refuses the mismatch
+up front, with no judge calls and nothing saved.
