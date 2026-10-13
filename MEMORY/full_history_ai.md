@@ -3919,3 +3919,22 @@ context_for_next_session:
   - 349_MERGED_MID_SESSION_drift_truncate_text_docstring_now_says_both_slices_were_removed
 followups: []
 ---
+
+---
+session: 2026-10-13T07:41:33Z
+duration_min: 10   # computed: plan comment 2026-10-13T07:41:33Z -> PR (gh createdAt)
+issue: 357
+branch: session/2026-10-13-0741-issue-357
+focus: DEMO_CURRENT_FIXTURE_RECORDED_MEAN_0_79_OVER_ROWS_AVERAGING_0_77_EVERY_PR_STICKY_COMMENT_HEADLINED_MINUS_0_050_NOT_MINUS_0_070
+phase: shipped
+delta:
+  files_changed: 2
+  tests_added: 6
+  suite: "2687 -> 2693 passed; ruff + mypy clean"
+decisions_made: []
+measured: "main: diff-json demo fixtures -> summary mean_delta -0.05, posted on #353 as mean Δ **-0.050**; rows give 0.77 - 0.84 = -0.070. Branch: -0.070 in json/ascii/markdown. Revert 4 of 6 red (population + baseline arms green by design)."
+context_for_next_session:
+  - THE_READER_TRUSTS_A_MEAN_THE_ROWS_DONT_REPRODUCE_BY_336_DESIGN_so_committed_run_fixtures_are_pinned_on_the_files_not_in_load_run_result_from_json
+  - FOUND_BY_RUNNING_THE_DOCUMENTED_DIFF_JSON_AND_RECOMPUTING_THE_HEADLINE_FROM_THE_TABLE_BELOW_IT
+followups: []
+---

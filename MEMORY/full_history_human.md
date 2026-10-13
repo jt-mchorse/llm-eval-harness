@@ -3520,3 +3520,12 @@ characters of the id. The PR comment did the same. `diff` and
 `run --baseline` need the whole id, so the id shown could not be used to
 repeat the comparison. Both now print the full id, the same fix #348 made for
 the `list` table.
+
+## 2026-10-13 — The demo comment's mean change matches its rows (#357)
+
+The eval workflow posts a comment on every PR comparing two committed demo
+runs. One of them recorded an average score of 0.79, but its five scores
+average 0.77. Every PR comment therefore headlined a mean change of -0.050,
+while the table below it added up to -0.070. The demo file now records 0.77.
+A test checks that each committed demo run's average matches its own scores,
+and that the demo comparison shows -0.070.
