@@ -3957,3 +3957,22 @@ context_for_next_session:
   - DEFERRED_binarize_pearson_r_checked_threshold_kappa_still_raise_OverflowError_on_a_huge_int_library_arg_no_file_or_cli_seam_reaches_them
 followups: []
 ---
+
+---
+session: 2026-10-13T07:56Z
+duration_min: 8   # computed: plan comment 07:56Z -> commit 08:04Z (date -u)
+issue: 361
+branch: session/2026-10-13-0756-issue-361
+focus: CALIBRATION_PER_ROW_SCORES_AT_DOT_2F_PRINTED_0_497_AS_0_50_SO_THE_TABLE_REBINARIZED_TO_KAPPA_0_798_UNDER_A_FAIL_AT_0_546
+phase: shipped
+delta:
+  files_changed: 2
+  tests_added: 10
+  suite: "2697 passed; ruff, ruff format, mypy clean"
+decisions_made: []
+measured: "judge answering 0.497 where human in [0.5,0.8) over fixtures/calibration.jsonl: main published FAIL at κ 0.546 above rows `0.50 | 0.50 | 0.00`; κ recomputed from the printed table 0.798. Branch: recomputed κ == reported κ. Revert 6 of 10 red."
+context_for_next_session:
+  - THE_CLASSIFICATION_WAS_IN_THE_METRIC_LABEL_binarized_at_0_5_NOT_PER_ROW_so_the_D_028_sweep_never_listed_the_per_row_cells
+  - TWO_CLASSES_NOT_THREE_BANDS_0_503_PRINTED_0_50_IS_STILL_IN_ITS_CLASS_widen_only_0_495_to_0_5
+followups: []
+---

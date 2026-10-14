@@ -707,12 +707,43 @@ def render_report(
         reasoning = md_table_cell(js.reasoning)
         # `abs_diff` is the difference of the two numbers printed beside it
         # (#293): taken from the unrounded scores, a judge's 0.625 printed as
-        # `0.62` beside a human 0.95 and an abs_diff of `0.32`.
-        human, judged = f"{row.human_score:.2f}", f"{js.score:.2f}"
+        # `0.62` beside a human 0.95 and an abs_diff of `0.32`. The pair shares
+        # one width, so that difference is exact at the same width.
+        human, judged, width = _render_score_pair(row.human_score, js.score)
         abs_diff = abs(Fraction(human) - Fraction(judged))
-        lines.append(f"| {row_id} | {human} | {judged} | {float(abs_diff):.2f} | {reasoning} |")
+        lines.append(
+            f"| {row_id} | {human} | {judged} | {float(abs_diff):.{width}f} | {reasoning} |"
+        )
     lines.append("")
     return "\n".join(lines)
+
+
+#: Width the per-row `human` / `judge` cells have always been published at.
+_ROW_SCORE_PLACES = 2
+
+
+def _render_score_pair(human: float, judged: float) -> tuple[str, str, int]:
+    """Render a per-row score pair so each cell binarizes as κ binarized it (#361).
+
+    κ is computed on `binarize(score)`, and the report says so ("binarized at
+    0.5"), but the cells were a fixed `.2f`: every score in `[0.495, 0.5)`
+    printed `0.50`, which reads as the positive class κ did not count it in. A
+    judge answering 0.497 where the human said 0.5-0.7 published rows reading
+    `0.50 | 0.50 | 0.00` under a FAIL at κ 0.546, while the printed table
+    re-binarizes to κ 0.798. Widen the pair from two places until both cells
+    binarize to their true class, at one shared width so `abs_diff` stays
+    exact (#293). Returns the two cells and the width. Two classes, not
+    `render_classified`'s three bands: `0.503` printed `0.50` is still in the
+    class it was counted in, so it is not widened. `repr` is the terminal
+    fallback and binarizes exactly.
+    """
+    for width in range(_ROW_SCORE_PLACES, COMPARISON_MAX_PLACES + 1):
+        pair = (f"{human:.{width}f}", f"{judged:.{width}f}")
+        if binarize(float(pair[0])) == binarize(human) and binarize(float(pair[1])) == binarize(
+            judged
+        ):
+            return pair[0], pair[1], width
+    return repr(human), repr(judged), COMPARISON_MAX_PLACES
 
 
 def _render_interpreted(
