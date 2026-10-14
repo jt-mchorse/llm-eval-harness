@@ -357,11 +357,11 @@ def test_render_handles_new_and_removed_rows():
     assert "| — |" in removed_row_line  # current missing for removed row
 
 
-def test_render_short_run_ids_in_subheading():
+def test_render_whole_run_ids_in_subheading():
     md = render_delta_markdown(_make_report([], _default_summary()))
-    # 8-char prefix of each id appears in the run-id line.
-    assert "`cur_runi`" in md
-    assert "`base_run`" in md
+    # The whole id, not an 8-char prefix `diff --baseline` refuses (#355).
+    assert "`cur_runid_abcdef0123`" in md
+    assert "`base_runid_0123abcdef`" in md
 
 
 # ---------------------------------------------------------------------------

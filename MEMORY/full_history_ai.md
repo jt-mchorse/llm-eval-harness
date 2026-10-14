@@ -3898,3 +3898,24 @@ context_for_next_session:
   - THE_JUDGE_EXTRA_IS_NOT_IN_CI_so_SDK_arms_skip_there_keep_SDK_free_arms_for_the_same_rule
 followups: []
 ---
+---
+
+session: 2026-10-13T07:17:04Z
+duration_min: 4   # computed: plan comment 2026-10-13T07:17:04Z -> PR (gh createdAt), approx
+issue: 355
+branch: session/2026-10-13-0717-issue-355
+focus: DELTA_HEADER_AND_PR_COMMENT_PRINTED_8_CHAR_RUN_ID_PREFIXES_THE_AUTO_PICKED_BASELINE_IS_NAMED_ONLY_THERE_AND_DIFF_CANNOT_RESOLVE_IT_348_ON_THE_DELTA_RENDERERS
+phase: shipped
+delta:
+  files_changed: 5
+  tests_added: 3
+  suite: "2640 passed; ruff + format + mypy gate clean"
+decisions_made: []
+measured: "stub judge, two runs: header '# delta 96b884d1 vs 8cbd2710'; diff --baseline 8cbd2710 -> ::error::no run with id, rc 2. Branch: header ids diff at rc 0. Revert 3 of 3 red."
+context_for_next_session:
+  - THE_348_FIX_LISTED_ONE_SURFACE_the_list_table_the_two_delta_renderers_sliced_run_id_8_and_run_names_its_auto_picked_baseline_ONLY_in_that_header
+  - test_comment_test_render_short_run_ids_in_subheading_LOCKED_THE_PREFIX_renamed_to_whole_ids_it_was_a_shape_lock_from_the_first_commit_not_a_rationale
+  - THREE_ERROR_MESSAGES_NAMED_THE_REMOVED_8_SLICE_reworded_to_the_markdown_code_span_AttributeError_which_still_fires_on_a_null_id
+  - 349_MERGED_MID_SESSION_drift_truncate_text_docstring_now_says_both_slices_were_removed
+followups: []
+---

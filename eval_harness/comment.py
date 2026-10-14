@@ -113,16 +113,18 @@ def render_delta_markdown(report: DeltaReport, *, max_bytes: int | None = None) 
         f"unchanged {n_same} · new {n_new} · removed {n_rem}"
     )
     lines.append("")
-    # The run ids load from the delta JSON (hand-editable); a backtick in the
-    # first 8 chars breaks these code spans just like the suite heading above.
+    # The run ids load from the delta JSON (hand-editable); a backtick in one
+    # breaks these code spans just like the suite heading above. They are
+    # printed whole, as in the ASCII header (#355): an 8-character prefix is
+    # an id `diff --baseline` refuses.
     # `threshold_drop` is a formatted float — no backtick possible — so it stays raw.
     # It is also the operator's configured `--threshold-drop`, and a fixed `.3f`
     # republished `0.0125` as `0.013` here while the ASCII header said `0.01`
     # (#257). `render_configured` widens from three places only as far as the
     # round trip requires, so the shipped default still publishes `0.100`.
     lines.append(
-        f"_current_ {md_code_span(report.current_run_id[:8])} "
-        f"vs _baseline_ {md_code_span(report.baseline_run_id[:8])} "
+        f"_current_ {md_code_span(report.current_run_id)} "
+        f"vs _baseline_ {md_code_span(report.baseline_run_id)} "
         f"· threshold drop: `{render_configured(report.threshold_drop)}`"
     )
     lines.append("")

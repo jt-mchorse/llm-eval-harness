@@ -3511,3 +3511,12 @@ code), the harness crashed with a raw Python error at exit code 1. In CI that
 code means "the quality got worse". It now reports that the backend answered
 with something that isn't a message, without repeating the body, and exits
 with code 2, the code for a setup or connection problem.
+
+## 2026-10-13 — Delta output names the baseline by an id `diff` accepts (#355)
+
+When `run` compares against the suite's previous run, the delta table header
+is the only place it says which run that was, and it showed just the first 8
+characters of the id. The PR comment did the same. `diff` and
+`run --baseline` need the whole id, so the id shown could not be used to
+repeat the comparison. Both now print the full id, the same fix #348 made for
+the `list` table.
