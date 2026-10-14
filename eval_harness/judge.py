@@ -353,7 +353,9 @@ def retry_call(
 class AnthropicBackend:
     """Production backend wrapping `anthropic.Anthropic.messages.create`.
 
-    Requires the `judge` optional dependency: `pip install eval-harness[judge]`.
+    Requires the `judge` optional dependency: `pip install -e '.[judge]'` from
+    the checkout. This project is not on PyPI, and the `eval-harness` there is an
+    unrelated package (#369).
     """
 
     def __init__(
@@ -397,7 +399,7 @@ class AnthropicBackend:
         except ImportError as e:
             raise ImportError(
                 "AnthropicBackend requires the optional `judge` extra. "
-                "Install with: pip install 'eval-harness[judge]'"
+                "Install with: pip install -e '.[judge]' from the llm-eval-harness checkout"
             ) from e
 
         self._anthropic_module = anthropic

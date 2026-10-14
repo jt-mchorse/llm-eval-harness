@@ -239,7 +239,7 @@ _TRANSLATED = [
 def _import_boom(**kwargs):
     raise ImportError(
         "AnthropicBackend requires the optional `judge` extra. "
-        "Install with: pip install 'eval-harness[judge]'"
+        "Install with: pip install -e '.[judge]' from the llm-eval-harness checkout"
     )
 
 
