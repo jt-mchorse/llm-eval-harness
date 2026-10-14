@@ -3582,3 +3582,13 @@ that far apart. These cases used to give a clean error at exit code 2. That
 stopped in October, when the delta was changed to exact decimal arithmetic.
 They now give a clean error again, naming the row or the average, at exit
 code 2. Scores near the limit that can still be stored are reported normally.
+
+## 2026-10-14 — the missing-judge-extra hint no longer points at someone else's package (#369)
+
+When the `judge` extra was missing, the error told the operator to run
+`pip install 'eval-harness[judge]'`. This project isn't on PyPI, and
+`eval-harness` there is an unrelated third-party package, so following the hint
+would install someone else's code into the environment that holds the API key.
+The hint now says `pip install -e '.[judge]'` from the checkout, matching the
+README. A new test reads the package name from `pyproject.toml` and fails if any
+tracked file tells the reader to install that name from an index.
