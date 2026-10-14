@@ -3559,3 +3559,15 @@ saying so. `--threshold-drop 5` (easy to type when you mean 5%) passed a run
 where every score fell to zero. Infinity was already refused for exactly this
 reason. Any value above 1 is now refused the same way, with exit code 2,
 before the judge is called.
+
+## 2026-10-14 — A JSON number with thousands of digits is bad input, not a crash (#365)
+
+Python 3.11 and later refuse to convert an integer with more than 4300 digits.
+When a data file contains one, the JSON reader raises a different kind of error
+from an ordinary syntax mistake, and the harness's shared reader only handled
+the syntax kind and the "nested too deep" kind (#333). So `validate` crashed
+with exit code 1, which means "found problems", and `run` crashed with exit
+code 1, which means "a row regressed". Neither command reported the bad line.
+The shared reader now treats the long number like any other unreadable JSON.
+`validate` reports that line and keeps checking the rest of the file. Every
+other command exits 2 and says which file could not be read.
