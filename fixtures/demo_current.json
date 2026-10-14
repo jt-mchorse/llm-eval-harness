@@ -5,7 +5,7 @@
   "dataset_version": "demo-v0.1",
   "judge_model": "claude-haiku-4-5-stub",
   "judge_kappa": 0.71,
-  "mean_score": 0.79,
+  "mean_score": 0.77,
   "n_rows": 5,
   "git_sha": "demo-current-sha",
   "rows": [
