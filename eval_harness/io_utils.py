@@ -33,6 +33,7 @@ import math
 import os
 import secrets
 import stat
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -394,11 +395,26 @@ def loads_json(text: str) -> Any:
     validators -- apply unchanged. Translating in one helper rather than at each
     site is the point: the next reader cannot catch one of the two and miss the
     other. A test pins that no module calls `json.loads` directly.
+
+    An integer literal longer than the int/str conversion limit
+    (`sys.get_int_max_str_digits()`, 4300 on 3.11/3.12) is the other input
+    `json.loads` refuses with something that is not a `JSONDecodeError`: a
+    plain `ValueError`. It escaped the same way, so `validate` and `run` exited
+    1 with a traceback (#365). It gets the same translation.
     """
     try:
         return json.loads(text)
     except RecursionError:
         raise json.JSONDecodeError("nesting too deep to decode", text, 0) from None
+    except json.JSONDecodeError:
+        raise
+    except ValueError:
+        raise json.JSONDecodeError(
+            f"integer literal longer than the {sys.get_int_max_str_digits()}-digit "
+            "limit for int conversion",
+            text,
+            0,
+        ) from None
 
 
 def _cap_base_for_temp(base: str) -> str:
