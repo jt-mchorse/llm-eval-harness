@@ -3550,3 +3550,12 @@ as a fail. In one example the report said FAIL at κ 0.546, but working κ out
 from the table's own numbers gave 0.798. The two scores in a row now get as
 many decimals as they need to land on the right side of 0.5 (here `0.497`).
 Rows that were already correct look exactly as before.
+
+## 2026-10-13 — A regression threshold above 1 is refused (#363)
+
+Scores run from 0 to 1, so no row can drop by more than 1. A
+`--threshold-drop` above 1 therefore turned the regression gate off without
+saying so. `--threshold-drop 5` (easy to type when you mean 5%) passed a run
+where every score fell to zero. Infinity was already refused for exactly this
+reason. Any value above 1 is now refused the same way, with exit code 2,
+before the judge is called.
