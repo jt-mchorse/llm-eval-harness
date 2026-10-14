@@ -3938,3 +3938,22 @@ context_for_next_session:
   - FOUND_BY_RUNNING_THE_DOCUMENTED_DIFF_JSON_AND_RECOMPUTING_THE_HEADLINE_FROM_THE_TABLE_BELOW_IT
 followups: []
 ---
+
+---
+session: 2026-10-13T07:47:22Z
+duration_min: 8   # computed: plan comment 2026-10-13T07:47:22Z -> PR (gh createdAt)
+issue: 359
+branch: session/2026-10-13-0747-issue-359
+focus: CALIBRATION_HUMAN_SCORE_401_DIGIT_INT_RAISED_OVERFLOWERROR_AT_EXIT_1_FROM_VALIDATE_CALIBRATION_AND_CALIBRATE_THE_318_CLASS_ON_THE_READER_318_DID_NOT_LIST
+phase: shipped
+delta:
+  files_changed: 2
+  tests_added: 4
+  suite: "2687 -> 2691 passed; ruff + mypy clean"
+decisions_made: []
+measured: "main: validate --calibration <human_score 9*401> -> OverflowError traceback rc 1; same row with 1e400 -> line 1 [score_range] rc 1. Branch: score_range finding, collecting walk continues; calibrate rc 2. Revert 4 of 4 red."
+context_for_next_session:
+  - 318_LISTED_SIX_RUNNER_SITES_THE_CALIBRATION_READER_WAS_THE_UNLISTED_SURFACE_found_by_a_load_vs_validate_differential_over_adversarial_rows
+  - DEFERRED_binarize_pearson_r_checked_threshold_kappa_still_raise_OverflowError_on_a_huge_int_library_arg_no_file_or_cli_seam_reaches_them
+followups: []
+---

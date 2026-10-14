@@ -199,7 +199,19 @@ def _row_from_dict(line_no: int, obj: dict) -> CalibrationRow:
     score = obj["human_score"]
     if not isinstance(score, (int, float)) or isinstance(score, bool):
         raise CalibrationLoadError(line_no, "human_score must be a number")
-    score_f = float(score)
+    # A JSON integer literal is an arbitrary-precision `int`, and `float()` of
+    # one too large for a double raises `OverflowError` -- past every catch in
+    # `validate_calibration` and the CLI, as a traceback at exit 1 (#359; the
+    # #318 class, which fixed only `runner.py`). It is out of range, so it gets
+    # the finding `1e400` already gets.
+    try:
+        score_f = float(score)
+    except OverflowError:
+        raise CalibrationLoadError(
+            line_no,
+            "human_score must be in [0, 1]; got an integer too large to be a finite number",
+            code="score_range",
+        ) from None
     if not (0.0 <= score_f <= 1.0):
         raise CalibrationLoadError(
             line_no,
