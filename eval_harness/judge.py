@@ -296,6 +296,27 @@ def _json_kind(value: object) -> str:
     return "a JSON number"
 
 
+def _remote_detail(exc: BaseException) -> str:
+    """``<Class>: <message>`` for an operator line, without echoing a non-JSON body (#378).
+
+    For a non-2xx whose body is not JSON -- a gateway's or proxy's HTML page --
+    the SDK's message *is* the body text, and ``exc.body`` is that same ``str``.
+    Interpolated whole it echoed every line of the page into the ``::error::``
+    line, which #352 rules out for a 200, and a GitHub annotation stops at the
+    first newline, so the PR check read ``(InternalServerError: <html>`` and
+    lost the sentence saying whether to re-run. A JSON error body is parsed by
+    the SDK into a one-line ``Error code: N - {...}``, and keeps it: that is
+    where the API says what was wrong with the request.
+    """
+    name = type(exc).__name__
+    status = getattr(exc, "status_code", None)
+    body = getattr(exc, "body", None)
+    if isinstance(status, int) and not isinstance(status, bool) and isinstance(body, str):
+        size = f"a non-JSON body of {len(body)} characters" if body else "an empty body"
+        return f"{name}: HTTP {status} with {size}"
+    return f"{name}: {exc}"
+
+
 class JudgeBackendError(ValueError):
     """The judge backend failed *operationally*: the remote said no, or was unreachable.
 
@@ -569,7 +590,7 @@ class AnthropicBackend:
             if is_auth_error(exc):
                 raise JudgeAuthError(
                     "judge backend could not authenticate with the Anthropic API "
-                    f"({type(exc).__name__}: {exc}). Set ANTHROPIC_API_KEY (or another "
+                    f"({_remote_detail(exc)}). Set ANTHROPIC_API_KEY (or another "
                     "credential the SDK accepts). `run` and `calibrate` have no "
                     "keyless mode; to score without a key, drive the library with your "
                     "own Backend, as examples/judge_calibration_stub.py does."
@@ -601,7 +622,7 @@ class AnthropicBackend:
         budget that was actually spent — "after 3 attempts" is a measurement,
         and it is also the number the operator would raise.
         """
-        detail = f"{type(exc).__name__}: {exc}"
+        detail = _remote_detail(exc)
         if is_transient_error(exc):
             return (
                 f"judge backend unreachable after {self.max_attempts} "
