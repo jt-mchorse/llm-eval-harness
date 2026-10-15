@@ -3605,3 +3605,15 @@ SDK used: if the server asks for a wait between 0 and 60 seconds (as seconds,
 milliseconds or a date), it waits that long for that retry. Otherwise it keeps
 its own backoff. Waits longer than 60 s are still capped, which is a separate
 decision.
+
+## 2026-10-15 — A judge reply that is JSON but not an object is a clear error (#376)
+
+The October fix for #352 made the judge report a clean error, at exit code 2,
+when the API endpoint answers 200 with something that is not a message. It
+covered an HTML page, broken JSON, and a JSON object with no content. It did
+not cover JSON that is not an object at all. For a body of `[]`, `null`, a
+number or `true`, the Anthropic SDK passes the value back unchanged, and `run`
+crashed with a raw `AttributeError` at exit code 1, which in CI means "a row
+regressed". These four shapes now get the same clean exit-2 error, and the
+error does not echo the body. A Message-shaped reply whose content our code
+cannot read still shows its traceback, as before.
