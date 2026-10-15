@@ -4052,3 +4052,24 @@ context_for_next_session:
   - THE_LOCK_READS_THE_DIST_NAME_FROM_pyproject_AND_SCANS_git_ls_files_EXCLUDING_MEMORY_so_a_new_hint_anywhere_fails
 followups: []
 ---
+
+---
+session: 2026-10-15T07:16Z
+duration_min: 5   # computed: clone 07:16Z -> commit 07:21Z (date -u); plan comment posted 2026-10-14T07:48Z by an earlier session that did not ship
+issue: 372
+branch: session/2026-10-15-0718-issue-372
+focus: JUDGE_RETRIES_IGNORED_RETRY_AFTER_SINCE_299_A_429_WITH_A_5S_WINDOW_SPENT_4_ATTEMPTS_IN_3_5S_AND_EXITED_2
+phase: shipped
+delta:
+  files_changed: 2
+  tests_added: 23
+  suite: "2753 -> 2774 passed, 21 skipped (CI-shaped, no anthropic); 2773 passed with anthropic 1.14 and with 0.32 (httpx<0.28) on the judge files; ruff, ruff format, mypy clean"
+decisions_made: []
+measured: "Real SDK, loopback stub 429 then 200, injected sleep: main slept [0.5]; branch slept [5.0] for retry-after: 5 and [2.5] for retry-after-ms: 2500. Full revert = collection error (new import); call-site-only revert 3 of 3 behaviour tests red."
+context_for_next_session:
+  - 299_PR_LISTED_TWO_SDK_BEHAVIOURS_IT_GAVE_UP_340_RESTORED_SHOULD_RETRY_THE_RETRY_AFTER_TIMING_WAS_THE_UNLISTED_HALF
+  - SDK_ORDER_KEPT_a_parseable_retry_after_ms_is_the_answer_even_out_of_range_retry_after_is_read_only_when_ms_does_not_parse
+  - DEFERRED_honouring_retry_after_above_60s_the_1_x_uncapped_rule_is_a_decision_about_CI_stall_time
+  - ANTHROPIC_0_32_NEEDS_httpx_lt_0_28_TO_CONSTRUCT_A_CLIENT_proxies_kwarg_verify_the_floor_in_a_pinned_venv
+followups: []
+---
