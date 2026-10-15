@@ -4012,3 +4012,23 @@ context_for_next_session:
   - DEFERRED_dump_jsonl_json_dumps_OF_AN_OVER_LIMIT_INT_RAISES_A_BARE_ValueError_library_only_no_CLI_file_reaches_it
 followups: []
 ---
+
+---
+session: 2026-10-14T07:32:44Z
+duration_min: 12   # computed: plan comment 2026-10-14T07:32:44Z -> PR (gh createdAt), approx
+issue: 368
+branch: session/2026-10-14-0732-issue-368
+focus: DIFF_RUNS_FLOAT_OF_AN_EXACT_FRACTION_DIFFERENCE_PAST_THE_DOUBLE_RANGE_RAISED_OVERFLOWERROR_AT_EXIT_1_289_AND_336_DID_NOT_LIST_THE_NO_NEAREST_FLOAT_CASE_PRE_289_IT_WAS_A_CLEAN_EXIT_2
+phase: shipped
+delta:
+  files_changed: 2
+  tests_added: 5
+  suite: "2703 -> 2708 passed; ruff + format + mypy clean"
+decisions_made: []
+measured: "main: diff-json current score 1e308 vs baseline -1e308 -> runner.py:952 OverflowError rc 1; means 1e308 vs -1e308 over 0.5 rows -> runner.py:972 OverflowError rc 1. At 1ec78f5^ (pre-289) both were ::error:: non-finite delta/mean_delta rc 2. Branch: ::error:: ... outside the float range rc 2. Revert 4 of 5 red (edge-of-range arm green by design)."
+context_for_next_session:
+  - D_034_PUBLISHES_THE_NEAREST_FLOAT_TO_THE_EXACT_DIFFERENCE_AND_PAST_THE_DOUBLE_RANGE_THERE_IS_NONE_the_two_float_Fraction_sites_in_diff_runs_now_go_through_published
+  - FOUND_BY_RUNNING_THE_PRE_FIX_COMMIT_ON_THE_SAME_INPUT_a_change_of_ARITHMETIC_can_move_a_failure_from_a_checked_record_guard_to_an_unchecked_conversion
+  - DEFERRED_refusing_scores_outside_0_1_on_read_is_a_semantics_call_see_317_363
+followups: []
+---

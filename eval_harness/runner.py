@@ -894,6 +894,26 @@ def _decimal(score: float) -> Fraction:
     return Fraction(repr(score))
 
 
+def _published(exact: Fraction, what: str) -> float:
+    """The nearest float to an exact difference, which D-034 publishes.
+
+    #289 and #336 compute a difference exactly and then publish `float()` of
+    it. A difference past the double range has no nearest float, and
+    `float(Fraction)` raises `OverflowError`, which no CLI catch translates:
+    `diff-json` on two run files its own reader accepts exited 1 with a
+    traceback, the code that means "a row regressed" (#368). Before #289 the
+    float subtraction gave `inf` and the delta record refused it as a
+    ValueError, so this is that exit 2 again, said about the input.
+    """
+    try:
+        return float(exact)
+    except OverflowError:
+        raise ValueError(
+            f"{what} is outside the float range, so it cannot be published; "
+            "scores must be finite and their difference must be too"
+        ) from None
+
+
 def _decimal_mean(run: StoredRun) -> Fraction:
     """The decimal mean a run's float `mean_score` stands for (#336).
 
@@ -960,7 +980,8 @@ def diff_runs(
             # decimals the scores and the threshold were written as (#289).
             exact = _decimal(cur[0]) - _decimal(base[0])
             status, flagged = _status_for(exact, exact_threshold)
-            rows.append(RowDelta(ex_id, base[0], cur[0], float(exact), status, flagged))
+            delta = _published(exact, f"the score difference for example_id {ex_id!r}")
+            rows.append(RowDelta(ex_id, base[0], cur[0], delta, status, flagged))
             if flagged:
                 n_flag += 1
             if status == "regressed":
@@ -980,7 +1001,9 @@ def diff_runs(
     summary = {
         "mean_score_current": current.mean_score,
         "mean_score_baseline": baseline.mean_score,
-        "mean_delta": float(_decimal_mean(current) - _decimal_mean(baseline)),
+        "mean_delta": _published(
+            _decimal_mean(current) - _decimal_mean(baseline), "the mean_delta of the two runs"
+        ),
         "n_flagged": n_flag,
         "n_regressed": n_reg,
         "n_improved": n_imp,

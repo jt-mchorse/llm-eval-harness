@@ -3571,3 +3571,14 @@ code 1, which means "a row regressed". Neither command reported the bad line.
 The shared reader now treats the long number like any other unreadable JSON.
 `validate` reports that line and keeps checking the rest of the file. Every
 other command exits 2 and says which file could not be read.
+
+## 2026-10-14 — A score difference too big to store is a clear error (#368)
+
+Comparing two run files whose scores differ by more than the largest number a
+computer float can hold (for example 1e308 against -1e308) crashed `diff-json`
+with a raw Python error at exit code 1. In CI that code means "a row
+regressed". The same thing happened when the two runs' average scores were
+that far apart. These cases used to give a clean error at exit code 2. That
+stopped in October, when the delta was changed to exact decimal arithmetic.
+They now give a clean error again, naming the row or the average, at exit
+code 2. Scores near the limit that can still be stored are reported normally.
