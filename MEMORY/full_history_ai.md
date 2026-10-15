@@ -4032,3 +4032,20 @@ context_for_next_session:
   - DEFERRED_refusing_scores_outside_0_1_on_read_is_a_semantics_call_see_317_363
 followups: []
 ---
+
+---
+session: 2026-10-14T07:50Z
+issue: 369
+focus: SECURITY_MISSING_JUDGE_EXTRA_HINT_SAID_PIP_INSTALL_EVAL_HARNESS_JUDGE_AND_EVAL_HARNESS_ON_PYPI_IS_AN_UNRELATED_THIRD_PARTY_PACKAGE
+phase: shipped
+delta:
+  files_changed: 3
+  tests_added: 3
+  suite: "full suite green; ruff + format + mypy clean"
+decisions_made: []
+measured: "pypi.org/pypi/eval-harness/json -> 200, version 2.0.2, homepage github.com/regokan/evalh. The error message and the AnthropicBackend docstring both told the operator to install it. Revert probe: 1 of 3 new arms red; the other 2 are controls (the scan sees real hints; the pattern accepts -e/.git+/../ and refuses bare/extras/quoted)."
+context_for_next_session:
+  - FOUND_AS_THE_SIBLING_OF_csl_266_WHICH_HAD_THE_SAME_HINT_SHAPE_POINTING_AT_A_404_HERE_THE_NAME_IS_TAKEN_BY_SOMEONE_ELSE_SO_THE_HINT_INSTALLS_THEIR_CODE
+  - THE_LOCK_READS_THE_DIST_NAME_FROM_pyproject_AND_SCANS_git_ls_files_EXCLUDING_MEMORY_so_a_new_hint_anywhere_fails
+followups: []
+---
