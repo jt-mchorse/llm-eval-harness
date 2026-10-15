@@ -3993,5 +3993,22 @@ measured: "main: diff-json over demo_baseline vs every-row-0.0 at --threshold-dr
 context_for_next_session:
   - THE_GUARDS_OWN_REASON_flags_nothing_COVERED_A_FINITE_NEIGHBOUR_it_refused_only_the_infinite_one
   - ONE_POINT_ZERO_STILL_ACCEPTED_matching_40s_inclusive_bound_for_drift_it_also_flags_nothing_a_decision_not_a_bug
+
+session: 2026-10-14T07:22:00Z
+duration_min: 15   # approx: plan comment -> PR
+issue: 365
+branch: session/2026-10-14-0722-issue-365
+focus: JSON_INT_LITERAL_OVER_THE_4300_DIGIT_LIMIT_IS_A_BARE_VALUEERROR_FROM_json_loads_THAT_loads_json_DID_NOT_TRANSLATE_validate_AND_run_EXITED_1_THE_333_SEAMS_OTHER_NON_JSONDECODEERROR
+phase: shipped
+delta:
+  files_changed: 2
+  tests_added: 11
+  suite: "2709 passed, 19 skipped after rebasing on #356 and #358; ruff + format + mypy clean"
+decisions_made: []
+measured: "main: validate/validate --calibration/run on a row with a 5001-digit int -> ValueError traceback rc=1; diff-json/comment/drift/calibrate rc=2 only via a broad except ValueError with the bare interpreter text. Branch: parse finding (walk continues) / exit 2 with the reader's prefix. Revert 9 of 11 red; the precondition and at-the-limit arms stay green by design."
+context_for_next_session:
+  - json_loads_HAS_THREE_REFUSALS_NOT_TWO_JSONDecodeError_RecursionError_AND_A_PLAIN_ValueError_FOR_AN_INT_OVER_sys_get_int_max_str_digits_a_one_reader_seam_must_enumerate_all_of_them
+  - BUILD_THE_LITERAL_FROM_THE_LIVE_LIMIT_and_keep_a_precondition_arm_that_fails_if_the_limit_is_disabled_PYTHONINTMAXSTRDIGITS_0
+  - DEFERRED_dump_jsonl_json_dumps_OF_AN_OVER_LIMIT_INT_RAISES_A_BARE_ValueError_library_only_no_CLI_file_reaches_it
 followups: []
 ---
