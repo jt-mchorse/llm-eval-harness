@@ -285,6 +285,17 @@ _NOT_A_MESSAGE = (
 )
 
 
+def _json_kind(value: object) -> str:
+    """Name a non-object JSON value by its JSON type, never its contents (#376)."""
+    if value is None:
+        return "JSON null"
+    if isinstance(value, bool):
+        return "a JSON boolean"
+    if isinstance(value, list):
+        return "a JSON array"
+    return "a JSON number"
+
+
 class JudgeBackendError(ValueError):
     """The judge backend failed *operationally*: the remote said no, or was unreachable.
 
@@ -515,6 +526,12 @@ class AnthropicBackend:
                 raise JudgeBackendError(
                     _NOT_A_MESSAGE.format(what=f"{len(msg)} characters of text")
                 )
+            # The SDK builds a Message only from a JSON *object*. Every other
+            # JSON value -- `[]`, `null`, `123`, `true` -- comes back as the
+            # parsed value itself, so `str` was one of the five non-object types
+            # and the other four escaped as AttributeError at exit 1 (#376).
+            if msg is None or isinstance(msg, (list, bool, int, float)):
+                raise JudgeBackendError(_NOT_A_MESSAGE.format(what=_json_kind(msg)))
             if hasattr(msg, "content") and msg.content is None:
                 raise JudgeBackendError(_NOT_A_MESSAGE.format(what="a message with no content"))
             # `content` is a list of content blocks; concatenate text blocks.
