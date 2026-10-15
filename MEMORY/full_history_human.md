@@ -3617,3 +3617,16 @@ crashed with a raw `AttributeError` at exit code 1, which in CI means "a row
 regressed". These four shapes now get the same clean exit-2 error, and the
 error does not echo the body. A Message-shaped reply whose content our code
 cannot read still shows its traceback, as before.
+
+## 2026-10-15 — A gateway error page is described, not pasted, in the error line (#378)
+
+When something in front of the API (a proxy or gateway) answered with an HTML
+error page, the judge's error line pasted the whole page into `::error::`.
+GitHub ends an annotation at the first line break, so the PR check showed only
+`(InternalServerError: <html>`. It lost the sentence saying whether a re-run
+might help, and never showed the HTTP status. Everything the page contained
+also went into the log, which #352 had already ruled out for 200 responses.
+The line now names the status and the body's size, for example `HTTP 502 with a
+non-JSON body of 85 characters`, and fits on one line. JSON error bodies from
+the API itself still show their message, because that is where the API says
+what was wrong.
