@@ -3993,7 +3993,10 @@ measured: "main: diff-json over demo_baseline vs every-row-0.0 at --threshold-dr
 context_for_next_session:
   - THE_GUARDS_OWN_REASON_flags_nothing_COVERED_A_FINITE_NEIGHBOUR_it_refused_only_the_infinite_one
   - ONE_POINT_ZERO_STILL_ACCEPTED_matching_40s_inclusive_bound_for_drift_it_also_flags_nothing_a_decision_not_a_bug
+followups: []
+---
 
+---
 session: 2026-10-14T07:22:00Z
 duration_min: 15   # approx: plan comment -> PR
 issue: 365
