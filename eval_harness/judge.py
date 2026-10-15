@@ -12,6 +12,7 @@ deterministic stub without an API key. The production backend is
 
 from __future__ import annotations
 
+import email.utils
 import json
 import math
 import os
@@ -136,6 +137,51 @@ def _should_retry_header(exc: BaseException) -> bool | None:
     if value == "false":
         return False
     return None
+
+
+#: Longest server-requested wait honoured, in seconds. The `anthropic>=0.32`
+#: floor's rule (`0 < retry_after <= 60`): a longer or broken header falls
+#: back to the computed backoff instead of stalling a CI job (#372).
+_MAX_RETRY_AFTER = 60.0
+
+
+def retry_after_seconds(
+    exc: BaseException, *, now: Callable[[], float] = time.time
+) -> float | None:
+    """The wait the failed response asked for, in seconds, or None (#372).
+
+    #299 built the client with `max_retries=0`, so the SDK no longer honours
+    `retry-after` and `retry_call` is the only layer that can. This is the SDK
+    floor's `_parse_retry_after_header` + `_calculate_retry_timeout` rule:
+    `retry-after-ms` when it parses as a number, else `retry-after` as seconds
+    (floats allowed), else `retry-after` as an HTTP-date. The wait is returned
+    only when `0 < wait <= 60`; absent, unparseable, non-positive, NaN or
+    longer waits are None, so the caller keeps its own backoff.
+    """
+    headers = getattr(getattr(exc, "response", None), "headers", None)
+    getter = getattr(headers, "get", None)
+    if not callable(getter):
+        return None
+    wait: float | None = None
+    # The SDK's order: a parseable `retry-after-ms` is THE answer, even when
+    # it is out of range -- `retry-after` is read only when it does not parse.
+    try:
+        wait = float(getter("retry-after-ms")) / 1000
+    except (TypeError, ValueError):
+        header = getter("retry-after")
+        try:
+            wait = float(header)
+        except (TypeError, ValueError):
+            if isinstance(header, str):
+                try:
+                    parsed = email.utils.parsedate_tz(header)
+                    if parsed is not None:
+                        wait = float(email.utils.mktime_tz(parsed)) - now()
+                except (TypeError, ValueError, OverflowError):
+                    wait = None
+    if wait is None or not 0 < wait <= _MAX_RETRY_AFTER:
+        return None
+    return wait
 
 
 #: Credential failures. 401 is a missing/invalid key, 403 a key without
@@ -322,6 +368,7 @@ def retry_call(
     max_delay: float,
     sleep: Callable[[float], None] = time.sleep,
     is_transient: Callable[[BaseException], bool] = is_transient_error,
+    retry_after: Callable[[BaseException], float | None] = retry_after_seconds,
 ) -> _T:
     """Call `fn`, retrying transient failures with capped exponential backoff.
 
@@ -330,7 +377,9 @@ def retry_call(
     re-raises the last exception unchanged so the caller keeps the original
     traceback. Backoff before retry `i` (0-indexed) is
     `min(max_delay, base_delay * 2**i)` seconds, injected via `sleep` so tests
-    pin a fake clock instead of waiting. `KeyboardInterrupt`/`SystemExit` are
+    pin a fake clock instead of waiting. A wait the failed response asked for
+    (`retry_after`, by default :func:`retry_after_seconds`) replaces that
+    backoff for the retry it precedes (#372). `KeyboardInterrupt`/`SystemExit` are
     never swallowed — only `Exception` subclasses are candidates for retry.
     """
     for attempt in range(max_attempts):
@@ -339,7 +388,11 @@ def retry_call(
         except Exception as exc:
             if not is_transient(exc) or attempt == max_attempts - 1:
                 raise
-            sleep(min(max_delay, base_delay * (2**attempt)))
+            # The server's own wait wins over the computed backoff (#372): a
+            # 429 with `retry-after: 5` spent all 4 attempts inside 3.5 s of
+            # its window and exited 2, where the SDK client waited and scored.
+            requested = retry_after(exc)
+            sleep(requested if requested is not None else min(max_delay, base_delay * (2**attempt)))
     # Unreachable: the loop either returns or raises on its final attempt.
     raise AssertionError("retry_call exhausted its loop without returning or raising")
 
