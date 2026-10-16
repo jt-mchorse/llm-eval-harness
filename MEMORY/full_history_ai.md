@@ -4218,3 +4218,20 @@ context_for_next_session:
   - SIBLING_rag_render_comparison_SAME_STOP_RULE_refusal_detail_top_score_minus_0_0000
 followups: []
 ---
+
+---
+session: 2026-10-16T14:00Z
+issue: 390
+branch: session/2026-10-16-0918-issue-390
+focus: CAPTURE_DEMO_RELATIVE_OUTPUT_DIR_COPIED_THE_REPORT_THEN_CRASHED_ON_PATH_AS_URI_EXIT_1
+phase: shipped
+delta:
+  files_changed: 2
+  tests_added: 2
+  suite: "green; ruff, format, mypy clean"
+decisions_made: []
+measured: "relative --output-dir: traceback exit 1 after copying on main; exit 0 + absolute file URI after. Revert: relative arm red."
+context_for_next_session:
+  - EVERY_TEST_PASSED_no_open_SO_THE_OPEN_BRANCH_NEVER_RAN_a_flag_every_test_sets_hides_the_other_branch
+followups: []
+---

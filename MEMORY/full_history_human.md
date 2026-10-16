@@ -3677,3 +3677,22 @@ numbers are zero. The helper that widens numbers until they look different
 stopped as soon as the text differed, and "-0.000" and "0.000" are different
 text for the same number. It now keeps widening until the two numbers differ,
 so the line reads "-0.0005 < threshold 0.0000".
+
+## 2026-10-15 — A gateway error page is described, not pasted, in the error line (#378)
+
+When something in front of the API (a proxy or gateway) answered with an HTML
+error page, the judge's error line pasted the whole page into `::error::`.
+GitHub ends an annotation at the first line break, so the PR check showed only
+`(InternalServerError: <html>`. It lost the sentence saying whether a re-run
+might help, and never showed the HTTP status. Everything the page contained
+also went into the log, which #352 had already ruled out for 200 responses.
+The line now names the status and the body's size, for example `HTTP 502 with a
+non-JSON body of 85 characters`, and fits on one line. JSON error bodies from
+the API itself still show their message, because that is where the API says
+what was wrong.
+
+## 2026-10-16 — The demo capture script works with a relative output folder (#390)
+
+`scripts/capture_demo.py --output-dir demo-out` copied the drift report and
+then crashed while opening it in the browser, because a file URL needs an
+absolute path. The path is now made absolute first.
