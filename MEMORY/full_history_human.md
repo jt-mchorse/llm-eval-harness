@@ -3630,3 +3630,13 @@ The line now names the status and the body's size, for example `HTTP 502 with a
 non-JSON body of 85 characters`, and fits on one line. JSON error bodies from
 the API itself still show their message, because that is where the API says
 what was wrong.
+
+## 2026-10-16 — A malformed comments page never causes a second PR comment (#382)
+
+The PR-comment step finds its earlier comment by reading GitHub's list of
+comments. If that response wasn't a list, it was treated as "no comments yet"
+and a second report comment was posted, which is exactly the duplication the
+step is built to avoid. Malformed entries crashed with a traceback and the exit
+code that means "a regression". A malformed page is now a clear error that
+writes nothing. If GitHub's reply to a successful write has an unreadable id,
+the step falls back to the id it already knew instead of crashing.
