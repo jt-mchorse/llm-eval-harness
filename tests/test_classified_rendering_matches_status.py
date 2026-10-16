@@ -182,36 +182,41 @@ def test_an_unambiguous_value_is_byte_identical_to_the_old_rendering(value: floa
     assert render_classified(value, DEFAULT_LENGTH_THRESHOLD) == f"{value:.3f}"
 
 
-def test_the_delegating_neighbour_is_wrong_on_two_inputs() -> None:
+def test_the_delegating_neighbour_is_still_wrong_on_an_unrepresentable_boundary() -> None:
     """`render_comparison(value, boundary)[0]` was the first implementation, and it is wrong.
 
     It is the obvious neighbour — one widening loop in the package instead of
     two — and the argument for it is that two renderings differing at width `w`
-    must straddle the boundary. Both counterexamples below were found by the
-    arms above, not by reading, and each is a distinct hole:
+    must straddle the boundary. Two counterexamples were found by the arms
+    above, not by reading:
 
-    * **Signed zero.** `-0.0001` renders `'-0.000'` and `0.0` renders
-      `'0.000'`. The *strings* differ, so the pairwise loop stops — and
-      `float('-0.000')` is `-0.0`, which is not below `0.0`. String difference
-      does not imply value difference.
+    * **Signed zero.** `-0.0001` rendered `'-0.000'` and `0.0` rendered
+      `'0.000'`; the *strings* differed, so the pairwise loop stopped on two
+      renderings of one value. **Fixed in `render_comparison` itself by #388**,
+      which now stops only when the renderings differ as numbers -- the CLI's
+      `::error::` κ annotation went through the bare helper and printed
+      "-0.000 < threshold 0.000". Pinned below as now correct.
     * **A boundary not representable at `places`.** For
       `value == boundary == 0.1004` the pairwise rule short-circuits on
       equality and returns `'0.100'`, which reads back as `0.1` — strictly
-      below a boundary the value sits exactly on.
-
-    Neither is reachable through `drift.py` today, and that is why this arm
-    exists: a JSD is non-negative and the shipped thresholds are round, so the
-    call sites cannot falsify the delegation. `render_classified` is public in
-    a `py.typed` package, so the rule has to hold where the callers do not go.
+      below a boundary the value sits exactly on. Still wrong, which is why
+      `render_classified` keeps its own loop.
     """
-    for value, boundary in [(-1e-4, 0.0), (0.1004, 0.1004)]:
-        delegated, _ = render_comparison(value, boundary)
-        assert _band(float(delegated), boundary) != _band(value, boundary), (
-            f"render_comparison({value!r}, {boundary!r})[0] == {delegated!r} now "
-            f"classifies correctly. If that is a deliberate change to the pairwise "
-            f"rule, `render_classified` can go back to delegating — but say so."
-        )
-        assert _band(float(render_classified(value, boundary)), boundary) == _band(value, boundary)
+    value, boundary = 0.1004, 0.1004
+    delegated, _ = render_comparison(value, boundary)
+    assert _band(float(delegated), boundary) != _band(value, boundary), (
+        f"render_comparison({value!r}, {boundary!r})[0] == {delegated!r} now "
+        f"classifies correctly. If that is a deliberate change to the pairwise "
+        f"rule, `render_classified` can go back to delegating — but say so."
+    )
+    assert _band(float(render_classified(value, boundary)), boundary) == _band(value, boundary)
+
+
+def test_the_signed_zero_hole_is_closed_in_the_pairwise_helper_too() -> None:
+    # #388: the first counterexample above, now correct in `render_comparison`.
+    delegated, _ = render_comparison(-1e-4, 0.0)
+    assert _band(float(delegated), 0.0) == _band(-1e-4, 0.0)
+    assert _band(float(render_classified(-1e-4, 0.0)), 0.0) == _band(-1e-4, 0.0)
 
 
 def test_the_repr_backstop_classifies_exactly() -> None:
