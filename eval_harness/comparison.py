@@ -157,7 +157,12 @@ def render_comparison(
             # double nest -- so skipping this width cannot skip past a narrower
             # acceptable one.
             continue
-        if value == other or rendered[0] != rendered[1]:
+        # Distinct as NUMBERS, not as strings (#388). `-0.000` and `0.000`
+        # differ as strings and both read back as zero, so a κ of -0.0005
+        # against `--threshold-kappa 0` published "-0.000 < threshold 0.000",
+        # false as written. Rounding is monotone, so renderings of two distinct
+        # values can only fail to separate by reading back equal.
+        if value == other or float(rendered[0]) != float(rendered[1]):
             return rendered
     # Two distinct doubles too small for any fixed-point rendering to separate.
     # `repr` round-trips a float by definition, so it always distinguishes them

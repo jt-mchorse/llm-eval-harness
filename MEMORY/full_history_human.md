@@ -3630,3 +3630,12 @@ The line now names the status and the body's size, for example `HTTP 502 with a
 non-JSON body of 85 characters`, and fits on one line. JSON error bodies from
 the API itself still show their message, because that is where the API says
 what was wrong.
+
+## 2026-10-16 — A failing κ check never prints "-0.000 < 0.000" (#388)
+
+With a calibration threshold of 0 and a κ just below zero, the CI annotation
+said "Cohen's κ -0.000 < threshold 0.000", which reads as false because both
+numbers are zero. The helper that widens numbers until they look different
+stopped as soon as the text differed, and "-0.000" and "0.000" are different
+text for the same number. It now keeps widening until the two numbers differ,
+so the line reads "-0.0005 < threshold 0.0000".
