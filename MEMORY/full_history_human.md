@@ -3592,3 +3592,16 @@ would install someone else's code into the environment that holds the API key.
 The hint now says `pip install -e '.[judge]'` from the checkout, matching the
 README. A new test reads the package name from `pyproject.toml` and fails if any
 tracked file tells the reader to install that name from an index.
+
+## 2026-10-15 — Judge retries wait as long as the server asks (#372)
+
+When the Anthropic API rate-limits a request, its reply says how long to wait
+before trying again (`retry-after`). Since #299 the harness does its own
+retrying, and it ignored that header. It always waited 0.5 s, then 1 s, then
+2 s. So a rate limit that asked for 5 s used up all four attempts in about
+3.5 s, and `run` or `calibrate` gave up with exit code 2. The SDK's own client
+would have waited and succeeded. The harness now follows the same rule the
+SDK used: if the server asks for a wait between 0 and 60 seconds (as seconds,
+milliseconds or a date), it waits that long for that retry. Otherwise it keeps
+its own backoff. Waits longer than 60 s are still capped, which is a separate
+decision.
