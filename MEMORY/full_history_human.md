@@ -3658,3 +3658,13 @@ the two agree exactly. The report generator checks that range, so the best
 possible calibration crashed with a traceback and no report. The correlation
 is now clamped to the valid range, and a perfectly agreeing judge gets a PASS
 report.
+
+## 2026-10-16 — Equal averages show a change of zero on Python 3.11 too (#386)
+
+Comparing two runs stored in the SQLite database could report a tiny nonzero
+change (-0.0000000000000001) between runs whose averages were exactly equal.
+On Python 3.11 the floating-point sum depends on the order the scores are
+added, and the database returned them sorted by example id instead of in the
+order they were scored, so a check from #336 failed for one run. Rows now load
+in the order they were scored, and the check accepts the stored average from
+any supported Python version's way of summing.
