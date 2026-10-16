@@ -3630,3 +3630,12 @@ The line now names the status and the body's size, for example `HTTP 502 with a
 non-JSON body of 85 characters`, and fits on one line. JSON error bodies from
 the API itself still show their message, because that is where the API says
 what was wrong.
+
+## 2026-10-16 — A judge that matches the human labels perfectly no longer crashes calibration (#384)
+
+The correlation between judge scores and human scores is always between -1 and
+1 mathematically, but floating-point rounding can push it a hair past 1 when
+the two agree exactly. The report generator checks that range, so the best
+possible calibration crashed with a traceback and no report. The correlation
+is now clamped to the valid range, and a perfectly agreeing judge gets a PASS
+report.
