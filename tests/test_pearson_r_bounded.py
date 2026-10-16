@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import math
+import random
 import re
 from pathlib import Path
 from unittest.mock import patch
@@ -20,15 +21,12 @@ import pytest
 from eval_harness.calibration import pearson_r
 from eval_harness.cli import main
 
-# Found by a seeded search: the unclamped quotient overshoots on each.
-OVER = [
-    [0.1, 0.5, 0.3, 0.25],
-    [0.08, 0.79, 0.71, 0.32, 0.17, 0.1, 0.63, 0.52],
-    [0.14, 0.43, 0.02, 0.35, 0.32, 0.07, 0.58, 0.23],
-    [0.7, 0.74, 0.19, 0.63],
-    [0.74, 0.2, 0.7, 0.66],
-]
-UNDER = [[0.56, 0.21, 0.23], [0.32, 0.59, 0.38], [0.22, 0.0, 0.63, 0.99]]
+# The first is the issue's measurement. Whether a given set overshoots depends on
+# the interpreter and platform -- float `sum` is a left fold on 3.11 and
+# compensated on 3.12+, and CI's ubuntu and macOS runners disagreed on 3.12 --
+# so the arms below search for the overshooting sets under the arithmetic
+# that is actually running, rather than pinning a list one platform found.
+ISSUE_SET = [0.1, 0.5, 0.3, 0.25]
 
 
 def _unclamped(xs: list[float], ys: list[float]) -> float:
@@ -39,20 +37,38 @@ def _unclamped(xs: list[float], ys: list[float]) -> float:
     return num / den
 
 
-def test_the_fixture_really_overshoots() -> None:
-    # Anti-vacuity: without these the arms below check nothing.
-    assert all(_unclamped(xs, xs) > 1.0 for xs in OVER)
-    assert all(_unclamped(xs, [1 - x for x in xs]) < -1.0 for xs in UNDER)
+def _candidates(seed: int, count: int = 20_000) -> list[list[float]]:
+    rng = random.Random(seed)
+    out = []
+    for _ in range(count):
+        xs = [round(rng.random(), 2) for _ in range(rng.randint(3, 8))]
+        if len(set(xs)) > 1:
+            out.append(xs)
+    return out
 
 
-@pytest.mark.parametrize("xs", OVER, ids=lambda xs: f"n{len(xs)}-{xs[0]}")
-def test_exact_agreement_is_exactly_one(xs: list[float]) -> None:
-    assert pearson_r(xs, xs) == 1.0
+OVER = [xs for xs in _candidates(384) if _unclamped(xs, xs) > 1.0]
+UNDER = [xs for xs in _candidates(385) if _unclamped(xs, [1 - x for x in xs]) < -1.0]
 
 
-@pytest.mark.parametrize("xs", UNDER, ids=lambda xs: f"n{len(xs)}-{xs[0]}")
-def test_exact_anti_agreement_is_exactly_minus_one(xs: list[float]) -> None:
-    assert pearson_r(xs, [1 - x for x in xs]) == -1.0
+def test_the_search_finds_overshooting_sets_on_this_interpreter() -> None:
+    # Anti-vacuity, wherever it runs: the clamp arms below check real overshoots.
+    assert len(OVER) >= 5
+    assert len(UNDER) >= 5
+
+
+def test_exact_agreement_is_exactly_one_wherever_the_quotient_overshoots() -> None:
+    assert [xs for xs in OVER if pearson_r(xs, xs) != 1.0] == []
+
+
+def test_exact_anti_agreement_is_exactly_minus_one_wherever_it_overshoots() -> None:
+    assert [xs for xs in UNDER if pearson_r(xs, [1 - x for x in xs]) != -1.0] == []
+
+
+def test_no_exact_agreement_leaves_the_range() -> None:
+    for xs in _candidates(386, count=5_000):
+        assert -1.0 <= pearson_r(xs, xs) <= 1.0
+        assert -1.0 <= pearson_r(xs, [1 - x for x in xs]) <= 1.0
 
 
 def test_ordinary_values_and_the_zero_variance_case_are_unchanged() -> None:
@@ -92,7 +108,7 @@ def test_the_cli_calibrates_an_exactly_agreeing_judge_at_exit_0(
                 }
             )
             + "\n"
-            for i, s in enumerate(OVER[0])
+            for i, s in enumerate(ISSUE_SET)
         ),
         encoding="utf-8",
     )
