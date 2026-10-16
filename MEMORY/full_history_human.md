@@ -3649,3 +3649,12 @@ step is built to avoid. Malformed entries crashed with a traceback and the exit
 code that means "a regression". A malformed page is now a clear error that
 writes nothing. If GitHub's reply to a successful write has an unreadable id,
 the step falls back to the id it already knew instead of crashing.
+
+## 2026-10-16 — A judge that matches the human labels perfectly no longer crashes calibration (#384)
+
+The correlation between judge scores and human scores is always between -1 and
+1 mathematically, but floating-point rounding can push it a hair past 1 when
+the two agree exactly. The report generator checks that range, so the best
+possible calibration crashed with a traceback and no report. The correlation
+is now clamped to the valid range, and a perfectly agreeing judge gets a PASS
+report.
