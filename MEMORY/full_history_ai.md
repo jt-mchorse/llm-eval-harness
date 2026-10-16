@@ -4114,3 +4114,21 @@ context_for_next_session:
   - DEFERRED_generic_percent_CR_LF_escaping_in_cli_fail_it_would_change_every_local_terminal_line_too
 followups: []
 ---
+
+---
+session: 2026-10-16T09:15Z
+issue: 384
+branch: session/2026-10-16-0813-issue-384
+focus: PEARSON_R_ROUNDED_TO_1_0000000000000002_FOR_AN_EXACTLY_AGREEING_JUDGE_AND_RENDER_REPORTS_RANGE_CHECK_CRASHED_CALIBRATE_AT_EXIT_1
+phase: shipped
+delta:
+  files_changed: 2
+  tests_added: 11
+  suite: "2827 passed; ruff, format, mypy clean"
+decisions_made: []
+measured: "main: pearson_r([.1,.5,.3,.25]x2) = 1.0000000000000002; calibrate exit 1 traceback, no report. After: 1.0, PASS, exit 0. Revert 9 of 11 red."
+context_for_next_session:
+  - A_RANGE_CHECK_DOWNSTREAM_OF_FLOAT_ARITHMETIC_REFUSES_THE_BOUNDARY_ITSELF_kappa_went_exact_283_r_needs_a_clamp
+  - NOT_FIXED_diff_sqlite_path_mean_delta_nonzero_on_3_11_rows_read_by_example_id_not_scoring_order_336_sibling
+followups: []
+---
