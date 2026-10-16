@@ -258,7 +258,10 @@ def main(argv: list[str] | None = None) -> int:
     print(out2_stable, end="")
     print(f"[capture] artifact copied to stable path: {stable_html}")
     if not args.no_open:
-        webbrowser.open(stable_html.as_uri())
+        # Resolved first (#390): `Path.as_uri()` refuses a relative path, so a
+        # relative `--output-dir` copied the report and then raised
+        # "relative paths can't be expressed as file URIs" at exit 1.
+        webbrowser.open(stable_html.resolve().as_uri())
     _pause(args.pause_seconds)
 
     # STAGE 3 — sticky-comment cheat-sheet (operator-action, not scriptable).
