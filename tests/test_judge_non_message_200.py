@@ -2,7 +2,8 @@
 
 The SDK returns the raw text as a `str` when a response is not JSON (a gateway
 page), raises `JSONDecodeError` on malformed JSON, and builds a Message with
-`content=None` from JSON without it (`{}`, an error envelope sent with 200).
+`content=None` from JSON without it (`{}`, an error envelope sent with 200), and
+hands back any non-object JSON (`[]`, `null`, `123`, `true`) unchanged (#376).
 Each escaped `complete` as AttributeError / JSONDecodeError / TypeError, and
 `run` exited 1, its "a row regressed" code. #303 fixed the same class in the
 `comment` command. A real Message our own loop cannot read keeps its traceback
@@ -56,6 +57,21 @@ def test_a_non_message_200_is_a_backend_error_and_not_retried(value: object) -> 
     assert messages.calls == 1
 
 
+@pytest.mark.parametrize(
+    "value",
+    [[], None, 123, 1.5, True, False, [{"type": "text", "text": "SCORE: 1"}]],
+    ids=["empty-array", "null", "int", "float", "true", "false", "array-of-blocks"],
+)
+def test_a_non_object_json_200_is_a_backend_error_and_not_retried(value: object) -> None:
+    """The SDK builds a Message only from a JSON object; any other value comes back as-is (#376)."""
+    messages = _Returning(value)
+    with pytest.raises(JudgeBackendError) as info:
+        _backend(messages).complete("sys", "user")
+    assert "not a Message" in str(info.value)
+    assert "SCORE" not in str(info.value)  # the body is never echoed
+    assert messages.calls == 1
+
+
 def test_a_real_message_is_still_read() -> None:
     block = SimpleNamespace(text="SCORE: 0.9")
     assert _backend(_Returning(SimpleNamespace(content=[block]))).complete("s", "u") == "SCORE: 0.9"
@@ -87,6 +103,11 @@ _SHAPES = {
         None,
         {"type": "error", "error": {"type": "overloaded_error", "message": "x"}},
     ),
+    # JSON that is not an object: the SDK returns the parsed value unchanged (#376).
+    "json-array": (200, {"content-type": "application/json"}, "[]", None),
+    "json-null": (200, {"content-type": "application/json"}, "null", None),
+    "json-number": (200, {"content-type": "application/json"}, "123", None),
+    "json-true": (200, {"content-type": "application/json"}, "true", None),
 }
 
 

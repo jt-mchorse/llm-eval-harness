@@ -4073,3 +4073,24 @@ context_for_next_session:
   - ANTHROPIC_0_32_NEEDS_httpx_lt_0_28_TO_CONSTRUCT_A_CLIENT_proxies_kwarg_verify_the_floor_in_a_pinned_venv
 followups: []
 ---
+
+---
+session: 2026-10-15T08:08:00Z
+duration_min: 15   # approx: plan comment -> PR
+issue: 376
+branch: session/2026-10-15-0808-issue-376
+focus: A_200_WHOSE_JSON_BODY_IS_NOT_AN_OBJECT_ARRAY_NULL_NUMBER_BOOL_ESCAPED_AS_ATTRIBUTEERROR_AT_EXIT_1_352_CHECKED_STR_THE_ONE_NON_OBJECT_TYPE_IT_LISTED
+phase: shipped
+delta:
+  files_changed: 2
+  tests_added: 11
+  suite: "2759 passed, 23 skipped (CI-shaped venv); 2782 passed with anthropic 1.14.0 installed; ruff + format + mypy clean"
+decisions_made: []
+measured: "main: eval-harness run against a loopback server answering 200 '[]' / 'null' -> AttributeError traceback rc 1; '{}' -> ::error:: rc 2 (the #352 control). Through complete() with the real SDK: [] / null / 123 / true all AttributeError. Branch: JudgeBackendError, one call, body never echoed. Revert 11 of 11 red (7 stub arms run in CI, 4 real-SDK arms importorskip)."
+context_for_next_session:
+  - THE_SDK_construct_type_BUILDS_A_MESSAGE_ONLY_FROM_A_DICT_EVERY_OTHER_JSON_VALUE_COMES_BACK_UNCHANGED_so_the_not_a_message_population_is_the_five_non_object_json_types
+  - UNCHANGED_BY_DESIGN_a_message_shaped_object_whose_content_is_not_iterable_keeps_its_traceback_test_a_broken_content_block_loop_keeps_its_traceback
+  - SWEPT_CLEAN_retry_classifier_vs_sdk_1_14_exception_tree_and_should_retry_only_the_cause_chain_walk_and_RetryableError_differ_and_both_need_middleware
+  - SWEPT_CLEAN_pytest_plugin_under_xdist_n2_eval_context_section_survives_report_serialisation
+followups: []
+---
