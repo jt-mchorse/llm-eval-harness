@@ -4132,3 +4132,20 @@ context_for_next_session:
   - NOT_FIXED_diff_sqlite_path_mean_delta_nonzero_on_3_11_rows_read_by_example_id_not_scoring_order_336_sibling
 followups: []
 ---
+
+---
+session: 2026-10-16T12:00Z
+issue: 384
+branch: session/2026-10-16-0813-issue-384
+focus: FOLLOW_UP_THE_FIRST_PUSH_PINNED_ONE_PLATFORMS_OVERSHOOTING_SETS_AND_ITS_ANTI_VACUITY_ARM_WENT_RED_ON_CI_UBUNTU_3_11_3_12_AND_MACOS_3_11
+phase: shipped
+delta:
+  files_changed: 1
+  tests_added: 0
+  suite: "pearson file 11 -> 6 tests; passes on 3.14 and 3.11"
+decisions_made: []
+measured: "seeded search finds 23 overshooting exact-agreement sets on 3.14, 28 on 3.11; revert 4 of 6 red on both."
+context_for_next_session:
+  - A_FLOAT_ROUNDING_FIXTURE_FOUND_ON_ONE_PLATFORM_IS_NOT_A_FIXTURE_search_under_the_running_arithmetic_and_assert_the_search_found_some
+followups: []
+---
