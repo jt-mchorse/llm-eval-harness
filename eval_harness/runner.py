@@ -926,9 +926,26 @@ def _decimal_mean(run: StoredRun) -> Fraction:
     says, and it is read as its own decimal.
     """
     scores = [score for score, _ in run.rows.values()]
-    if scores and sum(scores) / len(scores) == run.mean_score:
+    if scores and run.mean_score in _float_means(scores):
         return sum((_decimal(score) for score in scores), Fraction(0)) / len(scores)
     return _decimal(run.mean_score)
+
+
+def _float_means(scores: list[float]) -> set[float]:
+    """Every float mean a supported interpreter's runner can have recorded (#386).
+
+    `run_suite` records `sum(scores) / n`, and float `sum` is not one function
+    across the supported versions: 3.11's is a plain left fold, whose result
+    depends on order, and 3.12+ compensate, rounding as `math.fsum` does in
+    practice. A run is persistent and CI spans both, so a baseline written on
+    one interpreter is read on the other; and the rows must be in scoring order
+    for the left fold to reproduce it (`read_run` reads them `ORDER BY rowid`).
+    """
+    n = len(scores)
+    left_fold = 0.0
+    for score in scores:
+        left_fold += score
+    return {sum(scores) / n, left_fold / n, math.fsum(scores) / n}
 
 
 def _status_for(delta: float | Fraction, threshold_drop: float | Fraction) -> tuple[str, bool]:

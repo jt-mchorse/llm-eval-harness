@@ -223,8 +223,13 @@ def read_run(conn: sqlite3.Connection, run_id: str) -> StoredRun:
     row = cur.fetchone()
     if row is None:
         raise KeyError(f"no run with id {run_id!r}")
+    # In insertion order, which is the order the runner scored and summed the
+    # rows (#386). Without an ORDER BY, SQLite answered through
+    # `idx_rows_run_example`, i.e. sorted by example_id (q1, q10, q2), and on
+    # 3.11 -- whose float `sum()` depends on order -- `_decimal_mean` could no
+    # longer reproduce `mean_score` from the rows.
     rows_cur = conn.execute(
-        "SELECT example_id, score, reasoning FROM rows WHERE run_id = ?;",
+        "SELECT example_id, score, reasoning FROM rows WHERE run_id = ? ORDER BY rowid;",
         (run_id,),
     )
     rows_by_id = {ex_id: (score, reasoning) for ex_id, score, reasoning in rows_cur}
