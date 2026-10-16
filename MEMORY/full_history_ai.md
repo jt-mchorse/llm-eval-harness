@@ -4114,3 +4114,21 @@ context_for_next_session:
   - DEFERRED_generic_percent_CR_LF_escaping_in_cli_fail_it_would_change_every_local_terminal_line_too
 followups: []
 ---
+
+---
+session: 2026-10-16T10:00Z
+issue: 386
+branch: session/2026-10-16-0823-issue-386
+focus: 336S_REPRODUCE_THE_MEAN_CHECK_FAILED_ON_3_11_ROWS_LOADED_BY_EXAMPLE_ID_INDEX_NOT_SCORING_ORDER_AND_3_12_SUM_COMPENSATES
+phase: shipped
+delta:
+  files_changed: 3
+  tests_added: 7
+  suite: "2823 passed on 3.14; 2795 + 28 skipped on 3.11; ruff, format, mypy clean"
+decisions_made: []
+measured: "3.11.14 diff on q1/q2/q10 equal-mean runs: -0.0000000000000001 before, +0.000 after; same DB read on 3.14 same. Revert 4/7 red on 3.11, 2/7 on 3.14."
+context_for_next_session:
+  - SELECT_WITHOUT_ORDER_BY_RETURNS_INDEX_ORDER_when_an_index_covers_the_where_and_float_sum_on_3_11_is_order_dependent
+  - A_PERSISTENT_ARTIFACT_OUTLIVES_ITS_INTERPRETER_a_3_11_written_baseline_is_read_on_3_12
+followups: []
+---
