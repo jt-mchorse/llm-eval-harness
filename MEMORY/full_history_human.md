@@ -3630,3 +3630,9 @@ The line now names the status and the body's size, for example `HTTP 502 with a
 non-JSON body of 85 characters`, and fits on one line. JSON error bodies from
 the API itself still show their message, because that is where the API says
 what was wrong.
+
+## 2026-10-16 — The demo capture script works with a relative output folder (#390)
+
+`scripts/capture_demo.py --output-dir demo-out` copied the drift report and
+then crashed while opening it in the browser, because a file URL needs an
+absolute path. The path is now made absolute first.
