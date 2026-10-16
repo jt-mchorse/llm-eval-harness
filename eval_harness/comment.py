@@ -321,16 +321,50 @@ def find_sticky_comment(
     for page in range(1, 11):
         url = f"{api_base}/repos/{repo}/issues/{pr_number}/comments?per_page=100&page={page}"
         result = _do_request("GET", url, token)
-        items = result if isinstance(result, list) else []
-        if not items:
+        # A 200 whose page is not the documented shape is refused, not read as
+        # "no comments" (#382): `upsert_sticky_comment` then POSTs, and a second
+        # sticky comment is exactly what the marker exists to prevent. A
+        # non-object item or a non-string body used to escape as an
+        # AttributeError/TypeError at exit 1 -- the code `eval.yml` reads as a
+        # regression -- rather than #303's RuntimeError at exit 2.
+        if not isinstance(result, list):
+            raise RuntimeError(
+                f"GitHub API GET {url} returned {type(result).__name__}, not a list of comments"
+            )
+        if not result:
             return None
-        for item in items:
-            body = item.get("body") or ""
+        for item in result:
+            if not isinstance(item, dict):
+                raise RuntimeError(
+                    f"GitHub API GET {url} returned a comment that is a "
+                    f"{type(item).__name__}, not an object"
+                )
+            body = item.get("body")
+            if body is None:
+                body = ""
+            if not isinstance(body, str):
+                raise RuntimeError(
+                    f"GitHub API GET {url} returned a comment body that is a "
+                    f"{type(body).__name__}, not a string"
+                )
             if marker in body:
-                return int(item["id"])
-        if len(items) < 100:
+                comment_id = _comment_id(item.get("id"))
+                if comment_id is None:
+                    raise RuntimeError(
+                        f"GitHub API GET {url} returned the sticky comment with id "
+                        f"{item.get('id')!r}, not an integer"
+                    )
+                return comment_id
+        if len(result) < 100:
             return None
     return None
+
+
+def _comment_id(value: object) -> int | None:
+    """*value* as a comment id, or ``None`` if it is not a positive integer (#382)."""
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        return None
+    return value
 
 
 def upsert_sticky_comment(
@@ -357,10 +391,22 @@ def upsert_sticky_comment(
     if existing_id is not None:
         url = f"{api_base}/repos/{repo}/issues/comments/{existing_id}"
         result = _do_request("PATCH", url, token, body={"body": body})
-        return int((result if isinstance(result, dict) else {}).get("id", existing_id))
+        return _written_id(result, existing_id)
     url = f"{api_base}/repos/{repo}/issues/{pr_number}/comments"
     result = _do_request("POST", url, token, body={"body": body})
-    return int((result if isinstance(result, dict) else {}).get("id", 0))
+    return _written_id(result, 0)
+
+
+def _written_id(result: object, fallback: int) -> int:
+    """The id a PATCH/POST response reports, or *fallback* if it reports none.
+
+    The comment has been written by the time this runs and the id is only
+    printed, so an unreadable id (``null``, a string) falls back the way a
+    missing one always did, instead of raising ``int(None)``'s TypeError at
+    exit 1 after a successful write (#382).
+    """
+    reported = _comment_id(result.get("id")) if isinstance(result, dict) else None
+    return fallback if reported is None else reported
 
 
 def _resolve_token(token: str | None) -> str:
