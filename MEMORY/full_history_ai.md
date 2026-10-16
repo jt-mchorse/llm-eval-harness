@@ -4112,5 +4112,19 @@ context_for_next_session:
   - SDK_make_status_error_from_response_SETS_err_msg_TO_THE_RAW_BODY_AND_exc_body_TO_THE_SAME_STR_WHEN_THE_BODY_IS_NOT_JSON_a_dict_body_means_parsed_JSON
   - A_GITHUB_WORKFLOW_COMMAND_ENDS_AT_ITS_LINE_any_multi_line_text_in_an_error_line_loses_everything_after_the_first_newline_from_the_annotation
   - DEFERRED_generic_percent_CR_LF_escaping_in_cli_fail_it_would_change_every_local_terminal_line_too
+session: 2026-10-16T07:30Z
+issue: 380
+branch: session/2026-10-16-0725-issue-380
+focus: COMMENT_DO_REQUEST_ECHOED_A_NON_2XX_BODY_WHOLE_INTO_THE_ERROR_LINE_378S_DEFECT_ON_THE_GITHUB_BACKEND_379_LISTED_ONLY_JUDGE_PY
+phase: shipped
+delta:
+  files_changed: 2
+  tests_added: 6
+  suite: "2813 passed; ruff, format, mypy clean"
+decisions_made: []
+measured: "loopback 502 text/html -> before: 7-line ::error:: carrying the page incl. token=abc123, rc 2; after: one line '-> 502: HTTP 502 with a non-JSON body of 85 characters', rc 2. Revert 5 of 6 red; the green one is the escaped-newline control."
+context_for_next_session:
+  - MY_FIRST_DRAFT_CLAIMED_A_NEWLINE_INSIDE_A_JSON_STRING_COULD_SPLIT_THE_LINE_FALSE_json_text_never_holds_a_raw_newline_in_a_string_THE_REAL_SPLIT_IS_PRETTY_PRINTED_WHITESPACE_the_revert_probe_caught_it
+  - SIBLING_NOT_FIXED_find_sticky_comment_reads_item_get_and_int_item_id_unchecked_a_200_list_of_non_objects_exits_1
 followups: []
 ---

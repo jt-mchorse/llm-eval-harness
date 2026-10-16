@@ -3630,3 +3630,12 @@ The line now names the status and the body's size, for example `HTTP 502 with a
 non-JSON body of 85 characters`, and fits on one line. JSON error bodies from
 the API itself still show their message, because that is where the API says
 what was wrong.
+## 2026-10-16 — The PR-comment step describes a gateway error page instead of pasting it (#380)
+
+Yesterday's #378 stopped the judge from pasting a proxy's HTML error page into
+the job's error line. The PR-comment step talks to GitHub through its own small
+HTTP helper and had the same problem: a 502 page from a proxy went into the log
+line by line, and the PR check annotation showed only `<html>`. Error bodies
+that are JSON, which is how GitHub itself reports a missing PR or a bad token,
+still show their message, now on one line. Anything else is described by its
+status and size.
