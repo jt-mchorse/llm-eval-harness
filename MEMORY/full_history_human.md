@@ -3639,3 +3639,13 @@ line by line, and the PR check annotation showed only `<html>`. Error bodies
 that are JSON, which is how GitHub itself reports a missing PR or a bad token,
 still show their message, now on one line. Anything else is described by its
 status and size.
+
+## 2026-10-16 — A malformed comments page never causes a second PR comment (#382)
+
+The PR-comment step finds its earlier comment by reading GitHub's list of
+comments. If that response wasn't a list, it was treated as "no comments yet"
+and a second report comment was posted, which is exactly the duplication the
+step is built to avoid. Malformed entries crashed with a traceback and the exit
+code that means "a regression". A malformed page is now a clear error that
+writes nothing. If GitHub's reply to a successful write has an unreadable id,
+the step falls back to the id it already knew instead of crashing.
