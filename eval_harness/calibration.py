@@ -545,7 +545,14 @@ def pearson_r(xs: list[float], ys: list[float]) -> float:
     den = math.sqrt(var_x * var_y)
     if den == 0:
         return 0.0
-    return num / den
+    # Bounded to [-1, 1] (#384). Mathematically it is, but the float quotient
+    # can land a few ULP outside: a judge agreeing EXACTLY with the human scores
+    # [0.1, 0.5, 0.3, 0.25] gave 1.0000000000000002, which `render_report`'s
+    # range check (#204) refused -- the best possible calibration crashed
+    # `calibrate` at exit 1, after every judge call was paid for. `cohens_kappa`
+    # went exact (`Fraction`, #283); this needs a `sqrt`, so it is clamped, as
+    # numpy's `corrcoef` clips.
+    return max(-1.0, min(1.0, num / den))
 
 
 # ----------------------------------------------------------------------
