@@ -4200,3 +4200,21 @@ context_for_next_session:
   - A_PERSISTENT_ARTIFACT_OUTLIVES_ITS_INTERPRETER_a_3_11_written_baseline_is_read_on_3_12
 followups: []
 ---
+
+---
+session: 2026-10-16T12:20Z
+issue: 388
+branch: session/2026-10-16-0849-issue-388
+focus: RENDER_COMPARISON_STOPPED_WHEN_STRINGS_DIFFERED_MINUS_0_000_VS_0_000_KAPPA_ANNOTATION_FALSE_AS_WRITTEN_AT_THRESHOLD_ZERO
+phase: shipped
+delta:
+  files_changed: 3
+  tests_added: 8
+  suite: "2824 passed on 3.14; 2796 + 28 skipped on 3.11; ruff, format, mypy clean"
+decisions_made: []
+measured: "calibrate --threshold-kappa 0, kappa -0.00048: '-0.000 < threshold 0.000' before, '-0.0005 < threshold 0.0000' after. Revert 5 of 7 red."
+context_for_next_session:
+  - D_026_SCOPED_SIGNED_ZERO_AS_UNREACHABLE_BECAUSE_JSD_IS_NON_NEGATIVE_kappa_IS_NOT_a_scope_written_for_one_caller_misses_the_next
+  - SIBLING_rag_render_comparison_SAME_STOP_RULE_refusal_detail_top_score_minus_0_0000
+followups: []
+---

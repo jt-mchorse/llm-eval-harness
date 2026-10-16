@@ -3668,3 +3668,12 @@ added, and the database returned them sorted by example id instead of in the
 order they were scored, so a check from #336 failed for one run. Rows now load
 in the order they were scored, and the check accepts the stored average from
 any supported Python version's way of summing.
+
+## 2026-10-16 — A failing κ check never prints "-0.000 < 0.000" (#388)
+
+With a calibration threshold of 0 and a κ just below zero, the CI annotation
+said "Cohen's κ -0.000 < threshold 0.000", which reads as false because both
+numbers are zero. The helper that widens numbers until they look different
+stopped as soon as the text differed, and "-0.000" and "0.000" are different
+text for the same number. It now keeps widening until the two numbers differ,
+so the line reads "-0.0005 < threshold 0.0000".
