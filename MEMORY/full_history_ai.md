@@ -4094,3 +4094,23 @@ context_for_next_session:
   - SWEPT_CLEAN_pytest_plugin_under_xdist_n2_eval_context_section_survives_report_serialisation
 followups: []
 ---
+
+---
+session: 2026-10-15T08:15:00Z
+duration_min: 15   # approx: plan comment -> PR
+issue: 378
+branch: session/2026-10-15-0815-issue-378
+focus: A_NON_2XX_WITH_A_NON_JSON_BODY_WAS_ECHOED_WHOLE_INTO_THE_ERROR_ANNOTATION_THE_SDK_MESSAGE_IS_THE_RAW_BODY_352S_NEVER_ECHO_RULE_COVERED_ONLY_THE_200
+phase: shipped
+delta:
+  files_changed: 2
+  tests_added: 8
+  suite: "2758 passed, 22 skipped (CI-shaped venv); 2780 passed with anthropic 1.14.0; ruff + format + mypy clean"
+decisions_made: []
+measured: "main: eval-harness run against a loopback 502 text/html page -> a 7-line ::error:: carrying the whole page (token=abc123), annotation cut at '(InternalServerError: <html>', status never named. Branch: '(InternalServerError: HTTP 502 with a non-JSON body of 85 characters)' on one line, rc 2. Revert 7 of 8 red; the JSON-error-body control stays green by design."
+context_for_next_session:
+  - SDK_make_status_error_from_response_SETS_err_msg_TO_THE_RAW_BODY_AND_exc_body_TO_THE_SAME_STR_WHEN_THE_BODY_IS_NOT_JSON_a_dict_body_means_parsed_JSON
+  - A_GITHUB_WORKFLOW_COMMAND_ENDS_AT_ITS_LINE_any_multi_line_text_in_an_error_line_loses_everything_after_the_first_newline_from_the_annotation
+  - DEFERRED_generic_percent_CR_LF_escaping_in_cli_fail_it_would_change_every_local_terminal_line_too
+followups: []
+---
