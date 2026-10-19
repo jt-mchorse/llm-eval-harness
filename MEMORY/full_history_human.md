@@ -3696,3 +3696,11 @@ what was wrong.
 `scripts/capture_demo.py --output-dir demo-out` copied the drift report and
 then crashed while opening it in the browser, because a file URL needs an
 absolute path. The path is now made absolute first.
+
+## 2026-10-19 — A huge `list --limit` is a usage error, not a crash (#392)
+
+`eval-harness list --limit` accepted any positive whole number, but the run
+database can only store numbers up to 9,223,372,036,854,775,807. A bigger limit
+crashed with a traceback and the exit code that means "a regression" when a
+database existed, and quietly printed "no runs" when one didn't. It is now
+refused with a clear error and the usage-error exit code either way.
