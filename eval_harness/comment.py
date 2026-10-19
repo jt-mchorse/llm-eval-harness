@@ -17,8 +17,10 @@ deps; CI passes `GITHUB_TOKEN` (the workflow's automatic token) via env.
 
 from __future__ import annotations
 
+import http.client
 import json
 import os
+import re
 from typing import Any
 from urllib import error, request
 
@@ -238,6 +240,25 @@ def _row_to_md(r: RowDelta, threshold_drop: float) -> str:
 
 _GITHUB_API = "https://api.github.com"
 
+#: GitHub's ``owner/name`` grammar (#394): an owner is up to 39 ASCII
+#: alphanumerics and hyphens, not starting with a hyphen; a name is up to 100
+#: of ``[A-Za-z0-9._-]``. ``fullmatch``, so a trailing newline is refused too.
+_REPO_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za-z0-9._-]{1,100}")
+
+
+def check_repo(repo: str) -> None:
+    """Raise ``ValueError`` unless ``repo`` is a GitHub ``owner/name``.
+
+    A space, a non-ASCII character or a newline in ``--repo`` used to reach
+    ``http.client``, which raised ``InvalidURL``/``UnicodeEncodeError`` while
+    building the request line -- a traceback at exit 1, the code ``eval.yml``
+    reads as a regression (#394). The CLI calls this before it reads the
+    delta JSON so a malformed ``--repo`` is a usage error at exit 2.
+    """
+    name = repo.partition("/")[2]
+    if not _REPO_RE.fullmatch(repo) or name in (".", ".."):
+        raise ValueError(f'--repo must be a GitHub "owner/name"; got {repo!r}')
+
 
 def _auth_headers(token: str) -> dict[str, str]:
     return {
@@ -271,10 +292,10 @@ def _do_request(
     method: str, url: str, token: str, body: dict[str, Any] | None = None
 ) -> dict[str, Any] | list[Any]:
     data: bytes | None = json.dumps(body).encode("utf-8") if body is not None else None
-    req = request.Request(url, data=data, method=method, headers=_auth_headers(token))
-    if data is not None:
-        req.add_header("Content-Type", "application/json; charset=utf-8")
     try:
+        req = request.Request(url, data=data, method=method, headers=_auth_headers(token))
+        if data is not None:
+            req.add_header("Content-Type", "application/json; charset=utf-8")
         with request.urlopen(req, timeout=30) as resp:
             raw = resp.read().decode("utf-8")
             return loads_json(raw) if raw else {}
@@ -299,6 +320,14 @@ def _do_request(
         raise RuntimeError(
             f"GitHub API {method} {url} returned a body that is not JSON: {e}"
         ) from e
+    # After the body arm (UnicodeDecodeError and JSONDecodeError are
+    # ValueErrors too): a URL `http.client` will not put on a request line --
+    # `InvalidURL` (an HTTPException, not a ValueError) for a space or control
+    # character, `UnicodeEncodeError` for non-ASCII, urllib's "unknown url
+    # type" -- raised before anything was sent and escaped as a traceback at
+    # exit 1 (#394). Same RuntimeError as #303.
+    except (http.client.InvalidURL, ValueError) as e:
+        raise RuntimeError(f"GitHub API {method} {url!r} is not a valid request: {e}") from e
 
 
 def find_sticky_comment(

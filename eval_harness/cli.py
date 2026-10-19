@@ -35,6 +35,7 @@ from eval_harness.calibration import (
 from eval_harness.comment import (
     COMMENT_BODY_BUDGET,
     STICKY_MARKER,
+    check_repo,
     render_delta_markdown,
     upsert_sticky_comment,
 )
@@ -758,6 +759,13 @@ def _run_diff_json(args: argparse.Namespace) -> int:
 
 
 def _run_comment(args: argparse.Namespace) -> int:
+    # Before the delta JSON is read: a malformed `--repo` is a usage error,
+    # not the InvalidURL/UnicodeEncodeError traceback at exit 1 that
+    # http.client raised while building the request line (#394).
+    try:
+        check_repo(args.repo)
+    except ValueError as e:
+        return _fail(str(e))
     # The delta JSON written by `diff-json --format json` is the
     # DeltaReport.to_json() shape; DeltaReport.from_json (#68) is the
     # inverse — same defaulting semantics the prior SimpleNamespace

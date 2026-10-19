@@ -3704,3 +3704,13 @@ database can only store numbers up to 9,223,372,036,854,775,807. A bigger limit
 crashed with a traceback and the exit code that means "a regression" when a
 database existed, and quietly printed "no runs" when one didn't. It is now
 refused with a clear error and the usage-error exit code either way.
+
+## 2026-10-19 — A mistyped `comment --repo` is a usage error, not a "regression" (#394)
+
+If `--repo` had a space, an accented letter or a line break in it, the
+PR-comment step crashed with a traceback while building the web request. It
+exited with the code that CI reads as "a regression was found". It now checks
+that `--repo` looks like a GitHub `owner/name` before doing anything else, and
+it refuses a bad value with a clear error and the usage-error exit code. The
+lower-level request helper also turns an address it can't send into the same
+kind of error, for code that calls it directly.
