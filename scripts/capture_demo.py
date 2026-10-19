@@ -67,6 +67,12 @@ def _banner(stage: int, title: str) -> str:
     return f"\n{line}\n  STAGE {stage}  {title}\n{line}\n"
 
 
+#: Ceiling on ``--pause-seconds`` (#396). A cue pause for a screen recording;
+#: an hour is far past any real use and far inside ``time.sleep``'s range,
+#: which CPython holds as int64 nanoseconds (~9.2e9 s) on every platform.
+MAX_PAUSE_SECONDS = 3600.0
+
+
 def _validate_pause_seconds(seconds: float) -> str | None:
     """Return an error message for an unusable ``--pause-seconds``, else ``None``.
 
@@ -95,6 +101,10 @@ def _validate_pause_seconds(seconds: float) -> str | None:
         return f"--pause-seconds must be finite; got {seconds!r}"
     if seconds < 0:
         return f"--pause-seconds must be >= 0; got {seconds!r}"
+    # Finite is not the property `time.sleep` needs: `1e10` passed the check
+    # above, ran STAGE 1, then raised the same OverflowError `inf` did (#396).
+    if seconds > MAX_PAUSE_SECONDS:
+        return f"--pause-seconds must be <= {MAX_PAUSE_SECONDS:g}; got {seconds!r}"
     return None
 
 
@@ -169,7 +179,7 @@ def main(argv: list[str] | None = None) -> int:
         default=2.0,
         help=(
             "Pause between stages so the screen recorder has cue points to cut on. "
-            "Default 2.0; set to 0 for CI and tests."
+            "Default 2.0; set to 0 for CI and tests. At most 3600."
         ),
     )
     parser.add_argument(
