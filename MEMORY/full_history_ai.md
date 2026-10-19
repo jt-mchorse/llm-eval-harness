@@ -4147,3 +4147,38 @@ context_for_next_session:
   - NOT_FIXED_judge_content_scalar_5_exits_1_the_376_memory_entry_scoped_a_Message_shaped_reply_whose_content_our_code_cannot_read_OUT_deliberately_left_alone
 followups: []
 ---
+
+---
+session: 2026-10-16T09:15Z
+issue: 384
+branch: session/2026-10-16-0813-issue-384
+focus: PEARSON_R_ROUNDED_TO_1_0000000000000002_FOR_AN_EXACTLY_AGREEING_JUDGE_AND_RENDER_REPORTS_RANGE_CHECK_CRASHED_CALIBRATE_AT_EXIT_1
+phase: shipped
+delta:
+  files_changed: 2
+  tests_added: 11
+  suite: "2827 passed; ruff, format, mypy clean"
+decisions_made: []
+measured: "main: pearson_r([.1,.5,.3,.25]x2) = 1.0000000000000002; calibrate exit 1 traceback, no report. After: 1.0, PASS, exit 0. Revert 9 of 11 red."
+context_for_next_session:
+  - A_RANGE_CHECK_DOWNSTREAM_OF_FLOAT_ARITHMETIC_REFUSES_THE_BOUNDARY_ITSELF_kappa_went_exact_283_r_needs_a_clamp
+  - NOT_FIXED_diff_sqlite_path_mean_delta_nonzero_on_3_11_rows_read_by_example_id_not_scoring_order_336_sibling
+followups: []
+---
+
+---
+session: 2026-10-16T12:00Z
+issue: 384
+branch: session/2026-10-16-0813-issue-384
+focus: FOLLOW_UP_THE_FIRST_PUSH_PINNED_ONE_PLATFORMS_OVERSHOOTING_SETS_AND_ITS_ANTI_VACUITY_ARM_WENT_RED_ON_CI_UBUNTU_3_11_3_12_AND_MACOS_3_11
+phase: shipped
+delta:
+  files_changed: 1
+  tests_added: 0
+  suite: "pearson file 11 -> 6 tests; passes on 3.14 and 3.11"
+decisions_made: []
+measured: "seeded search finds 23 overshooting exact-agreement sets on 3.14, 28 on 3.11; revert 4 of 6 red on both."
+context_for_next_session:
+  - A_FLOAT_ROUNDING_FIXTURE_FOUND_ON_ONE_PLATFORM_IS_NOT_A_FIXTURE_search_under_the_running_arithmetic_and_assert_the_search_found_some
+followups: []
+---
