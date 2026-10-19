@@ -42,7 +42,7 @@ from eval_harness.comparison import (
     render_signed_classified,
 )
 from eval_harness.dataset import Dataset, Example, filter_examples_by_tags, load_jsonl
-from eval_harness.io_utils import copy_json_value, loads_json
+from eval_harness.io_utils import copy_json_value, find_unencodable, loads_json
 from eval_harness.judge import FAITHFULNESS_RUBRIC, Judge, JudgeParseError, JudgeScore
 from eval_harness.runs import (
     StoredRun,
@@ -842,6 +842,18 @@ def run_suite(
             # error named the symptom and not the site (#218). Re-raised as the
             # same class so `cli`'s exit-2 arm is unaffected.
             raise JudgeParseError(f"example {ex.id!r}: {e}") from e
+        # The reasoning is stored in the run record, and a lone surrogate (a
+        # gateway's `\ud83d` escape, a custom backend's surrogateescape byte)
+        # has no UTF-8 encoding. SQLite refused it in `write_run` -- after
+        # every row was paid for, as a UnicodeEncodeError at exit 1, the "a row
+        # regressed" code (#398, the judge-output half of #344). Refused at the
+        # row, as the parse error it is, so `cli`'s exit-2 arm reports it.
+        bad = find_unencodable(verdict.reasoning) if isinstance(verdict.reasoning, str) else None
+        if bad is not None:
+            raise JudgeParseError(
+                f"example {ex.id!r}: judge reasoning contains {ascii(bad[0])} at index "
+                f"{bad[1]}, which has no UTF-8 encoding; the run record cannot store it"
+            )
         scored.append(RowScore(example_id=ex.id, score=verdict.score, reasoning=verdict.reasoning))
 
     mean = sum(r.score for r in scored) / len(scored)
