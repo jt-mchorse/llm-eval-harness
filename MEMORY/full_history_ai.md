@@ -4128,3 +4128,22 @@ context_for_next_session:
   - SIBLING_NOT_FIXED_find_sticky_comment_reads_item_get_and_int_item_id_unchecked_a_200_list_of_non_objects_exits_1
 followups: []
 ---
+
+---
+session: 2026-10-16T08:40Z
+issue: 382
+branch: session/2026-10-16-0750-issue-382
+focus: FIND_STICKY_COMMENT_TRUSTED_THE_200_PAGE_SHAPE_A_NON_LIST_PAGE_READ_AS_NO_COMMENTS_POSTED_A_SECOND_STICKY_AND_BAD_ITEMS_EXITED_1
+phase: shipped
+delta:
+  files_changed: 2
+  tests_added: 16
+  suite: "2832 passed; ruff, format, mypy clean"
+decisions_made: []
+measured: "main: ['x'] AttributeError exit 1; [{id:7,body:5}] TypeError exit 1; PATCH {id:null} TypeError exit 1. After: RuntimeError naming the GET, only the GET sent; written-id falls back. Revert 12 of 16 red; 4 controls green."
+context_for_next_session:
+  - A_SHAPE_FALLBACK_TO_EMPTY_IS_A_WRITE_DECISION_here_empty_meant_POST_A_NEW_STICKY_ask_what_the_caller_DOES_with_the_default
+  - THE_HARNESS_RECORDS_EVERY_REQUEST_METHOD_so_no_write_is_asserted_not_assumed
+  - NOT_FIXED_judge_content_scalar_5_exits_1_the_376_memory_entry_scoped_a_Message_shaped_reply_whose_content_our_code_cannot_read_OUT_deliberately_left_alone
+followups: []
+---
