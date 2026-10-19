@@ -4253,3 +4253,21 @@ context_for_next_session:
   - "check_limit_IS_the_list_runs_rule_so_library_callers_get_the_ValueError_too"
 followups: []
 ---
+
+---
+session: 2026-10-19T07:45Z
+issue: 394
+branch: session/2026-10-19-0726-issue-394
+focus: COMMENT_REPO_WITH_SPACE_NON_ASCII_OR_NEWLINE_CRASHED_IN_HTTP_CLIENT_REQUEST_LINE_AT_EXIT_1
+phase: shipped
+delta:
+  files_changed: 3
+  tests_added: 27
+  suite: "2846 passed, 28 skipped; ruff, format, mypy clean"
+decisions_made: []
+measured: "main: 'o/llm eval-harness' and 'o/x\\ny' -> http.client.InvalidURL rc 1; 'o/llm-éval' -> UnicodeEncodeError rc 1. After: '::error::--repo must be a GitHub \"owner/name\"' rc 2, no request, delta not read. Revert 24 of 27 red; the 3 green are valid-repo controls."
+context_for_next_session:
+  - "http_client_InvalidURL_IS_AN_HTTPException_NOT_A_ValueError_the_brief_said_ValueError_and_a_ValueError_only_backstop_left_two_of_three_library_arms_red"
+  - "NOT_FIXED_other_http_client_HTTPExceptions_eg_IncompleteRead_still_escape_do_request_they_are_not_OSError_subclasses"
+followups: []
+---
