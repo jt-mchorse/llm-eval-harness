@@ -248,6 +248,25 @@ def _auth_headers(token: str) -> dict[str, str]:
     }
 
 
+def _error_body_detail(status: int, body: str) -> str:
+    """What a non-2xx's body contributes to the one error line (#380, after #378).
+
+    GitHub reports a 401/403/404/422 as a JSON object whose ``message`` says
+    what was wrong, so a JSON body keeps its detail -- re-serialised compactly,
+    because a pretty-printed body has newlines between its tokens and the
+    ``::error::`` annotation would end at the first of them. Anything else is a gateway's or
+    proxy's page, which was echoed whole: every line of it went into the job
+    log and the annotation read ``-> 502: <html>``. It is described by its size
+    instead, which is #378's rule for the judge backend.
+    """
+    try:
+        return json.dumps(loads_json(body), ensure_ascii=False, separators=(",", ":"))
+    except ValueError:  # `JSONDecodeError` is one
+        pass
+    size = f"a non-JSON body of {len(body)} characters" if body else "an empty body"
+    return f"HTTP {status} with {size}"
+
+
 def _do_request(
     method: str, url: str, token: str, body: dict[str, Any] | None = None
 ) -> dict[str, Any] | list[Any]:
@@ -264,7 +283,9 @@ def _do_request(
             err_body = e.read().decode("utf-8")
         except Exception:
             err_body = ""
-        raise RuntimeError(f"GitHub API {method} {url} -> {e.code}: {err_body}") from e
+        raise RuntimeError(
+            f"GitHub API {method} {url} -> {e.code}: {_error_body_detail(e.code, err_body)}"
+        ) from e
     # The rest of what talking to GitHub can raise, onto the same RuntimeError
     # the CLI translates to exit 2 (#303). Only HTTPError was caught, so a
     # refused connection, a timeout or a proxy's HTML page under a 200 escaped
