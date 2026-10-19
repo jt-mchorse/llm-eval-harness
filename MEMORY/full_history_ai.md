@@ -4289,3 +4289,22 @@ context_for_next_session:
   - "AN_ABOVE_CEILING_ARM_MUST_STUB_time_sleep_on_unfixed_code_3600_5_would_really_sleep_an_hour"
 followups: []
 ---
+
+---
+session: 2026-10-19T08:05Z
+issue: 398
+branch: session/2026-10-19-0743-issue-398
+focus: JUDGE_REASONING_WITH_A_LONE_SURROGATE_REACHED_WRITE_RUN_SQLITE_UNICODEENCODEERROR_EXIT_1_AFTER_EVERY_ROW_344S_JUDGE_OUTPUT_HALF
+phase: shipped
+delta:
+  files_changed: 2
+  tests_added: 7
+  suite: "2918 passed; ruff, format, mypy clean (3.12 venv with judge extra)"
+decisions_made: []
+measured: "main: loopback Messages API returning text 'REASONING: fine \\ud83d' -> every row judged, UnicodeEncodeError in runs.write_run executemany, rc 1, no --out, no run saved. After: refused at the row as JudgeParseError naming the example id, '\\ud83d' and index, rc 2 via the existing cli arm; later rows not called. Revert 4 of 7 red; the 3 green are the encodable non-ASCII reasoning controls."
+context_for_next_session:
+  - "REASONING_IS_REGEX_PARSED_NOT_JSON_DECODED_so_the_surrogate_must_come_from_the_API_BODY_ESCAPE_or_a_custom_Backend_not_from_model_text_written_as_backslash_u"
+  - "parse_judge_output_LEFT_ALONE_calibrate_writers_use_json_dumps_ensure_ascii_True_and_already_handle_it"
+  - "SEED_find_sticky_comment_non_object_items_and_non_int_id_ALREADY_COVERED_BY_383_tests_test_comment_malformed_page"
+followups: []
+---

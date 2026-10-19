@@ -3721,3 +3721,12 @@ kind of error, for code that calls it directly.
 it crashed the script after the first stage had run. A very large but finite
 number, like 10 billion seconds, crashed the same way. Pauses over an hour are
 now refused with a clear error before anything runs.
+
+## 2026-10-19 — A judge reply the run database can't store is a clear error, not a "regression" (#398)
+
+If the judge's one-sentence reasoning contained a broken character (half of an
+emoji's escaped pair, which a misbehaving gateway or a custom backend can send),
+`eval-harness run` judged every row, then crashed while saving the run. It
+showed a traceback and used the exit code that CI reads as "a regression was
+found", and nothing was saved. The run now stops at the row with the bad reply,
+names it, and exits with the usage/I-O error code.
