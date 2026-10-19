@@ -4308,3 +4308,22 @@ context_for_next_session:
   - "SEED_find_sticky_comment_non_object_items_and_non_int_id_ALREADY_COVERED_BY_383_tests_test_comment_malformed_page"
 followups: []
 ---
+
+---
+session: 2026-10-19T08:30Z
+issue: 402
+branch: session/2026-10-19-0814-issue-402
+focus: COMMENT_HTTP_CLIENT_HTTPEXCEPTION_INCOMPLETEREAD_BADSTATUSLINE_LINETOOLONG_ESCAPED_DO_REQUEST_AT_EXIT_1
+phase: shipped
+delta:
+  files_changed: 2
+  tests_added: 16
+  suite: "2907 passed, 28 skipped; ruff, format, mypy clean (3.12 venv)"
+decisions_made: []
+measured: "main: raw-socket fake GitHub sending a body short of Content-Length, a bad or cut chunk, 'HTTP/1.1 abc OK', 'SSH-2.0-OpenSSH_9.0', 150 headers or a 70000-byte header -> IncompleteRead/BadStatusLine/HTTPException/LineTooLong traceback rc 1. After: '::error::GitHub API GET <url> failed: malformed HTTP response (<Type>: <detail>)' rc 2. Revert 14 of 16 red; the 2 green are the well-formed-200 and InvalidURL-message controls."
+context_for_next_session:
+  - "HTTPEXCEPTION_ARM_GOES_AFTER_THE_394_INVALIDURL_ARM_InvalidURL_is_a_member_of_the_tree_and_keeps_its_not_a_valid_request_message"
+  - "BADSTATUSLINE_CARRIES_THE_PEERS_RAW_LINE_WITH_CRLF_detail_is_whitespace_collapsed_and_capped_at_200_so_the_error_annotation_stays_one_line"
+  - "PYTEST_ADDOPTS_IS_ra_q_so_an_extra_q_hides_the_summary_line_run_pytest_without_q_to_gate_on_it"
+followups: []
+---
