@@ -80,6 +80,33 @@ def test_non_finite_or_negative_pause_seconds_exits_2_before_stage_1(
     assert "--pause-seconds" in err, f"the error must name the offending flag; got:\n{err}"
 
 
+@pytest.mark.parametrize("big", ["1e10", "1e300", "3600.5"])
+def test_pause_seconds_past_the_ceiling_exits_2_before_stage_1(
+    big: str, tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`1e10` is finite, so it passed the #198 guard, ran STAGE 1, then raised
+    the OverflowError from `time.sleep` that the guard refuses `inf` for (#396)."""
+    # Stubbed so a regression fails fast instead of sleeping for an hour.
+    slept: list[float] = []
+    monkeypatch.setattr("time.sleep", slept.append)
+    rc, out = _drive([f"--pause-seconds={big}", *_base_argv(tmp_path)])
+
+    assert rc == 2, f"--pause-seconds {big} should be a usage error (exit 2); got {rc}"
+    assert "STAGE 1" not in out, f"rejected before STAGE 1 runs; stdout:\n{out}"
+    assert not (tmp_path / "drift_report.html").exists()
+    err = capsys.readouterr().err
+    assert "::error::--pause-seconds must be <= 3600" in err, err
+    assert slept == []
+
+
+def test_pause_seconds_at_the_ceiling_is_accepted() -> None:
+    """Control: the bound is inclusive and ordinary values still validate."""
+    capture_demo = _load_capture_module()
+    assert capture_demo._validate_pause_seconds(3600.0) is None
+    assert capture_demo._validate_pause_seconds(3600) is None
+    assert capture_demo._validate_pause_seconds(0.0) is None
+
+
 def test_nan_pause_seconds_took_no_pause_pre_fix(monkeypatch: pytest.MonkeyPatch) -> None:
     """Anchor on the corruption itself, independent of the exit code.
 

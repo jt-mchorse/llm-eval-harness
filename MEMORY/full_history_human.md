@@ -3714,3 +3714,10 @@ that `--repo` looks like a GitHub `owner/name` before doing anything else, and
 it refuses a bad value with a clear error and the usage-error exit code. The
 lower-level request helper also turns an address it can't send into the same
 kind of error, for code that calls it directly.
+
+## 2026-10-19 — The demo-capture script refuses an absurd pause up front (#396)
+
+`scripts/capture_demo.py --pause-seconds` already refused infinity because
+it crashed the script after the first stage had run. A very large but finite
+number, like 10 billion seconds, crashed the same way. Pauses over an hour are
+now refused with a clear error before anything runs.

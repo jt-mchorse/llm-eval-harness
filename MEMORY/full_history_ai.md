@@ -4271,3 +4271,21 @@ context_for_next_session:
   - "NOT_FIXED_other_http_client_HTTPExceptions_eg_IncompleteRead_still_escape_do_request_they_are_not_OSError_subclasses"
 followups: []
 ---
+
+---
+session: 2026-10-19T07:50Z
+issue: 396
+branch: session/2026-10-19-0729-issue-396
+focus: CAPTURE_DEMO_PAUSE_SECONDS_1E10_PASSED_THE_FINITE_GUARD_RAN_STAGE_1_THEN_OVERFLOWED_TIME_SLEEP
+phase: shipped
+delta:
+  files_changed: 2
+  tests_added: 4
+  suite: "2822 passed, 28 skipped; ruff, format, mypy clean"
+decisions_made: []
+measured: "main: --pause-seconds 1e10 -> STAGE 1 printed, OverflowError 'timestamp out of range for platform time_t' rc 1. After: '::error::--pause-seconds must be <= 3600' rc 2, no STAGE 1. Revert 3 of 4 red; the green one is the at-ceiling control."
+context_for_next_session:
+  - "FINITE_IS_NOT_THE_PROPERTY_time_sleep_NEEDS_the_198_guard_named_the_failure_and_checked_a_proxy_for_it"
+  - "AN_ABOVE_CEILING_ARM_MUST_STUB_time_sleep_on_unfixed_code_3600_5_would_really_sleep_an_hour"
+followups: []
+---
