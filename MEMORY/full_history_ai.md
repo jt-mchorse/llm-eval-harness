@@ -4235,3 +4235,21 @@ context_for_next_session:
   - EVERY_TEST_PASSED_no_open_SO_THE_OPEN_BRANCH_NEVER_RAN_a_flag_every_test_sets_hides_the_other_branch
 followups: []
 ---
+
+---
+session: 2026-10-19T07:40Z
+issue: 392
+branch: session/2026-10-19-0722-issue-392
+focus: LIST_LIMIT_PAST_INT64_REACHED_THE_SQLITE_BIND_OVERFLOWERROR_EXIT_1_WITH_A_DB_EXIT_0_WITHOUT_ONE
+phase: shipped
+delta:
+  files_changed: 2
+  tests_added: 11
+  suite: "2830 passed, 28 skipped; ruff, format, mypy clean"
+decisions_made: []
+measured: "main: --limit 9223372036854775808 with db -> OverflowError traceback rc 1; no db -> 'no runs' rc 0. After: '::error::limit must be at most 9223372036854775807' rc 2 on both. Revert 9 of 11 red; the 2 green are the int64-max controls."
+context_for_next_session:
+  - "REFUSE_NOT_CLAMP_matches_318_and_calibration_too_large_int_handling"
+  - "check_limit_IS_the_list_runs_rule_so_library_callers_get_the_ValueError_too"
+followups: []
+---
