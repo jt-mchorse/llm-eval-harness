@@ -315,8 +315,14 @@ class RunSummary:
     git_sha: str | None
 
 
+#: SQLite's INTEGER is a signed 64-bit value; binding a larger Python int to
+#: ``LIMIT ?`` raises ``OverflowError`` (#392).
+_SQLITE_INT_MAX = 2**63 - 1
+
+
 def check_limit(limit: object) -> None:
-    """Raise ``ValueError`` unless ``limit`` is a positive ``int`` (not a bool).
+    """Raise ``ValueError`` unless ``limit`` is a positive ``int`` (not a bool)
+    no larger than SQLite's ``INTEGER`` maximum, ``2**63 - 1``.
 
     The one definition of ``list_runs``' ``limit`` rule, also called by the
     ``list`` CLI before it looks for the database (#325): the CLI answers a
@@ -330,6 +336,10 @@ def check_limit(limit: object) -> None:
     """
     if not isinstance(limit, int) or isinstance(limit, bool) or limit <= 0:
         raise ValueError(f"limit must be a positive integer, got {limit!r}")
+    # Past int64 the `LIMIT ?` bind raised OverflowError, which no CLI catch
+    # translates: a traceback at exit 1 with a database, exit 0 without (#392).
+    if limit > _SQLITE_INT_MAX:
+        raise ValueError(f"limit must be at most {_SQLITE_INT_MAX}, got {limit}")
 
 
 def list_runs(
