@@ -3778,3 +3778,14 @@ now check the model name the judge will actually use before doing anything
 else, and stop with the usage/I-O error code. `calibrate` also stops at the
 first judge reply it could not write into the report. Before, it paid for all
 50 judge calls and then failed when writing the report.
+
+## 2026-10-20 — Old result files no longer print "-0.000" (#412)
+
+The previous fix (#404) stopped the harness from writing a judge score of
+"negative zero". Result files written before that fix still contained it, and
+the commands that read those files printed `-0.000` next to `0.000`. That
+affected `diff-json`, the PR comment, and the calibration report. Every reader
+now treats negative zero as plain zero, using one shared helper so the readers
+stay consistent. It also covers a case the issue did not list: a regression
+threshold of `-0` printed as `-0.000`. Comparing an old file through `diff-json`
+now prints exactly what `diff` prints from the database.
