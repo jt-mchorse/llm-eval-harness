@@ -149,3 +149,29 @@ def test_capture_demo_exposes_main_callable() -> None:
 
     sig = inspect.signature(capture_demo.main)
     assert "argv" in sig.parameters, f"main() must accept argv; current signature: {sig}"
+
+
+def test_two_captures_print_identical_frames(tmp_path: Path) -> None:
+    # The module docstring promises a re-capture "lands on identical frames".
+    # Measured on c708ee4 (#408): the drift HTML matched byte for byte, but the
+    # run ids in stdout (and the delta header) differed on every capture.
+    outs = []
+    for i in range(2):
+        capture_demo = _load_capture_module()
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            rc = capture_demo.main(
+                [
+                    "--pause-seconds",
+                    "0",
+                    "--no-open",
+                    "--output-dir",
+                    str(tmp_path / str(i)),
+                    "--skip-sticky-cheatsheet",
+                ]
+            )
+        assert rc == 0
+        outs.append(buf.getvalue().replace(str(tmp_path / str(i)), "<out>"))
+    assert outs[0] == outs[1]
+    # Whole run ids, not the 8-character prefix #348/#355 removed elsewhere.
+    assert "baseline run_id=example-baseline " in outs[0]

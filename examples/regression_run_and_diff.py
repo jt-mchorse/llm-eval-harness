@@ -79,15 +79,30 @@ def main() -> int:
             answer_source=DatasetEchoSource(),
         )
 
-        baseline = run_suite(baseline_spec, db_path=db_path)
-        current = run_suite(current_spec, db_path=db_path)
+        # Pinned ids and timestamps (#408): `scripts/capture_demo.py` promises a
+        # re-capture lands on identical frames, and a fresh uuid per run made
+        # these lines and the delta header differ every time. A real caller
+        # leaves both to `run_suite`'s defaults.
+        baseline = run_suite(
+            baseline_spec,
+            db_path=db_path,
+            run_id="example-baseline",
+            started_at="2026-05-15T00:00:00Z",
+        )
+        current = run_suite(
+            current_spec,
+            db_path=db_path,
+            run_id="example-current",
+            started_at="2026-05-16T00:00:00Z",
+        )
 
+        # Whole ids (#348/#355 removed the 8-character prefix elsewhere).
         print(
-            f"[example] baseline run_id={baseline.run_id[:8]} "
+            f"[example] baseline run_id={baseline.run_id} "
             f"mean={baseline.mean_score:.3f} n={baseline.n_rows}"
         )
         print(
-            f"[example] current  run_id={current.run_id[:8]} "
+            f"[example] current  run_id={current.run_id} "
             f"mean={current.mean_score:.3f} n={current.n_rows}"
         )
 
