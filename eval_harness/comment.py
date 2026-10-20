@@ -328,6 +328,25 @@ def _do_request(
     # exit 1 (#394). Same RuntimeError as #303.
     except (http.client.InvalidURL, ValueError) as e:
         raise RuntimeError(f"GitHub API {method} {url!r} is not a valid request: {e}") from e
+    # The rest of the `http.client.HTTPException` tree: the request was sent,
+    # but the response broke at the HTTP layer. Examples are a body cut short
+    # of its Content-Length or a bad chunk (`IncompleteRead`), a status line
+    # that is not HTTP (`BadStatusLine`), a 64 KiB header line (`LineTooLong`),
+    # or more than 100 headers. None of them is an OSError, so after #394
+    # only `InvalidURL` was caught and the rest escaped as a traceback at
+    # exit 1 (#402). This arm comes after the `InvalidURL` arm because
+    # `InvalidURL` is a member of the same tree. The detail is collapsed onto
+    # one line and capped: a `BadStatusLine` carries the peer's raw line,
+    # trailing CRLF included, and the `::error::` annotation would stop at
+    # the first newline.
+    except http.client.HTTPException as e:
+        detail = " ".join(str(e).split())
+        if len(detail) > 200:
+            detail = detail[:200] + "..."
+        raise RuntimeError(
+            f"GitHub API {method} {url} failed: malformed HTTP response "
+            f"({type(e).__name__}: {detail or 'no detail'})"
+        ) from e
 
 
 def find_sticky_comment(

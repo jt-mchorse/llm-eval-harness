@@ -3730,3 +3730,12 @@ emoji's escaped pair, which a misbehaving gateway or a custom backend can send),
 showed a traceback and used the exit code that CI reads as "a regression was
 found", and nothing was saved. The run now stops at the row with the bad reply,
 names it, and exits with the usage/I-O error code.
+
+## 2026-10-19 — A garbled reply from GitHub is a clear error, not a "regression" (#402)
+
+If GitHub, or a proxy in front of it, sent a reply that broke partway through
+(a body cut short, a broken chunk, a first line that isn't HTTP, or far too
+many or too-long headers), the PR-comment step crashed with a traceback. It
+exited with the code that CI reads as "a regression was found". These replies
+now produce one clear error line that names the request, with the usage/I-O
+error exit code, the same as a refused connection or a timeout.
