@@ -43,7 +43,13 @@ from eval_harness.comparison import (
 )
 from eval_harness.dataset import Dataset, Example, filter_examples_by_tags, load_jsonl
 from eval_harness.io_utils import copy_json_value, find_unencodable, loads_json
-from eval_harness.judge import FAITHFULNESS_RUBRIC, Judge, JudgeParseError, JudgeScore
+from eval_harness.judge import (
+    FAITHFULNESS_RUBRIC,
+    Judge,
+    JudgeParseError,
+    JudgeScore,
+    unsigned_zero,
+)
 from eval_harness.runs import (
     StoredRun,
     check_db,
@@ -276,7 +282,9 @@ def _finite_or_none(value: Any, field_name: str, example_id: Any) -> float | Non
             f"{field_name} must be finite — a NaN/Infinity value renders as 'inf'/'+nan' in "
             "the posted PR comment"
         )
-    return f
+    # A delta JSON written before #405 can carry `-0.0`, which every check above
+    # admits and both renderers print as `-0.000` (#412).
+    return unsigned_zero(f)
 
 
 # ----------------------------------------------------------------------
@@ -321,6 +329,9 @@ def _checked_threshold_drop(value: Any) -> float:
             "the regression test is `delta < -threshold_drop`, so a negative value "
             "inverts it"
         )
+    # `-0.0` passes the `< 0.0` check above and rendered as `threshold drop:
+    # \`-0.000\`` from a delta JSON or `--threshold-drop -0` (#412).
+    threshold_drop = unsigned_zero(threshold_drop)
     # The upper half of "flags nothing" (#363). Scores are in [0, 1], so a delta
     # is in [-1, 1] and `delta < -threshold_drop` cannot hold past 1: the guard
     # above refused `inf` for flagging nothing while `--threshold-drop 5` (a
@@ -595,6 +606,14 @@ class DeltaReport:
         _check_delta_suite(self.suite)
         object.__setattr__(self, "threshold_drop", _checked_threshold_drop(self.threshold_drop))
         _check_delta_summary(self.summary)
+        # After the check, on the owned copy, and only on a `float`: `False ==
+        # 0.0`, so normalising first would launder a bool past the check. A delta
+        # JSON written before #405 carries `-0.0` here, and the comment path
+        # printed `mean Δ **-0.000**` (#412). `from_json` builds through this.
+        for mean_key in ("mean_delta", "mean_score_baseline", "mean_score_current"):
+            mean_val = self.summary.get(mean_key)
+            if isinstance(mean_val, float):
+                self.summary[mean_key] = unsigned_zero(mean_val)
         # Shape before the per-row loop and the copy: a `str` is iterable.
         # Validated, so owned (D-019): a caller's list would otherwise let a
         # later append reach the frozen report. `RowDelta` validates itself and
@@ -1212,7 +1231,10 @@ def _checked_row_score(value: Any, example_id: str) -> float:
             "finite — a NaN/Infinity row score silently disables the regression gate "
             "(its delta is classified 'unchanged' and never flagged)"
         )
-    return score
+    # A run JSON written before #405 stored a judge's `SCORE: -0` as `-0.0`.
+    # SQLite `REAL` drops the sign and this reader kept it, so `diff` and
+    # `diff-json` still rendered the same old file differently (#412).
+    return unsigned_zero(score)
 
 
 def _check_n_rows(declared: Any, actual: int) -> int:
@@ -1233,7 +1255,8 @@ def _checked_mean_score(value: Any) -> float:
             f"non-finite mean_score {mean_score}; mean_score must be finite — a "
             "NaN/Infinity value corrupts the mean_delta diff_runs computes"
         )
-    return mean_score
+    # The mean of an all-`-0.0` run is `-0.0` too (#412, as the row score above).
+    return unsigned_zero(mean_score)
 
 
 def _checked_run_id(value: Any) -> str:

@@ -32,7 +32,7 @@ from eval_harness.io_utils import (
     find_unrepresentable,
     loads_json,
 )
-from eval_harness.judge import Judge, JudgeParseError, JudgeScore
+from eval_harness.judge import Judge, JudgeParseError, JudgeScore, unsigned_zero
 from eval_harness.markdown import md_code_cell, md_code_span, md_table_cell
 
 
@@ -64,6 +64,11 @@ class CalibrationRow:
         # one to make the two classes look symmetric would be a guard with no
         # harm to name.
         object.__setattr__(self, "provenance", copy_json_value(self.provenance))
+        # `human_score` is range-checked by the loader, and `0.0 <= -0.0` holds, so
+        # a row reading `"human_score": -0.0` printed `-0.00` in the per-row table
+        # where a `0.0` row printed `0.00` (#412, the reader half of #404). Here
+        # rather than in `_row_from_dict`, so a hand-built row is covered too.
+        object.__setattr__(self, "human_score", unsigned_zero(self.human_score))
 
 
 @dataclass(frozen=True)

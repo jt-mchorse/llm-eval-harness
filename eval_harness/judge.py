@@ -23,6 +23,21 @@ from dataclasses import dataclass
 from typing import Protocol, TypeVar
 
 
+def unsigned_zero(x: float) -> float:
+    """Return ``x``, with ``-0.0`` replaced by ``0.0``.
+
+    A score of negative zero is zero. ``-0.0 == 0.0``, so every range check and
+    equality assertion admits it, but ``.3f`` keeps the sign: a `-0.0` that
+    reached a renderer printed ``-0.000`` beside a ``0.000`` (#404). #405 fixed
+    the two writers. Each reader of a stored score (a run JSON, a delta JSON,
+    a calibration row) calls this as well, because a file written before that
+    fix still carries the sign (#412). It is one helper so those seams cannot
+    drift apart. Any value other than zero passes through unchanged, including
+    a non-``float`` that the caller's own check will reject.
+    """
+    return 0.0 if x == 0.0 else x
+
+
 def clamp_judge_score(x: float) -> float:
     """Clamp a judge score into ``[0, 1]``, rejecting corruption.
 
@@ -71,8 +86,7 @@ class JudgeScore:
             raise ValueError(f"score must be in [0, 1]; got {self.score}")
         # A BYO `Judge` builds this directly, without `clamp_judge_score`, so
         # `-0.0` (which the range check admits) is normalised here too (#404).
-        if self.score == 0.0:
-            object.__setattr__(self, "score", 0.0)
+        object.__setattr__(self, "score", unsigned_zero(self.score))
 
 
 class Backend(Protocol):
