@@ -325,9 +325,19 @@ def _do_request(
     # `InvalidURL` (an HTTPException, not a ValueError) for a space or control
     # character, `UnicodeEncodeError` for non-ASCII, urllib's "unknown url
     # type" -- raised before anything was sent and escaped as a traceback at
-    # exit 1 (#394). Same RuntimeError as #303.
-    except (http.client.InvalidURL, ValueError) as e:
+    # exit 1 (#394). Same RuntimeError as #303. Only `InvalidURL` keeps its
+    # detail, which is about the URL already on this line. A ValueError's
+    # message can quote a request header, and the Authorization header is the
+    # token: `Invalid header value b'Bearer <token>\n'` reached the
+    # `::error::` line this way (#406). `_check_token` now refuses such a
+    # token first; this arm is the second guard, and names only the class.
+    except http.client.InvalidURL as e:
         raise RuntimeError(f"GitHub API {method} {url!r} is not a valid request: {e}") from e
+    except ValueError as e:
+        raise RuntimeError(
+            f"GitHub API {method} {url!r} is not a valid request "
+            f"({type(e).__name__}; detail withheld, it can quote a request header)"
+        ) from e
     # The rest of the `http.client.HTTPException` tree: the request was sent,
     # but the response broke at the HTTP layer. Examples are a body cut short
     # of its Content-Length or a bad chunk (`IncompleteRead`), a status line
@@ -459,11 +469,46 @@ def _written_id(result: object, fallback: int) -> int:
 
 def _resolve_token(token: str | None) -> str:
     if token is not None:
-        return token
-    env = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
-    if not env:
+        return _check_token(token, "token=")
+    # `GITHUB_TOKEN or GH_TOKEN`, keeping which one was read so a refusal
+    # can name it (#406). Literal names: `test_env_example` scans for them.
+    for name, env in (
+        ("GITHUB_TOKEN", os.environ.get("GITHUB_TOKEN")),
+        ("GH_TOKEN", os.environ.get("GH_TOKEN")),
+    ):
+        if env:
+            return _check_token(env, name)
+    raise RuntimeError(
+        "GitHub token missing: pass `token=` or set GITHUB_TOKEN / GH_TOKEN. "
+        "In Actions, `permissions: pull-requests: write` makes this automatic."
+    )
+
+
+def _check_token(token: str, source: str) -> str:
+    """Return *token*, or raise ``RuntimeError`` if it cannot be a Bearer value (#406).
+
+    A secret pasted with a trailing newline, or read from a CRLF ``.env``, made
+    ``http.client`` refuse the Authorization header with a ``ValueError`` that
+    quotes it -- ``Invalid header value b'Bearer <token>\\n'`` -- and #394's
+    arm in ``_do_request`` copied that into the ``::error::`` line. A newline
+    followed by a space was worse: ``http.client`` reads it as a folded header
+    and sent it. GitHub tokens are visible ASCII (RFC 6750's ``b64token`` is a
+    subset), so anything else is refused here, before any request. The message
+    names where the token came from and what is wrong with it, never the value.
+    """
+    for i, ch in enumerate(token):
+        if "!" <= ch <= "~":
+            continue
+        hint = ""
+        if ch in "\r\n":
+            what = "a newline (CR or LF)"
+            hint = " Was the secret saved with a trailing newline, or read from a CRLF file?"
+        elif ch.isascii():
+            what = "whitespace or a control character"
+        else:
+            what = "a non-ASCII character"
         raise RuntimeError(
-            "GitHub token missing: pass `token=` or set GITHUB_TOKEN / GH_TOKEN. "
-            "In Actions, `permissions: pull-requests: write` makes this automatic."
+            f"GitHub token from {source} contains {what} at position {i} of "
+            f"{len(token)}; the token is not shown.{hint}"
         )
-    return env
+    return token

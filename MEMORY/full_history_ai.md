@@ -4363,3 +4363,23 @@ context_for_next_session:
   - "FILED_SAME_RUN_406_comment_token_in_error_407_calibrate_and_env_model_seams_fixed_by_parallel_agents"
 followups: []
 ---
+
+---
+session: 2026-10-20T07:44Z
+issue: 406
+branch: session/2026-10-20-0752-issue-406
+focus: COMMENT_TOKEN_WITH_CR_LF_ECHOED_INTO_ERROR_LINE_VIA_THE_394_VALUEERROR_ARM
+phase: shipped
+delta:
+  files_changed: 2
+  tests_added: 25
+  suite: "2977 passed; ruff, format, mypy clean (3.14 venv)"
+decisions_made: []
+measured: "main: GITHUB_TOKEN=$'ghp_SECRET...\\n' (and GH_TOKEN \\r, token='ghp_LIB\\n') -> '::error::... is not a valid request: Invalid header value b'Bearer ghp_SECRET...\\n'' rc 2; token='ghp\\n x' (obs-fold) passed http.client and was SENT. After: refused in _resolve_token before any urlopen, message names the source and the character class and position, never the value. Revert 21 of 25 red; the 4 green are the clean-token loopback posts, GITHUB_TOKEN precedence and the missing-token message."
+context_for_next_session:
+  - "TOKEN_CHECK_IS_VISIBLE_ASCII_0x21_0x7E_a_superset_of_RFC6750_b64token_refuses_space_tab_NUL_DEL_non_ASCII_too"
+  - "VALUEERROR_ARM_SPLIT_FROM_INVALIDURL_InvalidURL_keeps_its_detail_ValueError_names_only_the_class_since_it_can_quote_a_header"
+  - "ENV_READS_MUST_STAY_LITERAL_os_environ_get_NAME_test_env_example_scans_for_them_a_loop_over_names_turned_it_red"
+  - "NOT_FIXED_ANTHROPIC_API_KEY_trailing_newline_retried_as_transient_cosmetic_per_the_issue"
+followups: []
+---

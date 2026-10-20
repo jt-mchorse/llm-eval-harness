@@ -3755,3 +3755,14 @@ The demo recording script promises that re-recording gives identical frames,
 but the regression example created new random run ids every time it ran, so
 the printed ids and the comparison header changed between recordings. The
 example now uses fixed run ids and prints them in full.
+
+## 2026-10-20 — A GitHub token with a stray newline is refused without printing it (#406)
+
+If `GITHUB_TOKEN` or `GH_TOKEN` ended in a newline (a secret pasted with one,
+or a Windows-style `.env` file), the PR-comment step's error line printed the
+token itself. On GitHub, secret masking may hide it, but a local terminal or
+another CI system shows it in full. The token is now checked before anything
+is sent. If it contains a newline, a space, a control character or a
+non-ASCII character, the step stops with an error that says which variable
+is wrong and why, and never shows the value. Request errors that could quote
+a header no longer copy that text into the error line either.
