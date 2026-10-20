@@ -3766,3 +3766,15 @@ is sent. If it contains a newline, a space, a control character or a
 non-ASCII character, the step stops with an error that says which variable
 is wrong and why, and never shows the value. Request errors that could quote
 a header no longer copy that text into the error line either.
+
+## 2026-10-20 — A bad judge model name or judge reply is caught before calibration pays for it (#407)
+
+`eval-harness run` already refused a model name containing a byte with no
+UTF-8 encoding when it came from `--model`. It did not check the same name
+when it came from the `EVAL_HARNESS_JUDGE_MODEL` environment variable, and
+`calibrate` checked neither source. On those routes the Anthropic SDK crashed
+with a traceback and used the exit code CI reads as a finding. Both commands
+now check the model name the judge will actually use before doing anything
+else, and stop with the usage/I-O error code. `calibrate` also stops at the
+first judge reply it could not write into the report. Before, it paid for all
+50 judge calls and then failed when writing the report.

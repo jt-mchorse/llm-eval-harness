@@ -4383,3 +4383,22 @@ context_for_next_session:
   - "NOT_FIXED_ANTHROPIC_API_KEY_trailing_newline_retried_as_transient_cosmetic_per_the_issue"
 followups: []
 ---
+
+---
+session: 2026-10-20T07:44Z
+issue: 407
+branch: session/2026-10-20-0753-issue-407
+focus: UNENCODABLE_JUDGE_MODEL_VIA_ENV_OR_CALIBRATE_MODEL_CRASHED_THE_SDK_ENCODER_AT_EXIT_1_AND_CALIBRATE_REASONING_REFUSED_ONLY_AT_THE_REPORT_WRITE
+phase: shipped
+delta:
+  files_changed: 4
+  tests_added: 16
+  suite: "2968 passed (3.14 venv); 2940 passed, 28 skipped (fresh 3.11 [dev] venv, no anthropic); ruff, format, mypy clean"
+decisions_made: []
+measured: "main 54ebda7, anthropic 0.116.0, loopback base URL: EVAL_HARNESS_JUDGE_MODEL=$'bad\\xff' run, calibrate --model $'bad\\xff', EVAL_HARNESS_JUDGE_MODEL=$'bad\\xff' calibrate -> UnicodeEncodeError traceback rc 1; stub reasoning 'fine \\ud83d' -> 50 judge calls then rc 2 at the report write. After: '::error::<--model|EVAL_HARNESS_JUDGE_MODEL> ... has no UTF-8 encoding; the judge request cannot send it' rc 2 before any request, no DB created; reasoning refused at row 'cap_001' after 1 call, rc 2. Revert 7 of 16 red; the 9 green are encodable non-ASCII model (3 routes x 2) and reasoning controls."
+context_for_next_session:
+  - "RESOLVE_JUDGE_MODEL_IN_JUDGE_PY_IS_THE_ONE_DEFINITION_AnthropicBackend_and_cli_share_it_so_the_check_runs_before_check_db_creates_a_file"
+  - "A_CHECK_ON_backend_model_AFTER_CONSTRUCTION_STILL_LEFT_AN_EMPTY_runs_db_check_db_creates_it_the_db_exists_assertion_caught_it"
+  - "THE_398_MEMORY_CLAIM_calibrate_writers_use_ensure_ascii_WAS_TRUE_FOR_JSON_ONLY_the_markdown_report_carries_every_reasoning"
+followups: []
+---
