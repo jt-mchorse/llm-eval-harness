@@ -3748,3 +3748,10 @@ the same two runs from the database printed `0.000`, while comparing them
 from the JSON files (the path the CI comment uses) printed `-0.000`. The
 calibration report showed `-0.00` too. Negative zero now becomes zero when
 the score is parsed, and also when a custom judge builds a score directly.
+
+## 2026-10-20 — The demo prints the same thing every time (#408)
+
+The demo recording script promises that re-recording gives identical frames,
+but the regression example created new random run ids every time it ran, so
+the printed ids and the comparison header changed between recordings. The
+example now uses fixed run ids and prints them in full.
