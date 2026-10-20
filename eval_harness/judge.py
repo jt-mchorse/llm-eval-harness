@@ -443,6 +443,16 @@ def retry_call(
 # ----------------------------------------------------------------------
 
 
+def resolve_judge_model(model: str | None) -> str:
+    """The model `AnthropicBackend(model=...)` will send: *model*, else the env var.
+
+    One definition for the backend and for the CLI, which checks the result
+    before anything is built (#407): `run` checked `--model` alone, so a value
+    from `EVAL_HARNESS_JUDGE_MODEL` was first seen by the SDK's request encoder.
+    """
+    return model or os.environ.get("EVAL_HARNESS_JUDGE_MODEL", "claude-haiku-4-5-20251001")
+
+
 class AnthropicBackend:
     """Production backend wrapping `anthropic.Anthropic.messages.create`.
 
@@ -518,9 +528,7 @@ class AnthropicBackend:
                 "ANTHROPIC_CONFIG_DIR, or set ANTHROPIC_API_KEY (or another credential "
                 "the SDK accepts)."
             ) from exc
-        self.model = model or os.environ.get(
-            "EVAL_HARNESS_JUDGE_MODEL", "claude-haiku-4-5-20251001"
-        )
+        self.model = resolve_judge_model(model)
         self.max_tokens = max_tokens
         self.max_attempts = max_attempts
         self.base_retry_delay = base_retry_delay

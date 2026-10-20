@@ -25,7 +25,13 @@ from eval_harness.comparison import (
     render_comparison,
 )
 from eval_harness.dataset import ValidationFinding, ValidationReport
-from eval_harness.io_utils import UNENCODABLE, copy_json_value, find_unrepresentable, loads_json
+from eval_harness.io_utils import (
+    UNENCODABLE,
+    copy_json_value,
+    find_unencodable,
+    find_unrepresentable,
+    loads_json,
+)
 from eval_harness.judge import Judge, JudgeParseError, JudgeScore
 from eval_harness.markdown import md_code_cell, md_code_span, md_table_cell
 
@@ -572,12 +578,22 @@ def calibrate(judge: Judge, rows: Iterable[CalibrationRow]) -> CalibrationResult
         # verbatim — the old `or FAITHFULNESS_RUBRIC` silently swapped an empty
         # rubric for the default and corrupted the calibration (#75).
         try:
-            judge_scores.append(judge.score(row.prompt, row.response, rubric=row.rubric))
+            verdict = judge.score(row.prompt, row.response, rubric=row.rubric)
         except JudgeParseError as e:
             # Sibling of `runner.run_suite`'s arm (#218): name the row. The
             # calibration set is 50 rows, so "the judge answered wrong" without
             # an id is a bisect, not a report.
             raise JudgeParseError(f"row {row.id!r}: {e}") from e
+        # `run_suite`'s #398 check, which this loop did not get (#407). The
+        # reasoning lands in the markdown report, and a lone surrogate there
+        # was refused only by the report write -- after every row was paid for.
+        bad = find_unencodable(verdict.reasoning) if isinstance(verdict.reasoning, str) else None
+        if bad is not None:
+            raise JudgeParseError(
+                f"row {row.id!r}: judge reasoning contains {ascii(bad[0])} at index "
+                f"{bad[1]}, which has no UTF-8 encoding; the report cannot store it"
+            )
+        judge_scores.append(verdict)
 
     human_continuous = [r.human_score for r in rows_list]
     judge_continuous = [s.score for s in judge_scores]
