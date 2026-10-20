@@ -48,6 +48,7 @@ from eval_harness.judge import (
     JudgeAuthError,
     JudgeBackendError,
     JudgeParseError,
+    resolve_judge_model,
 )
 from eval_harness.runner import (
     DEFAULT_THRESHOLD_DROP,
@@ -102,6 +103,30 @@ def _fail(message: str) -> int:
     """
     print(f"::error::{message}", file=sys.stderr)
     return 2
+
+
+def _unencodable_judge_model(flag: str | None) -> str | None:
+    """The #344 refusal for the judge model *as the backend will resolve it* (#407).
+
+    #344 checked `run --model` only. The backend also takes its model from
+    ``EVAL_HARNESS_JUDGE_MODEL`` when the flag is absent, and ``calibrate``
+    had no check at all, so an argv or environment byte with no UTF-8
+    encoding reached the SDK, which raised ``UnicodeEncodeError`` while
+    encoding the first request -- a traceback at exit 1, the code both
+    commands reserve for a finding. *flag* is the ``--model`` the operator
+    passed (``None`` when absent). Resolved by `resolve_judge_model`, the
+    backend's own rule, without building the backend: nothing is written
+    and no optional extra is needed before the refusal.
+    """
+    model = resolve_judge_model(flag)
+    bad = find_unencodable(model)
+    if bad is None:
+        return None
+    source = "--model" if flag else "EVAL_HARNESS_JUDGE_MODEL"
+    return (
+        f"{source} {model!r} contains {bad[0]!r} at index {bad[1]}, which has no "
+        "UTF-8 encoding; the judge request cannot send it"
+    )
 
 
 def _write_output(path: str, rendered: str) -> int | None:
@@ -413,6 +438,11 @@ def _run_calibrate(args: argparse.Namespace) -> int:
         checked_threshold_kappa(args.threshold_kappa)
     except ValueError as e:
         return _fail(f"--threshold-kappa: {e}")
+    # The judge model as the backend will resolve it, before any judge call
+    # (#407): `--model` or `EVAL_HARNESS_JUDGE_MODEL` with no UTF-8 encoding
+    # crashed the SDK's request encoder at exit 1, the "kappa below" code.
+    if (message := _unencodable_judge_model(args.model)) is not None:
+        return _fail(message)
     # `--report` is written after the judge has scored every row; an unwritable
     # path used to cost the whole calibration run and then fail (#287).
     try:
@@ -536,6 +566,10 @@ def _run_run(args: argparse.Namespace) -> int:
                 f"{flag} {value!r} contains {bad[0]!r} at index {bad[1]}, which has no "
                 "UTF-8 encoding; the run record cannot store it"
             )
+    # That loop reads the flag; the backend falls back to
+    # `EVAL_HARNESS_JUDGE_MODEL`, which reached the SDK unchecked (#407).
+    if (message := _unencodable_judge_model(args.model)) is not None:
+        return _fail(message)
     try:
         list(load_jsonl(args.dataset))
     except FileNotFoundError as e:
