@@ -4327,3 +4327,22 @@ context_for_next_session:
   - "PYTEST_ADDOPTS_IS_ra_q_so_an_extra_q_hides_the_summary_line_run_pytest_without_q_to_gate_on_it"
 followups: []
 ---
+
+---
+session: 2026-10-20T07:20Z
+issue: 404
+branch: session/2026-10-20-0727-issue-404
+focus: JUDGE_SCORE_NEGATIVE_ZERO_PASSED_THE_CLAMP_SO_DIFF_AND_DIFF_JSON_RENDERED_ONE_RUN_PAIR_DIFFERENTLY
+phase: shipped
+delta:
+  files_changed: 2
+  tests_added: 15
+  suite: "2951 passed; ruff, format, mypy clean (3.14 venv)"
+decisions_made: []
+measured: "main: SCORE: -0 -> -0.0; two runs via a stubbed backend, diff (sqlite) markdown/ascii/json printed 0.000 / 0.0 and diff-json printed -0.000 / -0.0; calibrate row table printed -0.00. After: identical, no -0. Revert 10 of 15 red; the 5 green are the in-range controls and the clamp of -0.1 / -1e-300 that already returned +0.0."
+context_for_next_session:
+  - "JUDGESCORE_POST_INIT_NORMALISES_TOO_a_BYO_Judge_builds_it_without_clamp_judge_score_the_surface_the_issue_did_not_list"
+  - "NOT_FIXED_diff_ascii_ends_with_one_more_newline_than_diff_json_ascii_cosmetic_the_parity_test_rstrips_it"
+  - "DEFERRED_old_out_files_holding_minus_0_0_are_not_normalised_on_load"
+followups: []
+---

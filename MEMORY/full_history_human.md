@@ -3739,3 +3739,12 @@ many or too-long headers), the PR-comment step crashed with a traceback. It
 exited with the code that CI reads as "a regression was found". These replies
 now produce one clear error line that names the request, with the usage/I-O
 error exit code, the same as a refused connection or a timeout.
+
+## 2026-10-20 — A judge score of "-0" is plain zero (#404)
+
+A judge that answered `SCORE: -0` had its score stored as negative zero. The
+JSON run file kept the minus sign and the SQLite store dropped it. Comparing
+the same two runs from the database printed `0.000`, while comparing them
+from the JSON files (the path the CI comment uses) printed `-0.000`. The
+calibration report showed `-0.00` too. Negative zero now becomes zero when
+the score is parsed, and also when a custom judge builds a score directly.
