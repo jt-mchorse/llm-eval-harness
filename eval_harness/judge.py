@@ -47,7 +47,11 @@ def clamp_judge_score(x: float) -> float:
     """
     if not isinstance(x, (int, float)) or isinstance(x, bool) or not math.isfinite(x):
         raise ValueError(f"judge score must be finite; got {x!r}")
-    if x < 0.0:
+    # `<=`, not `<`: a judge answering `SCORE: -0` gave `-0.0`, which `< 0.0`
+    # let through. The `--out` JSON kept the sign and SQLite `REAL` dropped
+    # it, so `diff` printed `0.000` where `diff-json` printed `-0.000` for the
+    # same two runs (#404, the class #388 fixed in `render_comparison`).
+    if x <= 0.0:
         return 0.0
     if x > 1.0:
         return 1.0
@@ -65,6 +69,10 @@ class JudgeScore:
     def __post_init__(self) -> None:
         if not (0.0 <= self.score <= 1.0):
             raise ValueError(f"score must be in [0, 1]; got {self.score}")
+        # A BYO `Judge` builds this directly, without `clamp_judge_score`, so
+        # `-0.0` (which the range check admits) is normalised here too (#404).
+        if self.score == 0.0:
+            object.__setattr__(self, "score", 0.0)
 
 
 class Backend(Protocol):
