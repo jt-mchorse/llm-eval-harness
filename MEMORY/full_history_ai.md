@@ -4402,3 +4402,22 @@ context_for_next_session:
   - "THE_398_MEMORY_CLAIM_calibrate_writers_use_ensure_ascii_WAS_TRUE_FOR_JSON_ONLY_the_markdown_report_carries_every_reasoning"
 followups: []
 ---
+
+---
+session: 2026-10-20T08:08Z
+issue: 412
+branch: session/2026-10-20-0816-issue-412
+focus: NEGATIVE_ZERO_SURVIVED_EVERY_READER_RUN_JSON_DELTA_JSON_THRESHOLD_DROP_AND_CALIBRATION_HUMAN_SCORE_405_FIXED_ONLY_THE_WRITERS
+phase: shipped
+delta:
+  files_changed: 4
+  tests_added: 17
+  suite: "2985 passed, 28 skipped (fresh 3.12 [dev] venv, no anthropic); ruff, format, mypy clean"
+decisions_made: []
+measured: "main 4be0351: diff-json baseline row -0.0 -> '| unchanged | `a` | -0.000 | 0.000 | +0.000 |'; comment --dry-run on a -0.0 delta JSON -> 'mean Δ **-0.000**' and '-0.000' in all three cells; threshold_drop -0.0 (JSON or --threshold-drop -0) -> 'threshold drop: `-0.000`'; load_calibration human_score -0.0 -> -0.0. After: all print 0.000 / 0.00. Revert 14 of 17 red; the 3 green are the non-zero/None value controls and the bool-mean_delta-still-refused control."
+context_for_next_session:
+  - "JUDGE_UNSIGNED_ZERO_IS_THE_ONE_HELPER_every_score_reader_and_JudgeScore_call_it"
+  - "THRESHOLD_DROP_WAS_A_FIFTH_SEAM_THE_ISSUE_DID_NOT_LIST_minus_zero_passes_the_lt_zero_check"
+  - "SUMMARY_MEANS_NORMALISED_AFTER_THE_CHECK_AND_ONLY_ON_FLOAT_because_False_eq_0_0_would_launder_a_bool"
+followups: []
+---
