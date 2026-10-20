@@ -4346,3 +4346,20 @@ context_for_next_session:
   - "DEFERRED_old_out_files_holding_minus_0_0_are_not_normalised_on_load"
 followups: []
 ---
+
+---
+session: 2026-10-20T07:50Z
+issue: 408
+branch: session/2026-10-20-0750-issue-408
+focus: CAPTURE_DEMO_PROMISED_IDENTICAL_FRAMES_BUT_THE_REGRESSION_EXAMPLE_DREW_A_FRESH_UUID_PER_RUN
+phase: shipped
+delta:
+  files_changed: 2
+  tests_added: 1
+  suite: "2952 passed; ruff, format, mypy clean (3.14 venv)"
+decisions_made: []
+measured: "main c708ee4: two captures differed in both run_id lines and the delta header. After: byte-identical stdout (output dir normalised). Revert: the new test red."
+context_for_next_session:
+  - "FILED_SAME_RUN_406_comment_token_in_error_407_calibrate_and_env_model_seams_fixed_by_parallel_agents"
+followups: []
+---
