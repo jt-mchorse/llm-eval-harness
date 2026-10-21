@@ -658,7 +658,10 @@ def checked_threshold_kappa(threshold_kappa: object) -> float:
         raise ValueError(f"threshold_kappa must be a finite number; got {threshold_kappa!r}")
     if not -1.0 <= threshold_kappa <= 1.0:
         raise ValueError(f"threshold_kappa must be in [-1, 1]; got {threshold_kappa!r}")
-    return float(threshold_kappa)
+    # `-0.0` passes the range check above and published `threshold for κ:
+    # -0.000` from `--threshold-kappa -0`: the seam #412 did not list (#416).
+    # Callers must use the returned value, not the argument they passed in.
+    return unsigned_zero(float(threshold_kappa))
 
 
 def render_report(
@@ -686,7 +689,7 @@ def render_report(
     because `_interpret_kappa` falls through its whole `<` ladder on `NaN`.
     Guarding only the threshold left the gate half-checked.
     """
-    checked_threshold_kappa(threshold_kappa)
+    threshold_kappa = checked_threshold_kappa(threshold_kappa)
     _require_correlation_range(result.cohens_kappa, "result.cohens_kappa")
     _require_correlation_range(result.pearson_r, "result.pearson_r")
     # The verdict is decided here at full precision and the two numbers behind it
