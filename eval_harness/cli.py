@@ -435,7 +435,9 @@ def _run_calibrate(args: argparse.Namespace) -> int:
     # `render_report`, after every row had been scored, and its ValueError
     # escaped at exit 1 -- this command's "kappa below threshold" code.
     try:
-        checked_threshold_kappa(args.threshold_kappa)
+        # The checked value replaces the parsed one: it is `-0` read as `0`,
+        # which the report and the `::error::` annotation below both print (#416).
+        args.threshold_kappa = checked_threshold_kappa(args.threshold_kappa)
     except ValueError as e:
         return _fail(f"--threshold-kappa: {e}")
     # The judge model as the backend will resolve it, before any judge call

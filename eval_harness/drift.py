@@ -47,7 +47,7 @@ from pathlib import Path
 from eval_harness.comparison import render_classified, render_comparison
 from eval_harness.dataset import refuse_bare_string
 from eval_harness.io_utils import atomic_write_text, find_unencodable, loads_json
-from eval_harness.judge import clamp_judge_score
+from eval_harness.judge import clamp_judge_score, unsigned_zero
 
 # ----------------------------------------------------------------------
 # Public types
@@ -769,6 +769,11 @@ def compute_drift(
     ):
         if not (0.0 <= _value <= 1.0):
             raise ValueError(f"{_name} must be in [0.0, 1.0]; got {_value}")
+    # `-0.0` passes the range check above, lands on `AxisResult.threshold`, and
+    # rendered as `<td>-0.0000</td>` in the HTML table (#416, the class of #412).
+    length_threshold = unsigned_zero(length_threshold)
+    embedding_threshold = unsigned_zero(embedding_threshold)
+    judge_threshold = unsigned_zero(judge_threshold)
 
     # cluster_k <= 0 makes `_kmeans` return ([], []), so `compute_drift` takes
     # the no-centroids branch: emb_drift=0.0, status="ok", empty histograms.

@@ -4440,3 +4440,22 @@ context_for_next_session:
   - "ValidationReport_findings_IS_A_TUPLE_assert_findings_eq_empty_list_is_always_false"
 followups: []
 ---
+
+---
+session: 2026-10-21T07:24Z
+issue: 416
+branch: session/2026-10-21-0720-issue-416
+focus: THRESHOLD_KAPPA_AND_COMPUTE_DRIFT_THRESHOLDS_PUBLISHED_MINUS_ZERO_THE_SEAMS_412_DID_NOT_LIST
+phase: shipped
+delta:
+  files_changed: 4
+  tests_added: 15
+  suite: "3001 passed, 28 skipped (fresh uv [dev] venv, no anthropic); ruff, format, mypy clean"
+decisions_made: []
+measured: "main f547a04, backend stubbed to SCORE 0.9: calibrate --threshold-kappa -0 -> '- threshold for κ: -0.000' (0 -> '0.000'); compute_drift all thresholds -0.0 -> AxisResult.threshold -0.0 x3 and '-0.0000' x3 in render_html. After: '0.000', 0.0 x3, no '-0.0000'. Revert 6 of 15 red; the 9 green are pass-through controls (0, 0.6, -0.25, +-1 for kappa; 0, 0.1, 1 for drift). Partial reverts: cli.py alone -> 1 red (::error:: annotation), render_report's use of the return alone -> 1 red."
+context_for_next_session:
+  - "CHECKED_THRESHOLD_KAPPA_RETURN_WAS_DISCARDED_BY_BOTH_CALLERS_fixing_the_return_alone_changes_no_output_cli_now_reassigns_args_threshold_kappa"
+  - "OTHER_RANGE_CHECKED_FLOATS_binarize_threshold_retry_delays_quantile_q_ARE_NEVER_PUBLISHED_swept_and_left"
+  - "DRIFT_CLI_HAS_NO_THRESHOLD_FLAGS_the_drift_seam_is_library_only"
+followups: []
+---
