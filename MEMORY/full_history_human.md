@@ -3789,3 +3789,14 @@ now treats negative zero as plain zero, using one shared helper so the readers
 stay consistent. It also covers a case the issue did not list: a regression
 threshold of `-0` printed as `-0.000`. Comparing an old file through `diff-json`
 now prints exactly what `diff` prints from the database.
+
+## 2026-10-21 — `validate --calibration` and `calibrate` now agree on whitespace at a row's edge (#415)
+
+The calibration validator trimmed every kind of Unicode whitespace from each
+line, but the loader that `calibrate` uses removed only the newline. A row that
+started or ended with a non-breaking space, an ideographic space or an ASCII
+separator control therefore passed the pre-flight check, and `calibrate`
+then refused it as invalid JSON. The loader now trims lines the same way the
+validator does, which is also how the golden-dataset loader and validator
+already work. A new test checks every whitespace character Python recognises
+at both ends of a row and confirms the two functions give the same answer.

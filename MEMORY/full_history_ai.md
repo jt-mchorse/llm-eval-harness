@@ -4421,3 +4421,22 @@ context_for_next_session:
   - "SUMMARY_MEANS_NORMALISED_AFTER_THE_CHECK_AND_ONLY_ON_FLOAT_because_False_eq_0_0_would_launder_a_bool"
 followups: []
 ---
+
+---
+session: 2026-10-21T07:20Z
+issue: 415
+branch: session/2026-10-21-0720-issue-415
+focus: CALIBRATION_LOADER_RSTRIPPED_NEWLINE_WHILE_ITS_VALIDATOR_STRIPPED_SO_A_ROW_EDGED_WITH_NBSP_IDEOGRAPHIC_SPACE_OR_X1C_PASSED_VALIDATE_AND_CALIBRATE_REFUSED_IT
+phase: shipped
+delta:
+  files_changed: 2
+  tests_added: 14
+  suite: "3000 passed, 28 skipped (fresh uv [dev] venv, no anthropic); ruff, format, mypy clean"
+decisions_made: []
+measured: "main f547a04: U+00A0 / U+3000 / \\x1c / \\x1f prepended or appended to row 1 of fixtures/calibration.jsonl -> validate_calibration findings=0 valid=50/50 (CLI 'ok ... findings=0' rc 0) while load_calibration raised 'line 1: invalid JSON: Expecting value' (lead) / 'Extra data' (trail), 8 of 8 cells. After: all load 50 rows. Revert 11 of 14 red; the 3 green are inner-NBSP-invalid-in-both, whitespace-only-line-refused-by-both and ASCII-space-edges-accepted-by-both."
+context_for_next_session:
+  - "CALIBRATION_NOW_MATCHES_THE_DATASET_PAIR_load_jsonl_validate_dataset_load_calibration_validate_calibration_ALL_strip"
+  - "THE_PARITY_TEST_SWEEPS_EVERY_str_isspace_CODEPOINT_AT_BOTH_EDGES_and_asserts_same_verdict_not_the_three_named_chars_only"
+  - "ValidationReport_findings_IS_A_TUPLE_assert_findings_eq_empty_list_is_always_false"
+followups: []
+---

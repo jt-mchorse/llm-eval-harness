@@ -163,7 +163,14 @@ def load_calibration(path: str | Path) -> list[CalibrationRow]:
     seen_ids: set[str] = set()
     with Path(path).open("r", encoding="utf-8") as fh:
         for line_no, raw in enumerate(fh, start=1):
-            line = raw.rstrip("\n")
+            # `.strip()`, not `.rstrip("\n")` (#415): this must be the exact
+            # rule `validate_calibration` applies, as `load_jsonl` and
+            # `validate_dataset` already share it. `str.strip()` also drops
+            # Unicode whitespace JSON does not allow (U+00A0, U+3000,
+            # `\x1c`-`\x1f`), so a row edged with one passed the validator and
+            # then died here as "invalid JSON". The pre-flight said ok and
+            # `calibrate` refused the file, which is the same gap #217 closed.
+            line = raw.strip()
             if line == "":
                 # Blank lines are usually pipeline accidents; reject them so
                 # the loader doesn't silently swallow data.
