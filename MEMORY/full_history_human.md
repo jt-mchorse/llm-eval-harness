@@ -3800,3 +3800,14 @@ then refused it as invalid JSON. The loader now trims lines the same way the
 validator does, which is also how the golden-dataset loader and validator
 already work. A new test checks every whitespace character Python recognises
 at both ends of a row and confirms the two functions give the same answer.
+
+## 2026-10-21 — A threshold of "-0" no longer prints as "-0.000" (#416)
+
+The #412 fix missed two thresholds. `calibrate --threshold-kappa -0` wrote
+`threshold for κ: -0.000` in its report, and `compute_drift` called with a
+drift threshold of `-0.0` printed `-0.0000` in the HTML table. Both now treat
+negative zero as zero. The kappa check already returned a cleaned-up value,
+but nothing used it: the report and the command line both kept the value as
+typed. Both now use the checked value, which also fixes the `::error::` line
+printed when kappa is below the threshold. No other range-checked number in
+the harness appears in any output, so this class should now be closed.
