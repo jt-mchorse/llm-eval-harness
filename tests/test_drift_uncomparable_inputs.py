@@ -93,6 +93,9 @@ TOKEN_LESS = ["\U0001f389\U0001f389\U0001f389", "!!!", "", " \n\t ", "---", "???
         "\U0001f389\U0001f389\U0001f389",
         "_",
         "———",
+        # uncomparable by cancellation: two tokens, one bucket, opposite signs (#426)
+        "what refund",
+        "w195 w39",
     ],
 )
 def test_has_embeddable_content_agrees_with_hash_embed(text: str) -> None:

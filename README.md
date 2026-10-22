@@ -508,7 +508,9 @@ Three axes are scored:
   they are *excluded* from this axis and from the example list and
   counted in `DriftReport.n_uncomparable` instead — see D-017. They
   used to score the ceiling distance of `1.000` and evict every input
-  with real content (#210).
+  with real content (#210). The same holds for an input whose tokens
+  cancel: `"what refund"` has two tokens that hash to one bucket with
+  opposite signs, so it also embeds to the zero vector (#426).
 - **Judge** — operator-supplied `judge_score_fn(input) -> float`. The
   axis is *skipped* (not scored) when no function is provided so the
   rest of the report still renders. `--judge-stub` is a deterministic

@@ -378,8 +378,8 @@ def _tokens(text: str) -> list[str]:
     return out
 
 
-def has_embeddable_content(text: str) -> bool:
-    """True when ``hash_embed(text)`` is a real unit vector, not the zero vector.
+def has_embeddable_content(text: str, dim: int = 64) -> bool:
+    """True when ``hash_embed(text, dim)`` is a real unit vector, not the zero vector.
 
     ``hash_embed`` sums one signed unit contribution per token, so a string with
     no tokens -- ``""``, ``"!!!"``, ``"\U0001f389\U0001f389"``, ``"   \n\t "``
@@ -388,12 +388,28 @@ def has_embeddable_content(text: str) -> bool:
     point, and every cosine-derived quantity for it is **undefined**, not zero
     (D-017).
 
-    Deliberately defined as ``bool(_tokens(text))`` rather than by re-deriving
-    the rule, so it cannot drift out of lockstep with the embedder it describes.
+    Having tokens is not enough (#426). Two tokens that hash to the same bucket
+    with opposite signs cancel, so ``"what refund"`` has two tokens and still
+    embeds to exactly the zero vector -- about 1 in 128 random two-token inputs
+    at ``dim=64``. This used to be ``bool(_tokens(text))``, which called those
+    comparable, and `compute_drift` then reported ``["w195 w39"]`` against an
+    identical golden set at the ceiling distance ``1.0``. So the predicate now
+    tests the vector itself, and takes ``dim`` because which tokens collide
+    depends on the bucket count. The components are sums of ``+-1.0``, which
+    are exact in floating point, so a cancelled bucket is exactly ``0.0``.
     ``tests/test_drift_uncomparable_inputs.py`` pins the parity directly against
     ``hash_embed``.
     """
-    return bool(_tokens(text))
+    return _is_nonzero(hash_embed(text, dim=dim))
+
+
+def _is_nonzero(vec: Sequence[float]) -> bool:
+    """The comparability test on an already-computed vector (#426).
+
+    Split out so `compute_drift` can partition on the vectors it actually
+    clusters instead of re-embedding through `has_embeddable_content`.
+    """
+    return any(v != 0.0 for v in vec)
 
 
 def hash_embed(text: str, dim: int = 64) -> list[float]:
@@ -814,8 +830,16 @@ def compute_drift(
     # candidate set is a *sampled traffic slice* -- large, unreviewed -- so a
     # single emoji must not abort a 10k-line drift run; those are counted in
     # `n_uncomparable` and excluded from the cosine-derived outputs.
-    g_comparable = [has_embeddable_content(s) for s in golden_inputs]
-    c_comparable = [has_embeddable_content(s) for s in candidate_inputs]
+    #
+    # The partition is taken from the vectors themselves, at `embedding_dim`,
+    # not from a separate prediction of them (#426). It used to be "has any
+    # tokens", and two tokens can cancel to the zero vector in one bucket:
+    # `compute_drift(["w195 w39"], ["w195 w39"], cluster_k=1)` reported the
+    # identical input at the ceiling distance 1.0 with `n_uncomparable == (0, 0)`.
+    g_vecs = [hash_embed(s, dim=embedding_dim) for s in golden_inputs]
+    c_vecs = [hash_embed(s, dim=embedding_dim) for s in candidate_inputs]
+    g_comparable = [_is_nonzero(v) for v in g_vecs]
+    c_comparable = [_is_nonzero(v) for v in c_vecs]
 
     # Not a cosmetic guard. Measured before this check, `compute_drift(['!!!',
     # '???'], [4 real inputs], cluster_k=2)` was ACCEPTED and reported
@@ -828,8 +852,8 @@ def compute_drift(
     if not any(g_comparable):
         raise ValueError(
             f"golden_inputs must contain at least one input with embeddable content "
-            f"(alphanumeric tokens); all {len(golden_inputs)} are token-less, so every "
-            f"hash_embed vector is the zero vector and the embedding axis can only "
+            f"(alphanumeric tokens that do not cancel out); all {len(golden_inputs)} "
+            f"embed to the zero vector, so the embedding axis can only "
             f"report a fabricated 'ok'"
         )
 
@@ -861,8 +885,7 @@ def compute_drift(
     )
 
     # --- Embedding axis -------------------------------------------------
-    g_vecs = [hash_embed(s, dim=embedding_dim) for s in golden_inputs]
-    c_vecs = [hash_embed(s, dim=embedding_dim) for s in candidate_inputs]
+    # `g_vecs`/`c_vecs` were computed above for the comparability partition.
     # Seed k-means from comparable golden vectors only. A zero vector is not a
     # seed -- it drags a centroid toward the origin, and a centroid that stays
     # at the origin then ties with every input at cosine 0.0. Measured: one
@@ -1342,7 +1365,8 @@ def render_html(report: DriftReport) -> str:
             '<p style="color:#b04127;font-size:12px;margin-top:8px">'
             f"<strong>{g_uncomparable} of {report.n_golden}</strong> golden and "
             f"<strong>{c_uncomparable} of {report.n_candidate}</strong> candidate inputs "
-            "have no embeddable content (no alphanumeric tokens). They are counted in the "
+            "have no embeddable content (no alphanumeric tokens, or tokens that cancel to the "
+            "zero vector). They are counted in the "
             "length and judge axes and excluded from the embedding cluster axis and from "
             "the representative-example list, because the zero embedding vector has no "
             "angle to any centroid.</p>"
