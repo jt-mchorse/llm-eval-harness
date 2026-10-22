@@ -553,6 +553,16 @@ def pearson_r(xs: list[float], ys: list[float]) -> float:
     _require_finite_numbers(xs, "xs")
     _require_finite_numbers(ys, "ys")
 
+    # Zero variance is checked on the INPUT, not on the float `den` (#420). A
+    # constant judge whose score is not exactly representable -- [0.05] * 3 --
+    # has a float mean that differs from 0.05 by an ULP, so `var_x` came out as
+    # a tiny non-zero number, the `den == 0` guard below missed it, and r was
+    # float noise (-3.9e-16) that the report and the CLI printed as `-0.000`.
+    # The docstring promises exactly 0.0, and a constant list has zero variance
+    # by its shape, whatever its mean rounds to.
+    if all(x == xs[0] for x in xs) or all(y == ys[0] for y in ys):
+        return 0.0
+
     n = len(xs)
     mean_x = sum(xs) / n
     mean_y = sum(ys) / n
