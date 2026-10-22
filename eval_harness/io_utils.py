@@ -401,9 +401,28 @@ def loads_json(text: str) -> Any:
     `json.loads` refuses with something that is not a `JSONDecodeError`: a
     plain `ValueError`. It escaped the same way, so `validate` and `run` exited
     1 with a traceback (#365). It gets the same translation.
+
+    A key repeated inside one object is refused as a `JSONDecodeError` too
+    (#421). Bare `json.loads` keeps the last value, so a calibration row with
+    ``"human_score"`` written twice loaded the second label, a dataset row with
+    ``"id"`` written twice loaded the second id, and `validate` reported both
+    files clean. Which value the author meant is not recoverable, so it is a
+    malformed row. Only keys of the SAME object collide: ``{"a": {"a": 1}}``
+    still decodes.
     """
+
+    def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        obj = dict(pairs)
+        if len(obj) != len(pairs):
+            seen: set[str] = set()
+            for key, _ in pairs:
+                if key in seen:
+                    raise json.JSONDecodeError(f"duplicate key {key!r}", text, 0)
+                seen.add(key)
+        return obj
+
     try:
-        return json.loads(text)
+        return json.loads(text, object_pairs_hook=_reject_duplicate_keys)
     except RecursionError:
         raise json.JSONDecodeError("nesting too deep to decode", text, 0) from None
     except json.JSONDecodeError:
