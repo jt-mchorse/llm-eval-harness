@@ -3836,3 +3836,16 @@ table showed `-0.000`. The distance is now clamped to its valid range of 0 to
 2. The similarity function itself is unchanged, because clustering uses it to
 pick the closest centre, and clamping there could create ties that move
 inputs between clusters.
+
+## 2026-10-22 — A key written twice in one row is now refused instead of silently using the second value (#421)
+
+Every file the harness reads goes through one JSON reader, and that reader
+used Python's default behaviour for a key that appears twice in the same
+object: keep the last value, say nothing. So a hand-edited calibration row
+with `"human_score"` written twice quietly used the second label, and a
+dataset row with `"id"` written twice quietly used the second id. `validate`
+reported both files as clean. The reader now refuses a repeated key as
+invalid JSON, so `validate` lists it as a parse error and the loaders, `run`
+and `drift` reject the file the same way they reject any other broken row.
+The same key at different levels of nesting is still fine. Every data file
+committed to the repo still loads unchanged.

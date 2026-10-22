@@ -4517,3 +4517,22 @@ context_for_next_session:
   - "PYPROJECT_ADDOPTS_HAS_MINUS_Q_so_passing_minus_q_again_hides_the_pytest_summary_line"
 followups: []
 ---
+
+---
+session: 2026-10-22T08:03Z
+issue: 421
+branch: session/2026-10-22-0803-issue-421
+focus: LOADS_JSON_RESOLVED_A_KEY_REPEATED_INSIDE_ONE_OBJECT_LAST_ONE_WINS_SO_A_DOUBLE_HUMAN_SCORE_OR_ID_LOADED_THE_SECOND_VALUE_AND_VALIDATE_REPORTED_OK
+phase: shipped
+delta:
+  files_changed: 2
+  tests_added: 15
+  suite: "3077 passed (repo .venv, py3.14); ruff, format, mypy clean"
+decisions_made: []
+measured: "main 7dde645: calibration row 1 + ', \"human_score\": 0.0' -> validate --calibration rc 0 findings 0, load_calibration()[0].human_score 0.0; dataset row 1 + ',\"id\":\"qa_999\",\"input\":\"What is 2+2?\"' -> validate rc 0, load_jsonl yields qa_999. After: rc 1 'line 1 [parse]: invalid JSON: duplicate key ...', CalibrationLoadError / DatasetLoadError. All 8 tracked .json/.jsonl (127 decodable docs) decode identically. Revert 11 of 15 red; the 4 green are the bare-json.loads precondition and three controls (same key at different levels, same key in sibling objects, every committed document)."
+context_for_next_session:
+  - "OBJECT_PAIRS_HOOK_RAISES_JSONDECODEERROR_DIRECTLY_so_every_existing_bad_json_arm_applies_pos_is_0_like_the_recursion_and_int_limit_translations"
+  - "COMMENT_DO_REQUEST_ALSO_READS_THROUGH_LOADS_JSON_a_duplicate_key_github_body_now_takes_the_not_json_runtimeerror_arm_kept_uniform_on_purpose"
+  - "NO_COMMITTED_FIXTURE_HAD_A_DUPLICATE_KEY_a_control_test_walks_git_ls_files_json_jsonl"
+followups: []
+---
