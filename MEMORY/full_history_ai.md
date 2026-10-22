@@ -4459,3 +4459,22 @@ context_for_next_session:
   - "DRIFT_CLI_HAS_NO_THRESHOLD_FLAGS_the_drift_seam_is_library_only"
 followups: []
 ---
+
+---
+session: 2026-10-22T07:21Z
+issue: 420
+branch: session/2026-10-22-0721-issue-420
+focus: PEARSON_R_ZERO_VARIANCE_GUARD_READ_THE_FLOAT_DEN_SO_A_CONSTANT_AT_AN_UNREPRESENTABLE_VALUE_RETURNED_ULP_NOISE_RENDERED_MINUS_0_000
+phase: shipped
+delta:
+  files_changed: 2
+  tests_added: 7
+  suite: "3052 passed (repo .venv, 3.14); new file + pearson/calibration tests 54 passed in uv 3.11 and 3.12 venvs; ruff, format, mypy clean"
+decisions_made: []
+measured: "main 0f8203d: pearson_r([0.05]*3, [0.5, 0.9, 0.9]) -> -3.925231146709437e-16 (both argument orders); constants {0.05, 0.1, 0.7, 1/3} x lengths 2..12 against a non-constant partner -> non-zero r for 26/44 on 3.11, 9/44 on 3.12, 3/44 on 3.14; render_report '-0.000'. After: 0.0 / 0 of 44 / '0.000'. Revert 4 of 7 red on 3.11, 3.12 and 3.14; the 3 green are the interpreter-counted anti-vacuity arm, a real correlation unchanged bit for bit, exactly-representable constants already 0.0."
+context_for_next_session:
+  - "ZERO_VARIANCE_IS_NOW_A_SHAPE_CHECK_all_xs_equal_or_all_ys_equal_BEFORE_THE_MOMENTS_den_eq_0_kept_as_backstop_for_underflow"
+  - "THE_ISSUE_E2E_REPRO_VIA_FIXTURE_ROWS_DID_NOT_REPRODUCE_human_scores_are_constant_1_0_so_var_y_is_exactly_0_test_uses_hand_built_human_0_5_0_9_0_9"
+  - "NOT_SWEPT_non_constant_input_whose_variance_underflows_to_0_eg_values_near_1e_200_still_returns_0_0_out_of_calibration_domain"
+followups: []
+---

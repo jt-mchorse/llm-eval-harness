@@ -3811,3 +3811,16 @@ but nothing used it: the report and the command line both kept the value as
 typed. Both now use the checked value, which also fixes the `::error::` line
 printed when kappa is below the threshold. No other range-checked number in
 the harness appears in any output, so this class should now be closed.
+
+## 2026-10-22 — A constant judge now gets a correlation of exactly 0, not "-0.000" (#420)
+
+`pearson_r` is documented to return exactly 0 when either list of scores has
+no spread. It decided that by checking whether the computed variance was zero.
+For a judge that always gave the same score, say 0.05, rounding made the
+average land a hair away from 0.05. The variance then came out as a tiny
+non-zero number, the check missed it, and the correlation was rounding noise
+that the report printed as `-0.000`. The function now checks directly whether
+all the scores are equal before doing any arithmetic. The issue's suggested
+reproduction, using the bundled calibration file, did not actually show the
+bug: every human score in it is 1.0, which was already handled. The new test
+uses hand-written scores instead.
