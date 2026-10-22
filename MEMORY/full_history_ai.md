@@ -4478,3 +4478,22 @@ context_for_next_session:
   - "NOT_SWEPT_non_constant_input_whose_variance_underflows_to_0_eg_values_near_1e_200_still_returns_0_0_out_of_calibration_domain"
 followups: []
 ---
+
+---
+session: 2026-10-22T07:21Z
+issue: 419
+branch: session/2026-10-22-0721-issue-419
+focus: COMPUTE_DRIFT_DISTANCE_TO_NEAREST_GOLDEN_CLUSTER_WAS_UNCLAMPED_1_MINUS_COS_SO_AN_IDENTICAL_INPUT_PUBLISHED_MINUS_2_2E_16_RENDERED_MINUS_0_000
+phase: shipped
+delta:
+  files_changed: 2
+  tests_added: 8
+  suite: "3053 passed (repo .venv, py3.14); ruff, format, mypy clean"
+decisions_made: []
+measured: "main 0f8203d: compute_drift(['tau gamma iota'], ['tau gamma iota']) distance -2.220446049250313e-16; CLI drift on identical one-line files rc 0 with '<td>-0.000</td>'; golden_inputs.jsonl vs itself negative at cluster_k 7-10 (2 of 20 at k=8), clean at 1-6; 733-794 of 3000 random token strings have self-cosine > 1 across three seeds. After: 0.0 (+0), '<td>0.000</td>', none negative. Revert 5 of 8 red; the 3 green are the self-cosine-above-1 premise guard, the far-input bit-for-bit distance and the [0, 2] upper bound."
+context_for_next_session:
+  - "CLAMP_IS_AT_THE_SUBTRACTION_NOT_IN__cosine_kmeans_and__assign_use_cosine_as_an_argmax_key_with_first_wins_tie_break_and_a_clamp_there_would_create_ties"
+  - "A_PER_CLUSTER_K_PARAMETRIZE_WAS_SIX_ARMS_GREEN_ON_BOTH_TREES_folded_into_one_sweep_test"
+  - "PYPROJECT_ADDOPTS_HAS_MINUS_Q_so_passing_minus_q_again_hides_the_pytest_summary_line"
+followups: []
+---

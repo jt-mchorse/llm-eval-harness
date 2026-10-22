@@ -3824,3 +3824,15 @@ all the scores are equal before doing any arithmetic. The issue's suggested
 reproduction, using the bundled calibration file, did not actually show the
 bug: every human score in it is 1.0, which was already handled. The new test
 uses hand-written scores instead.
+
+## 2026-10-22 — An input identical to a golden input is now at distance 0, not slightly below it (#419)
+
+The drift report lists the candidate inputs furthest from the golden set,
+with each input's distance to the nearest golden cluster. That distance was
+computed as one minus a cosine similarity with no bound. Rounding can put an
+input's similarity to an identical cluster centre a hair above 1, so an exact
+copy of a golden input was reported at about -0.0000000000000002 and the HTML
+table showed `-0.000`. The distance is now clamped to its valid range of 0 to
+2. The similarity function itself is unchanged, because clustering uses it to
+pick the closest centre, and clamping there could create ties that move
+inputs between clusters.

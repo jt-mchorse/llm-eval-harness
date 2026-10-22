@@ -1041,10 +1041,23 @@ def compute_drift(
             if not ok:
                 continue
             nearest_sim = max(_cosine(v, centroids[i]) for i in occupied_clusters)
+            # Clamp into the cosine-distance range [0, 2] (#419). Both vectors
+            # are L2-normalised, but the normalisation is rounded, so the dot
+            # product of an input with an identical centroid can come out at
+            # 1.0000000000000002. The subtraction then published
+            # -2.220446049250313e-16, which the report rendered as `-0.000`,
+            # the negative-zero cell #404/#412/#416 removed elsewhere.
+            # Measured: about a quarter of random token strings (733-794 of
+            # 3000 across three seeds) have a self-cosine above 1, and the
+            # shipped golden set against itself gave 2 of 20 negative
+            # distances at `cluster_k=8`. The clamp goes here and not
+            # in `_cosine`. `_kmeans` and `_assign` use that value only as an
+            # argmax key with a first-wins tie-break, and clamping it would turn
+            # 1.0000000000000002 vs 1.0 into a tie and move inputs between
+            # clusters. `max(0.0, ...)` returns +0.0, never -0.0.
+            distance = min(2.0, max(0.0, 1.0 - nearest_sim))
             examples.append(
-                RepresentativeExample(
-                    text=text, distance_to_nearest_golden_cluster=1.0 - nearest_sim
-                )
+                RepresentativeExample(text=text, distance_to_nearest_golden_cluster=distance)
             )
         # Sort on (distance desc, text asc). The distance key alone left ties
         # to Python's stable sort, i.e. to the order the inputs happened to sit
