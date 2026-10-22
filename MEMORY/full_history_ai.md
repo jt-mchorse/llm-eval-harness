@@ -3544,16 +3544,14 @@ context_for_next_session:
   - MY_FLAGGED_FIRST_ARM_WAS_VACUOUS_every_flagged_fixture_was_also_regressed_which_ranks_first_anyway_A_RANK_KEY_NEEDS_A_FIXTURE_WHERE_ONLY_THAT_KEY_SEPARATES
   - sibling_check_for_next_run_rag_run_eval_post_comment_and_prs_aop_comment_posters_for_the_same_65536_cap
 followups: []
+---
+
+---
 session: 2026-10-07T07:28:53Z
 duration_min: 3   # computed from GitHub: plan comment 2026-10-07T07:26:24Z -> PR 2026-10-07T07:28:53Z
 issue: 309
 branch: session/2026-10-07-leh-readme-snippet
 focus: README_DOWNSTREAM_WORKFLOW_SNIPPET_DID_NOT_PARSE_FOLDED_ITS_COMMANDS_AND_SKIPPED_THE_COMMENT_ON_A_REGRESSION
-session: 2026-10-07T08:45Z
-duration_min: 6
-issue: 314
-branch: session/2026-10-07-leh-drift-marks
-focus: THE_DRIFT_TOKENIZER_DROPPED_COMBINING_MARKS_NFD_TEXT_READ_AS_DRIFTED
 phase: shipped
 delta:
   files_changed: 2
@@ -3565,12 +3563,28 @@ context_for_next_session:
   - A_YAML_BLOCK_IN_A_README_IS_CODE_parse_it_AND_RUN_IT_the_bash_fence_lock_scoped_itself_away_from_this_one_ON_PURPOSE_and_that_purpose_was_its_PATHS_not_its_validity
   - EXIT_1_MEANS_FINDINGS_IN_THIS_PORTFOLIO_so_ANY_DOCUMENTED_CI_STEP_RUNNING_A_FINDINGS_CLI_UNDER_bash_e_SKIPS_EVERYTHING_AFTER_IT_ON_EXACTLY_THE_RUN_THAT_FOUND_SOMETHING
 followups: ["#310"]
+---
+
+---
+session: 2026-10-07T08:45Z
+duration_min: 6
+issue: 314
+branch: session/2026-10-07-leh-drift-marks
+focus: THE_DRIFT_TOKENIZER_DROPPED_COMBINING_MARKS_NFD_TEXT_READ_AS_DRIFTED
+phase: shipped
+delta:
+  files_changed: 2
+  tests_added: 7
   suite: "2276 passed (junitxml); ruff, format, mypy clean"
 decisions_made: []
 measured: "main: NFD cafe -> cafe, Devanagari split, cos(NFC,NFD)=0.667; fix 1.0. Documented drift report byte-identical (cmp). Revert main 6/7, no-NFC 2, no-marks 3."
 context_for_next_session:
   - PYTHON_re_HAS_NO_p_M_and_[^\\W_]_IS_isalnum_WHICH_EXCLUDES_MARKS_sweep_other_python_tokenizers_rag_reranker_csl_semantic_for_the_same_class
   - GOTCHA_ZSH_CHOKES_ON_UNICODE_TEST_IDS_IN_GREP_PIPES_count_with_junitxml
+followups: []
+---
+
+---
 session: 2026-10-07T09:26Z
 duration_min: 3
 issue: 310
@@ -3586,6 +3600,9 @@ measured: "step scripts under bash -e with a stub: main 0/0/0 for rc 0/1/2 (2 re
 context_for_next_session:
   - OR_ECHO_AFTER_A_FINDINGS_CLI_SWALLOWS_ITS_ERROR_CODE_TOO_grep_workflows_for_or_echo_and_or_true_after_tools_with_a_0_1_2_contract
 followups: []
+---
+
+---
 session: 2026-10-07T10:50Z
 duration_min: 6
 issue: 318
@@ -3601,6 +3618,9 @@ measured: "real CLI on a 401-digit score: main traceback exit 1; fix exit 2 one 
 context_for_next_session:
   - ALSO_FILED_317_JT_judge_clamp_of_out_of_scale_scores_to_1_0
 followups: ["#317"]
+---
+
+---
 session: 2026-10-07T10:56Z
 duration_min: 4
 issue: 321
