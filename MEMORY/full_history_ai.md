@@ -4574,3 +4574,24 @@ context_for_next_session:
   - "BEHAVIOURAL_CONTROLS_SEARCH_W_I_W_J_PAIRS_WHERE_DIM_AND_DIM64_PREDICATES_DISAGREE_at_16_32_128"
 followups: []
 ---
+
+---
+session: 2026-10-23T07:39Z
+issue: 430
+branch: session/2026-10-23-0800-issue-430
+focus: DUMP_JSONL_LET_A_RAW_RECURSIONERROR_FROM_JSON_DUMPS_ESCAPE_ON_DEEPLY_NESTED_PROVENANCE_NOT_ITS_DOCUMENTED_VALUEERROR
+phase: shipped
+delta:
+  files_changed: 2
+  tests_added: 4
+  suite: "3073 passed, 28 skipped on CI-shaped 3.11 and 3.12 venvs (pip install -e .[dev]); ruff, format, mypy clean; CLI smoke ok"
+decisions_made: []
+measured: "main dd4748d: provenance {'p': N nested lists} -> dump_jsonl RecursionError at N=5000 (3.11) and N=20000 (3.12); 3.12 writes 9992; 3.14 writes 20000. Encoder limits bisected: 992 (3.11), 9995 (3.12). Destination untouched in every failing case. After: ValueError 'examples[0] (id='b'): field 'provenance' is nested too deep ...', destination untouched. Revert 2 of 4 red on 3.11 and 3.12 (patched-encoder arm + 12000-deep real arm); the 2 green are the 200-deep round-trip and the patched-encoder passthrough controls."
+context_for_next_session:
+  - "NO_SHARED_FIXED_DEPTH_BOUND_load_jsonl_decodes_about_100000_levels_on_3_11_3_12_so_a_bound_safe_for_the_3_11_encoder_would_shrink_what_the_reader_accepts"
+  - "FIELD_IS_LOCATED_BY_RE_ENCODING_NAME_VALUE_NOT_THE_BARE_VALUE_so_a_value_one_level_under_the_limit_alone_is_still_named"
+  - "REAL_DEPTH_ARM_SKIPS_ON_3_14_BY_PRECONDITION_the_patched_json_dumps_arm_is_red_on_every_interpreter"
+  - "FIND_UNREPRESENTABLE_PATH_STRINGS_ARE_QUADRATIC_IN_DEPTH_about_680MB_at_20000_filed_as_432_real_depth_test_capped_at_12000"
+followups:
+  - "#432 find_unrepresentable quadratic memory on deep values"
+---

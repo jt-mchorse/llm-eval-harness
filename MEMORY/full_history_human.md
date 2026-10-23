@@ -3878,3 +3878,20 @@ clustered and reported, and the one they called fine was counted as
 uncomparable. Both docstrings, the README and the architecture doc now
 name the size-aware call. New tests check the wording and pin the count at
 several non-default sizes.
+
+## 2026-10-23 — Writing a dataset with a deeply nested value now raises the documented error instead of a crash (#430)
+
+`dump_jsonl` promises that anything it can't write is refused with a
+`ValueError` that names the example and the field. A free-form field like
+`provenance` nested thousands of levels deep broke that promise. Python's
+JSON encoder ran out of stack and raised a `RecursionError`, which is a
+different kind of error and gets past code that only catches `ValueError`.
+How deep is too deep depends on the Python version: about 1,000 levels on
+3.11, about 10,000 on 3.12, and 3.14 copes with far more. So the writer now
+catches the encoder's own failure, works out which field caused it, and
+raises the documented `ValueError`. It does not enforce a fixed depth limit,
+because the reader accepts much deeper files than the 3.11 encoder can write,
+and a shared limit would have made the reader reject files it reads today.
+Nothing is written to disk when the error happens. While testing this I
+found that the check that walks these values uses memory that grows with the
+square of the depth, and filed that separately as #432.
