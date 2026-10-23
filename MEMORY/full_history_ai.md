@@ -4595,3 +4595,22 @@ context_for_next_session:
 followups:
   - "#432 find_unrepresentable quadratic memory on deep values"
 ---
+
+---
+session: 2026-10-23T07:47Z
+issue: 432
+branch: session/2026-10-23-0750-issue-432
+focus: FIND_UNREPRESENTABLE_BUILT_A_FULL_PATH_STRING_PER_PUSHED_NODE_SO_MEMORY_WAS_QUADRATIC_IN_DEPTH
+phase: shipped
+delta:
+  files_changed: 3
+  tests_added: 18
+  suite: "3099 passed, 28 skipped (CI-shaped 3.11 venv, pip install -e .[dev]); targeted files 204 passed on 3.12; ruff, format, mypy clean; CLI smoke ok"
+decisions_made: []
+measured: "main e5a2915 (3.11.14), tracemalloc peak of find_unrepresentable({'provenance': {'p': N nested lists}}): 2000 6.5 MB, 12000 218.4 MB, 20000 605.3 MB (10x depth = 93x memory). After: 0.6 / 2.8 / 6.6 MB (11x). Revert io_utils.py: 1 of 18 red (the peak-ratio arm, bound 30x); 17 green controls (5000-deep full path + 16-row path table whose expected values are main's output). The wrong lazy fix that drops the empty-key rule turns 3 table rows red (.x, ., ..k)."
+context_for_next_session:
+  - "PATH_IS_A_PARENT_SEGMENT_LINK_NONE_IS_THE_EMPTY_PATH_joined_only_for_the_returned_finding"
+  - "OLD_SPELLING_DROPPED_THE_DOT_WHEN_THE_STRING_SO_FAR_WAS_EMPTY_which_is_also_below_an_empty_string_key_at_the_root_key_path_keeps_it"
+  - "SURROGATE_FIXTURES_MUST_USE_CHR_0XD800_test_source_representability_rejects_a_literal"
+followups: []
+---

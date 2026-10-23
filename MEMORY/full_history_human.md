@@ -3895,3 +3895,17 @@ and a shared limit would have made the reader reject files it reads today.
 Nothing is written to disk when the error happens. While testing this I
 found that the check that walks these values uses memory that grows with the
 square of the depth, and filed that separately as #432.
+
+## 2026-10-23 — The record check now uses memory in step with nesting depth, not its square (#432)
+
+Before a record is loaded or written, a walk checks every value in it, and
+it built the full text path to each value (like `provenance.p[0][0]...`) as
+it went. A value nested N levels deep gave each level a path string of
+length N, so memory grew with the square of the depth: about 218 MB at
+12,000 levels and 605 MB at 20,000. Each value now keeps only a link to its
+parent and its own piece of the path, and the full path is put together
+only when there is a problem to report. The same walk now peaks at 2.8 MB
+and 6.6 MB. Reported paths are the same as before, character for character.
+New tests check that, including the odd case of empty-string keys, where
+the old code left out the dot. Another new test fails if memory starts
+growing faster than the depth again.
