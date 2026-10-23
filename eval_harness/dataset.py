@@ -244,6 +244,11 @@ class Dataset:
         and overwriting every row with `self.version` would be a lossy write
         that no reader could detect.
 
+        A value nested deeper than `json.dumps` can encode is refused the same
+        way, naming the field, instead of escaping as a `RecursionError` (#430).
+        That depth belongs to the interpreter (about 1000 on 3.11, 10000 on
+        3.12), so the refusal comes from the encoder, not from a fixed bound.
+
         `tests/test_dataset_representability.py` runs the representability
         property over a variant table, and
         `tests/test_dataset_dump_write_path.py` does the same for the schema.
@@ -317,10 +322,13 @@ class Dataset:
         # Compact separators (no spaces) plus sorted keys give us a stable,
         # diff-friendly canonical form. `ensure_ascii=False` keeps non-ASCII
         # inputs human-readable on disk.
-        lines = (
-            json.dumps(record, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
-            for record in records
-        )
+        # Encoded in full before anything is written: a record nested too deep
+        # for the encoder becomes a `ValueError` here rather than a raw
+        # `RecursionError`, and the destination is left untouched (#430).
+        lines = [
+            _encode_record(i, ex.id, record)
+            for i, (ex, record) in enumerate(zip(self.examples, records, strict=True))
+        ]
         atomic_write_text(path, "\n".join(lines) + "\n")
 
 
@@ -601,6 +609,50 @@ def _find_unrepresentable(record: dict[str, Any]) -> tuple[str, str] | None:
     # it did not find; the loud version is a bug report instead of a wrong
     # sentence in an operator's terminal.
     raise AssertionError(f"unhandled representability kind {kind!r} at {path!r}")
+
+
+def _dumps_canonical(value: Any) -> str:
+    return json.dumps(value, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+
+
+def _encode_record(index: int, example_id: str, record: dict[str, Any]) -> str:
+    """Encode one record as its canonical JSONL line, or raise `ValueError`.
+
+    `json.dumps` raises `RecursionError` on nesting deeper than the encoder's
+    stack allows -- not a `ValueError`, so it escaped `dump_jsonl`'s documented
+    contract and a caller's `except ValueError` (#430). A `provenance` of
+    20000 nested lists did it on 3.11 and 3.12 alike; 3.11 gives up near 1000
+    levels, 3.12 near 10000, and 3.14 writes that file, so the depth is the
+    interpreter's and is not hard-coded here. `Example(...)` accepts the value,
+    and `load_jsonl` reads it back (its decoder goes ~100,000 deep, #333), so a
+    shared fixed bound would change what the reader accepts; this translates
+    the encoder's own refusal instead.
+
+    Raised before `atomic_write_text` is called, so the destination is left as
+    it was, like every other refusal in `dump_jsonl`. The field is found by
+    re-encoding each top-level value, which only runs on the failure path.
+    """
+    try:
+        return _dumps_canonical(record)
+    except RecursionError:
+        pass
+    # Outside the `except` so the message is not chained to the
+    # `RecursionError`'s traceback, thousands of frames deep. Each field is
+    # re-encoded as `{name: value}`, not bare, so it sits at the depth it had in
+    # the record: a value one level under the limit on its own would otherwise
+    # encode and leave no field to name.
+    field_name = "(record root)"
+    for name in sorted(record):
+        try:
+            _dumps_canonical({name: record[name]})
+        except RecursionError:
+            field_name = name
+            break
+    raise ValueError(
+        f"examples[{index}] (id={ascii(example_id)}): field {field_name!r} is nested "
+        "too deep for `json.dumps` to encode on this interpreter (RecursionError); "
+        "`dump_jsonl` cannot write it. Flatten the value, or store it as a string"
+    )
 
 
 def _validate_record(raw: Any, line_no: int) -> Example:
