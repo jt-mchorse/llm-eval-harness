@@ -3864,3 +3864,17 @@ so these inputs are counted as uncomparable like the wordless ones. Two of
 the older off-support test cases had been relying on this kind of input
 without anyone noticing, so they were found again with inputs that don't
 cancel.
+
+## 2026-10-23 — The docs now say "uncomparable" is decided at the report's embedding size (#429)
+
+The fix for #426 made the "can this input be compared" check depend on how
+many slots the embedding uses, because which words cancel each other out
+changes with the slot count. The drift report already used the right slot
+count. But the docs for the uncomparable count, and for `compute_drift`,
+still pointed at the check without saying which size to use, and that means
+the default of 64. Run with 32 slots, following the docs gave the opposite
+answer for the issue's example: the input they called uncomparable was
+clustered and reported, and the one they called fine was counted as
+uncomparable. Both docstrings, the README and the architecture doc now
+name the size-aware call. New tests check the wording and pin the count at
+several non-default sizes.

@@ -510,7 +510,11 @@ Three axes are scored:
   used to score the ceiling distance of `1.000` and evict every input
   with real content (#210). The same holds for an input whose tokens
   cancel: `"what refund"` has two tokens that hash to one bucket with
-  opposite signs, so it also embeds to the zero vector (#426).
+  opposite signs, so it also embeds to the zero vector (#426). Which
+  tokens collide depends on the bucket count, so the split is taken at
+  `compute_drift`'s `embedding_dim`: to pre-filter the same way, call
+  `has_embeddable_content(text, dim=embedding_dim)`, not the default
+  `dim=64` (#429).
 - **Judge** — operator-supplied `judge_score_fn(input) -> float`. The
   axis is *skipped* (not scored) when no function is provided so the
   rest of the report still renders. `--judge-stub` is a deterministic
