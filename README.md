@@ -568,7 +568,7 @@ The embedding count's denominator is the **clustered** candidate count
 (`cluster_stats[1].n`), not `n_candidate` — this axis drops uncomparable
 inputs, and the frozen fraction is taken over the histogram the JSD
 actually normalizes. On a measured report with one uncomparable
-candidate the true frozen contribution is `(1/2)/2 = 0.25` of a `0.4733`
+candidate the true frozen contribution is `(1/2)/2 = 0.25` of a `0.5`
 score, where an `n_candidate` base would claim `0.1667`.
 
 The output HTML report is single-file (inline SVG, no external CDN)

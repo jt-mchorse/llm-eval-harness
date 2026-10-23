@@ -26,14 +26,16 @@ axis drops inputs with no embeddable content, and the JSD normalises the
 histogram it is actually handed. `test_the_frozen_contribution_is_measured_over_
 the_clustered_candidates` is the arm that rejects the other unit: on a corpus
 with one uncomparable candidate the true frozen contribution is `(1/2)/2 = 0.25`
-of a 0.4733 score, while an `n_candidate` base would claim `(1/3)/2 = 0.1667`.
+of a 0.5 score, while an `n_candidate` base would claim `(1/3)/2 = 0.1667`.
 
 Neither corpus below was constructed by hand. Both were found by random search
-over the module's own `hash_embed` / `_kmeans` / `_assign` path and then reduced
-by greedy delta-debugging, which is why the golden set in case B carries five
-copies of `"rollback"` — the duplicates are load-bearing for the cluster
-structure that leaves a centroid empty, and every attempt to drop one loses the
-property.
+over the public `compute_drift`. The first pair, found over the raw
+`hash_embed` / `_kmeans` / `_assign` path, owed their empty centroids to inputs
+whose two tokens cancel to the zero vector (`"billing delivery"` at dim 64,
+`"cluster namespace"` at dim 16), which `compute_drift` now treats as
+uncomparable (#426). These were searched for with every golden input and every
+named comparable candidate non-zero at its `embedding_dim`, so the empty
+centroids come from `_kmeans` alone.
 """
 
 from __future__ import annotations
@@ -54,34 +56,26 @@ from eval_harness.drift import (
 )
 
 # --- Case A: reachable off-support mass at a mid-range score ---------------
-# Random search + delta-debugging. Two golden-empty clusters (ids 1 and 2), two
-# of the three candidates landing in one of them.
-A_GOLDEN = ["charge", "billing delivery", "package", "delivery billing"]
-A_CANDIDATE = ["zebra", "enzyme", "enzyme"]
-A_KWARGS = {"cluster_k": 8, "embedding_dim": 64}
-A_GOLDEN_HIST = (3, 0, 0, 1)
-A_CANDIDATE_HIST = (1, 2, 0, 0)
-A_JSD = 0.5176503615477757
+# Random search. Two golden-empty clusters (ids 0 and 2), two of the three
+# candidates landing in one of them. Re-found for #426: no input here embeds to
+# the zero vector.
+A_GOLDEN = ["alpha", "epsilon", "delta gamma epsilon", "mu", "epsilon", "zeta alpha"]
+A_CANDIDATE = ["beta", "kappa", "beta beta mu"]
+A_KWARGS = {"cluster_k": 4, "embedding_dim": 64}
+A_GOLDEN_HIST = (0, 3, 0, 3)
+A_CANDIDATE_HIST = (2, 0, 0, 1)
+A_JSD = 0.5954372523105548
 
 # --- Case B: the denominator case ----------------------------------------
 # One candidate has no embeddable content, so the clustered count (2) and
 # `n_candidate` (3) differ and the two candidate denominators disagree.
-B_GOLDEN = [
-    "rollback",
-    "rollback",
-    "replica",
-    "rollback",
-    "canary",
-    "cluster namespace",
-    "cluster",
-    "rollback",
-    "rollback",
-]
-B_CANDIDATE = ["deployment", "!!!", "namespace"]
+# Re-found for #426: `"!!!"` is the only uncomparable input.
+B_GOLDEN = ["lam zeta eta", "gamma mu", "eta", "epsilon delta"]
+B_CANDIDATE = ["theta lam", "!!!", "theta beta kappa"]
 B_KWARGS = {"cluster_k": 3, "embedding_dim": 16}
-B_GOLDEN_HIST = (4, 5, 0)
+B_GOLDEN_HIST = (2, 0, 2)
 B_CANDIDATE_HIST = (0, 1, 1)
-B_JSD = 0.4732773112896197
+B_JSD = 0.5
 
 # --- Case C: an ordinary report, nothing off support ----------------------
 C_GOLDEN = [
@@ -125,14 +119,15 @@ def test_kmeans_retains_a_centroid_whose_cluster_went_empty() -> None:
     it is pinned here rather than left implicit in the corpora below.
     """
     vecs = [hash_embed(s, dim=64) for s in A_GOLDEN]
-    centroids, assigns = _kmeans(vecs, 8)
+    assert all(any(v) for v in vecs), "an input embeds to the zero vector (#426)"
+    centroids, assigns = _kmeans(vecs, A_KWARGS["cluster_k"])
 
-    # k is clamped to n, and every centroid slot survives the run...
-    assert len(centroids) == len(A_GOLDEN) == 4
+    # Every centroid slot survives the run...
+    assert len(centroids) == A_KWARGS["cluster_k"] == 4
     # ...including the ones no input is assigned to.
     occupied = set(assigns)
     assert occupied != set(range(len(centroids)))
-    assert sorted(set(range(len(centroids))) - occupied) == [1, 2]
+    assert sorted(set(range(len(centroids))) - occupied) == [0, 2]
 
 
 def test_a_candidate_reaches_a_cluster_no_golden_input_occupies() -> None:
@@ -147,8 +142,8 @@ def test_a_candidate_reaches_a_cluster_no_golden_input_occupies() -> None:
 
     assert golden_hist == A_GOLDEN_HIST
     assert candidate_hist == A_CANDIDATE_HIST
-    assert golden_hist[1] == 0
-    assert candidate_hist[1] == 2
+    assert golden_hist[0] == 0
+    assert candidate_hist[0] == 2
     assert report.n_embedding_off_support == 2
 
 
@@ -190,8 +185,8 @@ def test_the_off_support_clusters_contribute_exactly_half_their_fraction() -> No
     clustered = sum(A_CANDIDATE_HIST)
 
     assert frozen == pytest.approx((off / clustered) / 2, abs=1e-15)
-    # Just under two thirds of this score cannot respond to the traffic moving.
-    assert frozen / A_JSD == pytest.approx(0.6439, abs=5e-5)
+    # Over half of this score cannot respond to the traffic moving.
+    assert frozen / A_JSD == pytest.approx(0.5598, abs=5e-5)
 
 
 # ----------------------------------------------------------------------
@@ -332,7 +327,7 @@ def test_the_other_side_of_the_zero_test_is_a_different_number() -> None:
     the axis can see, not what it cannot.
     """
     wrong_side = sum(g for g, c in zip(A_GOLDEN_HIST, A_CANDIDATE_HIST, strict=True) if c == 0)
-    assert wrong_side == 1
+    assert wrong_side == 3
     assert _off_support_count(A_GOLDEN_HIST, A_CANDIDATE_HIST) == 2
 
 
