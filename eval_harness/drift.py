@@ -117,9 +117,15 @@ class DriftReport:
     representative_examples: tuple[RepresentativeExample, ...]
     cluster_k: int
     #: ``(golden, candidate)`` counts of inputs with no embeddable content, i.e.
-    #: the ones `has_embeddable_content` rejects. They take part in the length
-    #: axis (their char count is truthful) and in the judge axis (a judge can
-    #: legitimately score them), and are excluded from everything cosine-derived
+    #: the ones ``has_embeddable_content(text, dim=embedding_dim)`` rejects --
+    #: at the ``embedding_dim`` the report was computed with, not the predicate's
+    #: default 64, because which tokens cancel depends on the bucket count (#426,
+    #: #429). At ``embedding_dim=32``, ``"w1 w96"`` is comparable and
+    #: ``"w0 w82"`` is not; the dim-less call says the opposite.
+    #:
+    #: They take part in the length axis (their char count is truthful) and in
+    #: the judge axis (a judge can legitimately score them), and are excluded
+    #: from everything cosine-derived
     #: -- the cluster histograms and `representative_examples` -- because the
     #: zero vector has no angle to any centroid (D-017, #210).
     #:
@@ -679,8 +685,10 @@ def compute_drift(
     uncomparable inputs and the JSD normalises the histogram it is actually
     given (D-024, #246).
 
-    Inputs with no embeddable content (``has_embeddable_content`` is
-    ``False``) take part in the length and judge axes but not in
+    Inputs with no embeddable content
+    (``has_embeddable_content(text, dim=embedding_dim)`` is ``False``; the
+    ``dim`` matters, because which tokens cancel depends on it -- #426, #429)
+    take part in the length and judge axes but not in
     anything cosine-derived; they are counted in ``n_uncomparable`` and
     excluded from the cluster histograms and from
     ``representative_examples`` (D-017, #210). A golden set in which

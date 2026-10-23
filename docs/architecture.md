@@ -376,6 +376,8 @@ leave no cluster golden-empty.
 
 The embedding axis has a domain the other two don't: `hash_embed`
 returns the all-zero vector for an input with no alphanumeric tokens,
+or whose tokens cancel in a shared bucket at `embedding_dim` (#426, so
+the split is `has_embeddable_content(text, dim=embedding_dim)` — #429),
 and the zero vector has no angle to any centroid. Per D-017 such an
 input is *uncomparable*, not maximally distant — it is counted in
 `DriftReport.n_uncomparable` and excluded from the cluster histograms
