@@ -200,6 +200,36 @@ def _safe_path_segment(key: str) -> str:
     return key if key.isprintable() else ascii(key)
 
 
+#: A node's JSON path as a chain of ``(parent, segment)`` links, ``None`` for the
+#: empty path (#432). Each child holds its parent and one segment, so a level
+#: costs O(1); the string is only built, by `_join_path`, for the finding that
+#: is returned.
+_PathLink = tuple[Any, str] | None
+
+
+def _key_path(parent: _PathLink, key: str) -> _PathLink:
+    """The link for dict key *key* (already rendered) under *parent*.
+
+    Its joined string is the old ``f"{path}.{key}" if path else key``: the ``.``
+    is dropped when the path *so far* is empty, which is at the root and also
+    below a ``""`` key at the root. ``None`` is that empty path, so a ``""`` key
+    under it stays ``None`` and the rule is decided on the link, not a string.
+    List indices and the `` (object key)`` suffix append unconditionally and
+    need no helper.
+    """
+    if parent is None:
+        return None if key == "" else (None, key)
+    return (parent, f".{key}")
+
+
+def _join_path(link: _PathLink) -> str:
+    segments: list[str] = []
+    while link is not None:
+        link, segment = link
+        segments.append(segment)
+    return "".join(reversed(segments))
+
+
 def find_unrepresentable(
     record: Any, *, kinds: frozenset[str] = _ALL_KINDS
 ) -> tuple[str, str, str] | None:
@@ -272,11 +302,22 @@ def find_unrepresentable(
     # on a linear chain, marker vs frozenset: 5000 levels 0.005s vs 0.088s;
     # 20000 levels 0.059s vs 1.573s. Four times the depth costs 12x here and 18x
     # there -- the quadratic showing up, not a constant factor.
+    #
+    # The path had the same shape and kept it (#432). Every push built the
+    # child's whole path string, ``f"{path}[{i}]"``, so a node N levels down
+    # held an O(N) string and a linear chain held O(depth^2) bytes across the
+    # walk: 218 MB of tracemalloc peak at 12000 levels, 605 MB at 20000, and
+    # the 100,000 levels `loads_json` decodes (#333) put a `dump_jsonl` near
+    # 2.6 GB of RSS. The ancestor set above was made O(1) per level and this,
+    # one line further down the same tuple, was not. A node now carries a
+    # `_PathLink` -- its parent's link plus one segment -- and `_join_path`
+    # builds the string only for the finding returned, which is the same
+    # string the old spelling produced, character for character.
     on_path: set[int] = set()
     # `False` = descend into this node; `True` = leaving it, drop it from the
     # path. LIFO, so the exit marker is pushed *before* the children and popped
     # after all of them.
-    stack: list[tuple[str, Any, bool]] = [("", record, False)]
+    stack: list[tuple[_PathLink, Any, bool]] = [(None, record, False)]
     while stack:
         path, node, leaving = stack.pop()
         if leaving:
@@ -285,7 +326,7 @@ def find_unrepresentable(
         if isinstance(node, (dict, list, tuple)):
             if id(node) in on_path:
                 if CIRCULAR_REFERENCE in kinds:
-                    return path, CIRCULAR_REFERENCE, type(node).__name__
+                    return _join_path(path), CIRCULAR_REFERENCE, type(node).__name__
                 # Axis not enforced by this caller, so do not descend. Unlike the
                 # other not-enforced arms, skipping loses no coverage: nothing
                 # below a back-reference is absent from the path already, and
@@ -303,10 +344,10 @@ def find_unrepresentable(
                 unencodable = find_unencodable(node)
                 if unencodable is not None:
                     bad, pos = unencodable
-                    return path, UNENCODABLE, f"{bad!r} at position {pos}"
+                    return _join_path(path), UNENCODABLE, f"{bad!r} at position {pos}"
         elif isinstance(node, float):
             if NON_FINITE in kinds and not math.isfinite(node):
-                return path, NON_FINITE, repr(node)
+                return _join_path(path), NON_FINITE, repr(node)
         elif isinstance(node, dict):
             for k, v in node.items():
                 if not isinstance(k, str):
@@ -323,24 +364,28 @@ def find_unrepresentable(
                     # surrogate would put it back into the message this
                     # function exists to keep clean.
                     if NON_STRING_KEY in kinds:
-                        return path, NON_STRING_KEY, f"{ascii(k)} ({type(k).__name__})"
+                        return (
+                            _join_path(path),
+                            NON_STRING_KEY,
+                            f"{ascii(k)} ({type(k).__name__})",
+                        )
                     # Axis not enforced here, but the *value* still is: descend
                     # under a rendered key so a caller enforcing only
                     # UNENCODABLE keeps finding surrogates below a non-string
                     # key instead of losing that subtree.
                     seg = _safe_path_segment(ascii(k))
-                    stack.append((f"{path}.{seg}" if path else seg, v, False))
+                    stack.append((_key_path(path, seg), v, False))
                     continue
                 seg = _safe_path_segment(k)
-                child = f"{path}.{seg}" if path else seg
+                child = _key_path(path, seg)
                 # A key is a string on the record too, and is subject to the
                 # same UTF-8 rule as a value. Push it under its own path so the
                 # message points at the key rather than at whatever it maps to.
-                stack.append((f"{child} (object key)", k, False))
+                stack.append(((child, " (object key)"), k, False))
                 stack.append((child, v, False))
         elif isinstance(node, list):
             for i, v in enumerate(node):
-                stack.append((f"{path}[{i}]", v, False))
+                stack.append(((path, f"[{i}]"), v, False))
         elif node is not None and not isinstance(node, _FAITHFUL_JSON_TYPES):
             # The value-side twin of the non-string-key arm above, and it
             # carries the same pair of harms that arm's own comment names for
@@ -363,7 +408,7 @@ def find_unrepresentable(
             # lone surrogate, which is the exact string `_safe_path_segment`
             # and the `ascii(k)` above exist to keep out of these messages.
             if UNSERIALIZABLE_TYPE in kinds:
-                return path, UNSERIALIZABLE_TYPE, type(node).__name__
+                return _join_path(path), UNSERIALIZABLE_TYPE, type(node).__name__
             # Axis not enforced by this caller, but the items still are, on the
             # same reasoning as the non-string-key arm: a caller asking only
             # for UNENCODABLE should keep finding a surrogate inside a tuple
@@ -372,7 +417,7 @@ def find_unrepresentable(
             # report and descending would make the message order-dependent.
             if isinstance(node, tuple):
                 for i, v in enumerate(node):
-                    stack.append((f"{path}[{i}]", v, False))
+                    stack.append(((path, f"[{i}]"), v, False))
     return None
 
 
