@@ -3849,3 +3849,18 @@ invalid JSON, so `validate` lists it as a parse error and the loaders, `run`
 and `drift` reject the file the same way they reject any other broken row.
 The same key at different levels of nesting is still fine. Every data file
 committed to the repo still loads unchanged.
+
+## 2026-10-23 — Inputs whose words cancel out are now treated as uncomparable instead of maximally distant (#426)
+
+The drift report's embedding turns each word into a +1 or -1 in one of 64
+slots. When two words land in the same slot with opposite signs they cancel,
+so a short input like "what refund" ends up as an all-zero vector, the same
+thing an input with no words produces. The check for "can this input be
+compared" only asked whether the input had any words, so these inputs counted
+as comparable. They were reported at the maximum distance of 1.000 and pushed
+real inputs out of the "most distant" list. Even an input identical to a
+golden one was reported at 1.000. The check now looks at the actual vector,
+so these inputs are counted as uncomparable like the wordless ones. Two of
+the older off-support test cases had been relying on this kind of input
+without anyone noticing, so they were found again with inputs that don't
+cancel.

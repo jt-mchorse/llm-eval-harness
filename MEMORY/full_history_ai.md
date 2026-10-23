@@ -4536,3 +4536,23 @@ context_for_next_session:
   - "NO_COMMITTED_FIXTURE_HAD_A_DUPLICATE_KEY_a_control_test_walks_git_ls_files_json_jsonl"
 followups: []
 ---
+
+---
+session: 2026-10-23T07:18Z
+issue: 426
+branch: session/2026-10-22-0807-issue-426
+focus: HAS_EMBEDDABLE_CONTENT_WAS_BOOL_TOKENS_SO_TWO_TOKENS_CANCELLING_IN_ONE_BUCKET_GAVE_A_ZERO_VECTOR_CALLED_COMPARABLE_AND_REPORTED_AT_MAX_DISTANCE_1_000
+phase: shipped
+delta:
+  files_changed: 5
+  tests_added: 13
+  suite: "3068 passed, 28 skipped (CI-shaped 3.11 venv, pip install -e .[dev]); ruff, format, mypy clean; CLI smoke ok"
+decisions_made: []
+measured: "main 7dde645/09ab1ac: has_embeddable_content('what refund') True with hash_embed all zeros; compute_drift(['w195 w39'], ['w195 w39'], cluster_k=1) example at 1.0 with n_uncomparable (0, 0); HTML first row '<td>1.000</td><td>what refund'. After: False; examples () and counted; row absent, n_uncomparable (0, 1); all-cancelling golden set raises. Revert 14 red (12 new-file + 2 parity cases); 4 new-file controls green."
+context_for_next_session:
+  - "PARTITION_IS_NOW_TAKEN_FROM_G_VECS_C_VECS_AT_EMBEDDING_DIM_has_embeddable_content_takes_dim_because_collisions_depend_on_bucket_count"
+  - "D_024_OFF_SUPPORT_CORPORA_OWED_EMPTY_CENTROIDS_TO_CANCELLING_INPUTS_billing_delivery_dim64_cluster_namespace_dim16_re_found_case_B_jsd_now_0_5"
+  - "MEMORY_D_024_TEXT_STILL_QUOTES_0_4733_left_as_historical_record"
+  - "RESUMED_FROM_A_CUT_OFF_AGENT_branch_name_carries_10_22_not_10_23"
+followups: []
+---
