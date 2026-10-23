@@ -4556,3 +4556,21 @@ context_for_next_session:
   - "RESUMED_FROM_A_CUT_OFF_AGENT_branch_name_carries_10_22_not_10_23"
 followups: []
 ---
+
+---
+session: 2026-10-23T07:39Z
+issue: 429
+branch: session/2026-10-23-0800-issue-429
+focus: N_UNCOMPARABLE_AND_COMPUTE_DRIFT_DOCS_NAMED_HAS_EMBEDDABLE_CONTENT_WITHOUT_DIM_WHICH_GIVES_THE_OPPOSITE_SPLIT_AT_EMBEDDING_DIM_NOT_64
+phase: shipped
+delta:
+  files_changed: 4
+  tests_added: 6
+  suite: "3075 passed, 28 skipped (CI-shaped 3.11 venv, pip install -e .[dev]); ruff, format, mypy clean; CLI smoke ok"
+decisions_made: []
+measured: "main dd4748d: compute_drift(['refund please','where is my parcel'], ['w1 w96','w0 w82'], embedding_dim=32) n_uncomparable (0, 1), examples ['w1 w96']; has_embeddable_content default dim (False, True), dim=32 (True, False). Behaviour unchanged; docs fixed in drift.py field doc + compute_drift docstring, README embedding bullet, architecture.md. Revert drift.py: 2 doc-lock tests red, 4 behavioural controls green; a dim-less-partition probe turns the 4 controls red and leaves the 2 doc tests green."
+context_for_next_session:
+  - "DOC_LOCKS_READ_THE_N_UNCOMPARABLE_HASH_COLON_BLOCK_VIA_INSPECT_GETSOURCE_DriftReport_and_compute_drift___doc__"
+  - "BEHAVIOURAL_CONTROLS_SEARCH_W_I_W_J_PAIRS_WHERE_DIM_AND_DIM64_PREDICATES_DISAGREE_at_16_32_128"
+followups: []
+---
