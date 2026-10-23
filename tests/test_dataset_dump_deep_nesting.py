@@ -31,9 +31,10 @@ from eval_harness.dataset import Dataset, Example, ExpectedOutput, load_jsonl
 # identity: `Example.to_dict` deep-copies `provenance`, so identity is lost.
 MARKER = "__too_deep_to_encode__"
 
-# Fails on 3.11 (~1000) and 3.12 (~10000). Not deeper than it must be:
-# `find_unrepresentable` builds a path string per level, so memory grows with
-# the square of the depth (~250 MB here, ~680 MB at 20000).
+# Fails on 3.11 (~1000) and 3.12 (~10000). Kept at 12000 because that is all
+# the arm needs. It used to be a memory cap too: `find_unrepresentable` built a
+# path string per level, quadratic in depth (~250 MB here), until #432 made it
+# linear (`tests/test_find_unrepresentable_path_memory.py`).
 REAL_DEPTH = 12_000
 
 # Well under every interpreter's limit, including 3.11 inside pytest's stack.
