@@ -223,7 +223,7 @@ def test_a_hand_built_delta_report_is_held_to_the_same_rule() -> None:
     assert _positive(row.baseline_score)
     assert row.delta is not None
     assert _positive(row.delta)
-    report = DeltaReport("c", "b", "s", -0.0, (row,), {"mean_delta": -0.0})
+    report = DeltaReport("c", "b", "s", -0.0, (row,), {"mean_delta": -0.0, "n_unchanged": 1})
     assert _positive(report.summary["mean_delta"])
     assert _positive(report.threshold_drop)
 

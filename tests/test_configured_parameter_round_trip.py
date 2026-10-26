@@ -48,6 +48,7 @@ from __future__ import annotations
 
 import ast
 import re
+from fractions import Fraction
 from pathlib import Path
 
 import pytest
@@ -90,6 +91,9 @@ _IDS = [repr(c) for c in _CONFIGURED]
 
 
 def _report(threshold_drop: float) -> DeltaReport:
+    # The row is flagged exactly when its 0.3 drop is past the threshold, on the
+    # decimals (D-034): the report refuses a flag its scores do not give (#435).
+    flagged = Fraction("-0.3") < -Fraction(repr(threshold_drop))
     return DeltaReport(
         current_run_id="cur_runid_abcdef0123",
         baseline_run_id="base_runid_0123abcdef",
@@ -102,12 +106,12 @@ def _report(threshold_drop: float) -> DeltaReport:
                 current_score=0.5,
                 delta=-0.3,
                 status="regressed",
-                flagged=True,
+                flagged=flagged,
             ),
         ),
         summary={
             "mean_delta": -0.3,
-            "n_flagged": 1,
+            "n_flagged": int(flagged),
             "n_regressed": 1,
             "n_improved": 0,
             "n_unchanged": 0,

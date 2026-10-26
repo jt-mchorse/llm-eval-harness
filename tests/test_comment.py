@@ -39,10 +39,15 @@ from eval_harness.runner import DeltaReport, RowDelta, render_delta_ascii
 # ---------------------------------------------------------------------------
 
 
-def _with_forced_status(row: RowDelta, status: str) -> RowDelta:
-    """Set a status no constructor or reader accepts (#266), to test a renderer's own guard."""
+def _with_forced_status(report: DeltaReport, status: str) -> DeltaReport:
+    """Set a status no constructor or reader accepts (#266), to test a renderer's own guard.
+
+    On the built report's only row: since #435 the report checks each row
+    against the verdict its scores give, so the row is forced after that check.
+    """
+    (row,) = report.rows
     object.__setattr__(row, "status", status)
-    return row
+    return report
 
 
 def _make_report(rows: list[RowDelta], summary: dict[str, float | int]) -> DeltaReport:
@@ -93,10 +98,12 @@ def test_render_contains_sticky_marker():
 def test_render_handles_null_mean_delta_in_summary():
     # `from_json` passes the summary through verbatim, so a delta JSON with an
     # explicit `"mean_delta": null` (an undefined mean Δ) reaches the renderer.
-    # It must coerce null to +0.000, not raise TypeError on the `:+.3f` format.
+    # It must not raise TypeError on the `:+.3f` format, and since #435 it does
+    # not print `+0.000` either, a mean nobody measured: it is the dash.
     summary = {**_default_summary(), "mean_delta": None}
     md = render_delta_markdown(_make_report([], summary))
-    assert "mean Δ **+0.000**" in md
+    assert "mean Δ **—**" in md
+    assert "+0.000" not in md
 
 
 def test_render_includes_suite_name_in_heading():
@@ -269,13 +276,12 @@ def test_render_escapes_pipe_in_status_so_columns_dont_break():
     # `DELTA_ROW_STATUSES`, so this row is forced past the constructor: the
     # escaping stays as defence in depth and this pins it.
     md = render_delta_markdown(
-        _make_report(
-            [
-                _with_forced_status(
-                    RowDelta("qa_01", 0.6, 0.9, 0.3, "improved", False), "improved | INJECTED"
-                )
-            ],
-            _default_summary(mean_delta=0.3, n_improved=1),
+        _with_forced_status(
+            _make_report(
+                [RowDelta("qa_01", 0.6, 0.9, 0.3, "improved", False)],
+                _default_summary(mean_delta=0.3, n_improved=1),
+            ),
+            "improved | INJECTED",
         )
     )
     lines = md.splitlines()
@@ -295,15 +301,14 @@ def test_render_neutralizes_newline_in_status_so_the_row_stays_one_line():
     # delimiter — it splits the cell across two physical lines, corrupting the
     # table exactly as an unescaped pipe corrupts columns. The status-bearing row
     # must render as exactly one physical line. Fails pre-fix (row split in two).
-    # Forced past the constructor, as in the pipe case above (#266).
+    # Forced past the constructor, as in the pipe case above (#266, #435).
     md = render_delta_markdown(
-        _make_report(
-            [
-                _with_forced_status(
-                    RowDelta("qa_01", 0.9, 0.4, -0.5, "regressed", True), "regressed\nEVIL"
-                )
-            ],
-            _default_summary(mean_delta=-0.5, n_regressed=1, n_flagged=1),
+        _with_forced_status(
+            _make_report(
+                [RowDelta("qa_01", 0.9, 0.4, -0.5, "regressed", True)],
+                _default_summary(mean_delta=-0.5, n_regressed=1, n_flagged=1),
+            ),
+            "regressed\nEVIL",
         )
     )
     lines = md.splitlines()
@@ -822,7 +827,7 @@ def test_row_delta_from_json_rejects_non_finite_score(field: str, bad: float) ->
 def test_delta_report_from_json_accepts_null_and_absent_mean_delta() -> None:
     """The guard must only fire on a present, non-null, non-finite value — an
     explicit `null` (undefined mean Δ, e.g. an all-new suite) and an absent
-    key both remain legal and still render (renderer coerces null → +0.000)."""
+    key both remain legal and still render (as a dash since #435)."""
     null_summary = {**_default_summary(), "mean_delta": None}
     assert (
         DeltaReport.from_json({"rows": [], "summary": null_summary}).summary["mean_delta"] is None

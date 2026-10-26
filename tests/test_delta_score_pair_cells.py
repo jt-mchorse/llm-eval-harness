@@ -69,7 +69,9 @@ def test_both_renderers_use_the_pair(base: float, cur: float) -> None:
         suite="s",
         threshold_drop=0.1,
         rows=(row,),
-        summary={},
+        # The counts the row gives: the report refuses a summary that
+        # contradicts its rows (#435).
+        summary={f"n_{row.status}": 1, "n_flagged": int(row.flagged)},
     )
     row_line = next(
         line for line in render_delta_ascii(report).splitlines() if line.startswith(row.status)

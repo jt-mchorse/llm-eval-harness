@@ -78,19 +78,25 @@ def render_delta_markdown(report: DeltaReport, *, max_bytes: int | None = None) 
     smaller run had posted one kept that stale verdict.
     """
     summary = report.summary
-    # `.get` defaults only on a MISSING key; a present-but-null mean_delta
-    # (an undefined mean Δ — e.g. an all-new suite — serialized as JSON null)
-    # would reach the `:+.3f` format below and raise TypeError, crashing the
-    # whole comment render. Coerce null → 0.0 explicitly; `is not None` (not
-    # `or`) so a legitimate falsy 0.0 mean Δ is preserved.
-    raw_mean_delta = summary.get("mean_delta", 0.0)
-    mean_delta = float(raw_mean_delta) if raw_mean_delta is not None else 0.0
+    # A present-but-null mean_delta (an undefined mean Δ — e.g. an all-new
+    # suite — serialized as JSON null) reached the `:+.3f` format and raised
+    # TypeError, so null was coerced to 0.0 — and printed `+0.000`, a mean Δ
+    # nobody measured, as did a missing key. Unlike the counts it cannot be
+    # checked against the rows, so it renders as the table's missing-value
+    # dash (#435); `is not None` (not `or`) keeps a real 0.0.
+    raw_mean_delta = summary.get("mean_delta")
+    mean_delta_cell = (
+        render_signed_classified(float(raw_mean_delta), (0.0,))
+        if raw_mean_delta is not None
+        else "—"
+    )
 
     # The sibling count fields were left with bare `int(...)`, so a present-but-null
     # count (an undefined count serialized as JSON null, the same shape as the
     # null mean_delta handled above) reached `int(None)` and raised a TypeError —
     # crashing the whole comment render and escaping `_run_comment` as exit 1 (it
-    # catches ValueError/KeyError, not TypeError). Coerce null → 0 like mean_delta.
+    # catches ValueError/KeyError, not TypeError). Coerce null → 0: since #435 the
+    # report refuses a missing or null count unless its rows give 0 too.
     def _count(key: str) -> int:
         v = summary.get(key)
         return int(v) if v is not None else 0
@@ -110,7 +116,7 @@ def render_delta_markdown(report: DeltaReport, *, max_bytes: int | None = None) 
     lines.append(f"# Eval delta · {md_code_span(report.suite)}")
     headline_status = "[X]" if n_flag > 0 else "[!]" if n_reg > 0 else "[+]" if n_imp > 0 else "[=]"
     lines.append(
-        f"{headline_status} mean Δ **{render_signed_classified(mean_delta, (0.0,))}** · "
+        f"{headline_status} mean Δ **{mean_delta_cell}** · "
         f"flagged **{n_flag}** · regressed {n_reg} · improved {n_imp} · "
         f"unchanged {n_same} · new {n_new} · removed {n_rem}"
     )
