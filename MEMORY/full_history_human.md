@@ -3909,3 +3909,19 @@ and 6.6 MB. Reported paths are the same as before, character for character.
 New tests check that, including the odd case of empty-string keys, where
 the old code left out the dot. Another new test fails if memory starts
 growing faster than the depth again.
+
+## 2026-10-26 — The PR comment headline can no longer contradict the table under it (#435)
+
+A delta file stores per-row results and a summary of counts, and the PR
+comment builds its headline and verdict icon from the summary alone. The
+reader never checked the summary against the rows. If a delta file had lost
+its summary, the comment said `[=] ... flagged 0` directly above a row
+marked with a warning, and still exited 0. The reader also accepted rows the
+diff could never have produced, such as an `unchanged` row that was also
+flagged, or the same example listed twice. The diff now works out each row
+from a single helper, and the reader and the constructor check every row
+against that same helper. They also check that each summary count matches
+the rows, so a contradictory file is refused with exit 2. A missing count is
+still fine when the rows would give zero. A missing mean change can't be
+checked against the rows, so it now shows as a dash instead of a made-up
+`+0.000`. Every documented command gives exactly the same output as before.

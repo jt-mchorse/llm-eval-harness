@@ -4614,3 +4614,25 @@ context_for_next_session:
   - "SURROGATE_FIXTURES_MUST_USE_CHR_0XD800_test_source_representability_rejects_a_literal"
 followups: []
 ---
+
+---
+session: 2026-10-26T07:26Z
+issue: 435
+branch: session/2026-10-26-0726-issue-435
+focus: DELTAREPORT_NEVER_CHECKED_SUMMARY_AGAINST_ROWS_NOR_ROWS_AGAINST_THEIR_OWN_SCORES_SO_THE_HEADLINE_SAID_FLAGGED_0_ABOVE_A_FLAGGED_ROW
+phase: shipped
+delta:
+  files_changed: 13
+  tests_added: 44
+  suite: "3099 -> 3144 passed, 28 skipped (CI-shaped 3.11 and 3.12 venvs, pip install -e .[dev]); ruff, format, mypy clean; CLI smoke ok"
+decisions_made: []
+measured: "main 7de275b: demo diff-json with summary deleted -> comment --dry-run exit 0, '[=] mean Δ **+0.000** · flagged **0**' above a :warning: row. After: exit 2 \"delta JSON summary 'n_flagged' is None but the rows give 1\". Every documented command (diff-json at 0.1/0.05/0.0125/0 x json/markdown/ascii, comment --dry-run, 3 README validate, both examples, CLI --help smoke) byte-identical with identical exit codes. Revert runner.py+comment.py: 38 red (35 of 44 new + 3 updated null-mean arms), 9 green controls (real round trip, missing count beside zero rows, diff_runs read-back at 6 thresholds, present 0.0 mean). Checks removed from __post_init__ only: 13 red."
+context_for_next_session:
+  - "_ROW_VERDICT_IS_THE_ONE_DELTA_STATUS_FLAGGED_DEFINITION_diff_runs_builds_rows_from_it_and__check_delta_rows_compares_each_row_to_it_exact_D_034_decimals"
+  - "SUMMARY_COUNTS_COMPARED_AS_THE_RENDERERS_READ_THEM_missing_or_null_is_0_so_a_partial_summary_still_reads_beside_rows_that_give_0"
+  - "MEAN_DELTA_MISSING_OR_NULL_NOW_RENDERS_A_DASH_md_em_dash_ascii_hyphen_not_plus_0_000_documented_null_contract_kept_so_no_refusal"
+  - "NO_NEW_D_NNN_applies_D_033_reader_looser_than_producer_to_the_flagged_vs_status_rule_D_033_deferred"
+  - "A_PRE_D_034_DELTA_JSON_float_subtraction_deltas_old_flags_IS_NOW_REFUSED_delta_JSON_is_produced_and_consumed_in_one_CI_job"
+  - "HAND_BUILT_TEST_RECORDS_MUST_NOW_BE_CONSISTENT_status_escaping_tests_force_the_status_after_the_report_is_built"
+followups: []
+---

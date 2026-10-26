@@ -808,7 +808,20 @@ def test_comment_malformed_summary_count_exits_two(
 def test_comment_valid_summary_count_exits_zero(tmp_path: Path, capsys, good) -> None:
     # A valid integer count (incl. a numeric string, a whole float, a genuine 0,
     # or an explicit null that the renderer coerces to 0) must not regress to a
-    # usage error — the comment renders cleanly and --dry-run exits 0.
+    # usage error — the comment renders cleanly and --dry-run exits 0. Beside
+    # that many flagged rows: since #435 the count must agree with the rows.
+    n = 0 if good is None else int(good)
+    rows = [
+        {
+            "example_id": f"e{i}",
+            "baseline_score": 0.9,
+            "current_score": 0.5,
+            "delta": -0.4,
+            "status": "regressed",
+            "flagged": True,
+        }
+        for i in range(n)
+    ]
     delta = tmp_path / "d.json"
     _delta_json(
         delta,
@@ -817,8 +830,8 @@ def test_comment_valid_summary_count_exits_zero(tmp_path: Path, capsys, good) ->
             "baseline_run_id": "b",
             "suite": "s",
             "threshold_drop": 0.1,
-            "rows": [],
-            "summary": {"mean_delta": 0.0, "n_flagged": good},
+            "rows": rows,
+            "summary": {"mean_delta": 0.0, "n_flagged": good, "n_regressed": n},
         },
     )
     rc = main(_comment_dry_run(delta))

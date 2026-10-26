@@ -206,8 +206,9 @@ class TestRenderDeltaAscii:
     def test_renders_empty_summary_without_keyerror(self) -> None:
         # `from_json` permits an empty/partial summary (an all-new suite has an
         # undefined mean Δ). render_delta_ascii used direct subscripting and
-        # raised KeyError; it must render zeros instead, matching the markdown
-        # renderer's guard (#100).
+        # raised KeyError; it must render zero counts instead, matching the
+        # markdown renderer's guard (#100), and the missing mean Δ as a dash
+        # rather than `+0.000` (#435).
         report = DeltaReport.from_json(
             {
                 "current_run_id": "c1",
@@ -219,26 +220,37 @@ class TestRenderDeltaAscii:
             }
         )
         out = render_delta_ascii(report)
-        assert "summary: mean Δ=+0.000" in out
+        assert "summary: mean Δ=-  " in out
         assert "regressed=0 (flagged=0)" in out
         assert "new=0  removed=0" in out
 
-    def test_renders_null_mean_delta_as_zero(self) -> None:
-        # A present-but-null mean_delta (explicit JSON null) must coerce to 0.0,
-        # not raise TypeError on the `:+.3f` format (parity with comment.py).
+    def test_renders_null_mean_delta_as_a_dash(self) -> None:
+        # A present-but-null mean_delta (explicit JSON null) must not raise
+        # TypeError on the `:+.3f` format (parity with comment.py), and since
+        # #435 it prints the table's missing-value dash, not `+0.000`.
         report = DeltaReport.from_json(
             {
                 "current_run_id": "c1",
                 "baseline_run_id": "b1",
                 "suite": "s",
                 "threshold_drop": 0.1,
-                "summary": {"mean_delta": None, "n_regressed": 2},
-                "rows": [],
+                "summary": {"mean_delta": None, "n_regressed": 1, "n_flagged": 1},
+                "rows": [
+                    {
+                        "example_id": "a",
+                        "baseline_score": 0.9,
+                        "current_score": 0.5,
+                        "delta": -0.4,
+                        "status": "regressed",
+                        "flagged": True,
+                    }
+                ],
             }
         )
         out = render_delta_ascii(report)
-        assert "mean Δ=+0.000" in out
-        assert "regressed=2" in out
+        assert "mean Δ=-  " in out
+        assert "+0.000" not in out
+        assert "regressed=1 (flagged=1)" in out
 
 
 # ----------------------------------------------------------------------

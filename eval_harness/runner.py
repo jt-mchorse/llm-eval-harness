@@ -393,8 +393,8 @@ def _check_delta_row_flagged(flagged: Any, example_id: str) -> bool:
 def _check_delta_summary(summary: dict[str, Any]) -> None:
     mean_delta = summary.get("mean_delta")
     # `mean_delta` may be legitimately absent or an explicit null (an
-    # undefined mean Δ, e.g. an all-new suite — the renderer coerces that
-    # to 0.0). Only a present, non-null, non-finite value is corruption.
+    # undefined mean Δ, e.g. an all-new suite — the renderers print a dash,
+    # #435). Only a present, non-null, non-finite value is corruption.
     if mean_delta is not None and not math.isfinite(_require_float(mean_delta, "mean_delta")):
         raise ValueError(
             f"non-finite mean_delta {mean_delta} in delta JSON summary; mean_delta must be "
@@ -441,6 +441,84 @@ def _check_delta_suite(suite: Any) -> str:
             "and renders as a literal 'None' suite name in the ascii header"
         )
     return suite
+
+
+def _row_verdict(
+    example_id: str,
+    baseline_score: float | None,
+    current_score: float | None,
+    threshold_drop: float,
+) -> tuple[float | None, str, bool]:
+    """``(delta, status, flagged)`` for one example id: ``diff_runs``' rule.
+
+    ``diff_runs`` builds every row from this, and ``_check_delta_rows`` refuses
+    a row that disagrees with it (#435), so a delta record can only carry the
+    verdict its own scores and threshold produce. Exact on the decimals (D-034).
+    """
+    if baseline_score is not None and current_score is not None:
+        exact = _decimal(current_score) - _decimal(baseline_score)
+        status, flagged = _status_for(exact, _decimal(threshold_drop))
+        delta = _published(exact, f"the score difference for example_id {example_id!r}")
+        return delta, status, flagged
+    if current_score is not None:
+        return None, "new", False
+    if baseline_score is not None:
+        return None, "removed", False
+    raise ValueError(
+        f"delta row for example_id {example_id!r} has neither a baseline_score nor a "
+        "current_score — diff_runs gives a row only to an id in one of the two runs"
+    )
+
+
+def _check_delta_rows(rows: tuple[RowDelta, ...], threshold_drop: float) -> None:
+    # The reader checked each row's fields and never the row against its own
+    # scores, so `status: "unchanged"` beside `delta: +0.4, flagged: true` read
+    # back, and so did a repeated example_id, which the run reader refuses
+    # (#79). A flag the scores do not produce is a verdict nobody computed (#435).
+    seen: set[str] = set()
+    for row in rows:
+        if row.example_id in seen:
+            raise ValueError(
+                f"duplicate example_id {row.example_id!r} in delta rows — diff_runs gives "
+                "each id one row, and the summary counts would count it twice"
+            )
+        seen.add(row.example_id)
+        expected = _row_verdict(
+            row.example_id, row.baseline_score, row.current_score, threshold_drop
+        )
+        if (row.delta, row.status, row.flagged) != expected:
+            delta, status, flagged = expected
+            raise ValueError(
+                f"delta row for example_id {row.example_id!r} says delta={row.delta!r}, "
+                f"status={row.status!r}, flagged={row.flagged!r}, but its scores "
+                f"(baseline {row.baseline_score!r}, current {row.current_score!r}) at "
+                f"threshold_drop {threshold_drop!r} give delta={delta!r}, status={status!r}, "
+                f"flagged={flagged!r} — diff_runs produces no such row"
+            )
+
+
+def _check_delta_summary_counts(summary: dict[str, Any], rows: tuple[RowDelta, ...]) -> None:
+    # Both renderers take the headline counts and the `[X]/[!]/[+]/[=]` verdict
+    # from `summary` alone, a missing or null count read as 0, so a delta JSON
+    # without its summary posted `[=] ... flagged **0**` above a `:warning:` row
+    # (#435). Each count is compared the way the renderers read it: a missing
+    # key is refused exactly when the rows say the count is not 0.
+    from_rows = {
+        "n_flagged": sum(1 for r in rows if r.flagged),
+        **{
+            f"n_{status}": sum(1 for r in rows if r.status == status)
+            for status in DELTA_ROW_STATUSES
+        },
+    }
+    for count_key, count in from_rows.items():
+        value = summary.get(count_key)
+        stated = _require_int(value, count_key) if value is not None else 0
+        if stated != count:
+            raise ValueError(
+                f"delta JSON summary '{count_key}' is {value!r} but the rows give {count} — "
+                "the comment headline and its verdict are rendered from the summary, so "
+                "it would contradict the table under it"
+            )
 
 
 @dataclass(frozen=True)
@@ -624,6 +702,10 @@ class DeltaReport:
             if not isinstance(row, RowDelta):
                 raise TypeError(f"rows[{index}] must be a RowDelta; got {type(row).__name__}")
         object.__setattr__(self, "rows", tuple(self.rows))
+        # On the owned rows: each must be the row `diff_runs` builds from its
+        # scores, and the summary's counts must be the rows' (#435).
+        _check_delta_rows(self.rows, self.threshold_drop)
+        _check_delta_summary_counts(self.summary, self.rows)
 
     @property
     def regressed_ids(self) -> list[str]:
@@ -684,6 +766,13 @@ class DeltaReport:
         (#42). A bare ``NaN`` / ``Infinity`` token parses natively via
         ``json.loads`` and would otherwise render as ``nan`` (threshold
         line) / ``+nan`` (mean Δ) in the posted PR comment (#89).
+
+        Since #435 the record must also agree with itself: each row must be
+        the row ``diff_runs`` builds from its own scores and ``threshold_drop``
+        (``delta``, ``status`` and ``flagged`` included), no ``example_id``
+        may repeat, and each ``summary`` ``n_*`` count, read as the renderers
+        read it (missing or null is 0), must equal the rows' count. A missing
+        summary therefore reads back only beside rows that give every count 0.
         """
         # A bare list/number/string/null is valid JSON but not the
         # `DeltaReport.to_json()` object shape; without this guard `payload.get`
@@ -761,12 +850,18 @@ class DeltaReport:
                 f"delta JSON 'rows' must be a JSON array when present; "
                 f"got {type(rows_raw).__name__}"
             )
+        rows = tuple(RowDelta.from_json(r) for r in rows_raw)
+        # A row its own scores contradict, a repeated id, and a summary count
+        # the rows disagree with -- a missing summary included -- all read back
+        # until #435, and the headline then contradicted the table under it.
+        _check_delta_rows(rows, threshold_drop)
+        _check_delta_summary_counts(summary, rows)
         return cls(
             current_run_id=current_run_id,
             baseline_run_id=baseline_run_id,
             suite=suite,
             threshold_drop=threshold_drop,
-            rows=tuple(RowDelta.from_json(r) for r in rows_raw),
+            rows=rows,
             summary=summary,
         )
 
@@ -1011,7 +1106,6 @@ def diff_runs(
     # Since #266 this is the one definition the delta reader and `DeltaReport`
     # share, so a report `diff_runs` would refuse to build cannot be read back.
     threshold_drop = _checked_threshold_drop(threshold_drop)
-    exact_threshold = _decimal(threshold_drop)
     if current.suite != baseline.suite:
         raise ValueError(
             f"cannot diff across suites: current={current.suite} baseline={baseline.suite}"
@@ -1023,27 +1117,24 @@ def diff_runs(
     for ex_id in all_ids:
         cur = current.rows.get(ex_id)
         base = baseline.rows.get(ex_id)
-        if cur is not None and base is not None:
-            # Exact, so the verdict and the published delta agree with the
-            # decimals the scores and the threshold were written as (#289).
-            exact = _decimal(cur[0]) - _decimal(base[0])
-            status, flagged = _status_for(exact, exact_threshold)
-            delta = _published(exact, f"the score difference for example_id {ex_id!r}")
-            rows.append(RowDelta(ex_id, base[0], cur[0], delta, status, flagged))
-            if flagged:
-                n_flag += 1
-            if status == "regressed":
-                n_reg += 1
-            elif status == "improved":
-                n_imp += 1
-            else:
-                n_same += 1
-        elif cur is not None:
-            rows.append(RowDelta(ex_id, None, cur[0], None, "new", False))
+        base_score = base[0] if base is not None else None
+        cur_score = cur[0] if cur is not None else None
+        # Exact, so the verdict and the published delta agree with the
+        # decimals the scores and the threshold were written as (#289). The
+        # one definition the delta record checks its rows against (#435).
+        delta, status, flagged = _row_verdict(ex_id, base_score, cur_score, threshold_drop)
+        rows.append(RowDelta(ex_id, base_score, cur_score, delta, status, flagged))
+        if flagged:
+            n_flag += 1
+        if status == "regressed":
+            n_reg += 1
+        elif status == "improved":
+            n_imp += 1
+        elif status == "unchanged":
+            n_same += 1
+        elif status == "new":
             n_new += 1
         else:
-            assert base is not None
-            rows.append(RowDelta(ex_id, base[0], None, None, "removed", False))
             n_rem += 1
 
     summary = {
@@ -1162,28 +1253,34 @@ def render_delta_ascii(report: DeltaReport) -> str:
     lines = [header, "", fmt(columns), sep.join("-" * w for w in widths)]
     lines.extend(fmt(row) for row in cells)
     s = report.summary
-    # `DeltaReport.from_json` permits an empty/partial summary (its docstring:
-    # "mean_delta may be legitimately absent or an explicit null ... coerces
-    # that to 0.0"). Direct subscripting here raised KeyError on a missing key,
+    # `DeltaReport.from_json` permits a partial summary (`mean_delta` may be
+    # legitimately absent or an explicit null). Direct subscripting here raised KeyError on a missing key,
     # and `f"{None:+.3f}"` raised TypeError on a present-null mean_delta — while
     # the sibling `render_delta_markdown` (comment.py) already defends both. Use
-    # `.get` defaults + the explicit None→0.0 coercion (`is not None`, so a real
-    # 0.0 mean Δ is preserved) to bring the two renderers to parity (#100).
-    raw_mean_delta = s.get("mean_delta", 0.0)
-    mean_delta = float(raw_mean_delta) if raw_mean_delta is not None else 0.0
+    # `.get` + an explicit None check (`is not None`, so a real 0.0 mean Δ is
+    # preserved) to bring the two renderers to parity (#100). The None arm was
+    # a coercion to 0.0, which printed `+0.000`, a mean nobody measured; since
+    # #435 it prints this table's missing-value dash, as the PR comment prints
+    # its own. Unlike the counts, a mean cannot be checked against the rows.
+    raw_mean_delta = s.get("mean_delta")
+    mean_delta_cell = (
+        render_signed_classified(float(raw_mean_delta), (0.0,))
+        if raw_mean_delta is not None
+        else "-"
+    )
 
     # A present-but-null count (e.g. `{"n_flagged": null}` in a hand-edited delta
     # JSON) was interpolated raw and rendered the literal string `None` — silent
     # wrong output, the ascii sibling of the `int(None)` TypeError in
-    # render_delta_markdown. Coerce null → 0, matching the mean_delta None→0.0
-    # handling above and bringing the two renderers to parity.
+    # render_delta_markdown. Coerce null → 0, as the PR comment does; since #435
+    # the report refuses a missing or null count unless its rows give 0 too.
     def _count(key: str) -> int:
         v = s.get(key)
         return int(v) if v is not None else 0
 
     lines.append("")
     lines.append(
-        f"summary: mean Δ={render_signed_classified(mean_delta, (0.0,))}  "
+        f"summary: mean Δ={mean_delta_cell}  "
         f"regressed={_count('n_regressed')} (flagged={_count('n_flagged')})  "
         f"improved={_count('n_improved')}  unchanged={_count('n_unchanged')}  "
         f"new={_count('n_new')}  removed={_count('n_removed')}"

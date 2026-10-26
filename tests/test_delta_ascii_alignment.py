@@ -78,7 +78,16 @@ def test_the_demo_fixture_table_lines_up(tmp_path: Path) -> None:
 def test_a_widened_delta_and_a_long_id_still_line_up() -> None:
     # #291 widens a delta that would otherwise read as the other verdict.
     rows = [
-        RowDelta("an-example-id-far-longer-than-twelve", 0.9, 0.8, -0.1 - 1e-9, "regressed", True),
+        # Scores that give that delta: the report refuses a row its scores
+        # contradict (#435).
+        RowDelta(
+            "an-example-id-far-longer-than-twelve",
+            0.900000001,
+            0.8,
+            -0.100000001,
+            "regressed",
+            True,
+        ),
         RowDelta("x", 0.5, 0.5, 0.0, "unchanged", False),
     ]
     report = DeltaReport(

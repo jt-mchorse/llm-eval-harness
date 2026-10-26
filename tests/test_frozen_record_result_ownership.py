@@ -246,7 +246,7 @@ def test_an_edit_to_the_to_json_payload_does_not_reach_the_report() -> None:
 
 
 def test_the_payload_still_round_trips() -> None:
-    report = _report({"mean_delta": -0.25, "n_flagged": 1})
+    report = _report({"mean_delta": -0.25, "n_flagged": 0})
     again = DeltaReport.from_json(json.loads(json.dumps(report.to_json())))
     assert again == report
 

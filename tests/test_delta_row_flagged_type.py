@@ -192,6 +192,7 @@ def test_every_flagged_value_to_json_can_emit_reads_back() -> None:
             RowDelta("qa_001", 0.9, 0.5, -0.4, "regressed", True),
             RowDelta("qa_002", 0.9, 0.9, 0.0, "unchanged", False),
         ),
+        summary={"n_flagged": 1, "n_regressed": 1, "n_unchanged": 1},
     )
     # Through a real JSON round trip, not just the dict — `json.dumps` is where
     # a Python bool becomes the `true`/`false` token the reader will see.
@@ -249,7 +250,13 @@ def test_regressed_ids_no_longer_gains_a_phantom_id() -> None:
     """`regressed_ids` is public and is what `examples/` prints."""
     with pytest.raises(ValueError, match="flagged must be a boolean"):
         DeltaReport.from_json(_one_row_report([0]))
-    assert DeltaReport.from_json(_one_row_report(True)).regressed_ids == ["qa_001"]
+    # A real `true` on a row whose scores regress past the threshold; `true` on
+    # the unchanged row above is now refused as a verdict its scores do not
+    # give (#435).
+    flagged = _one_row_report(True)
+    flagged["rows"] = [_row(current_score=0.5, delta=-0.4, status="regressed", flagged=True)]
+    flagged["summary"] = {"mean_delta": -0.4, "n_flagged": 1, "n_regressed": 1}
+    assert DeltaReport.from_json(flagged).regressed_ids == ["qa_001"]
 
 
 def test_cli_comment_path_exits_2_not_1(tmp_path: Path) -> None:

@@ -25,10 +25,12 @@ GITHUB_LIMIT = 65_536
 def _row(
     i: int, status: str = "unchanged", *, flagged: bool = False, eid: str | None = None
 ) -> RowDelta:
+    # A regressed row is flagged exactly when it drops past the 0.1 threshold;
+    # the report refuses a flag its scores do not give (#435).
     base, cur = {
         "unchanged": (0.8, 0.8),
         "improved": (0.6, 0.8),
-        "regressed": (0.8, 0.6),
+        "regressed": (0.8, 0.6) if flagged else (0.8, 0.75),
     }.get(status, (0.8, 0.8))
     if status == "new":
         return RowDelta(eid or f"ex-{i:05d}", None, cur, None, "new", False)
