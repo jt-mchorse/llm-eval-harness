@@ -27,6 +27,7 @@ from urllib import error, request
 from eval_harness.comparison import (
     render_configured,
     render_delta_cell,
+    render_score,
     render_score_pair,
     render_signed_classified,
 )
@@ -207,8 +208,10 @@ def _rows_within_budget(
 
 
 def _row_to_md(r: RowDelta, threshold_drop: float) -> str:
+    # A lone score on a `new` / `removed` row, printed the way a paired cell
+    # prints the same score in this column: its decimal, half to even (#446).
     def fmt(v: float | None) -> str:
-        return "—" if v is None else f"{v:.3f}"
+        return "—" if v is None else render_score(v)
 
     # Beside its `:warning:` and its status, so it may not read as the other
     # verdict: two rows both showing `-0.100`, one flagged (#291). Rendered from
