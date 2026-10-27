@@ -4696,3 +4696,25 @@ context_for_next_session:
   - "RENDER_REPORT_PRINTS_MINUS_0_000_FOR_A_NEGATIVE_ZERO_KAPPA_OR_R_ON_AN_EMPTY_RESULT_not_filed"
 followups: []
 ---
+
+---
+session: 2026-10-27T07:51Z
+issue: 443
+branch: session/2026-10-27-0742-issue-443
+focus: SCORE_PAIR_CELLS_WERE_DOT_NF_OF_THE_BINARY_FLOAT_SO_AT_16_17_PLACES_0_2_PRINTED_0_20000000000000001_AND_DID_NOT_SUBTRACT_TO_437S_EXACT_DELTA_CELL
+phase: shipped
+delta:
+  files_changed: 2
+  tests_added: 22
+  suite: "3219 -> 3241 passed, 28 skipped (fresh 3.12 venv and 3.11 venv with --cov, pip install -e .[dev]); ruff, format, mypy clean; CLI smoke ok"
+decisions_made: []
+measured: "main 931c815 at 0.1: b 0.2->0.09999999999999999 printed 0.20000000000000001 | 0.09999999999999999 | -0.10000000000000001; d 0.6->0.49999999999999994 printed 0.6000000000000000 | 0.4999999999999999 | -0.1000000000000001. After: 0.20000000000000000 | 0.09999999999999999 | -0.10000000000000001 and 0.60000000000000000 | 0.49999999999999994 | -0.10000000000000006, Fraction read-back exact, pair subtracts exactly to delta. Demo diff-json 4 thresholds x 3 formats byte-identical, same exit codes. Revert comparison.py: 18 of 22 red, 4 green controls (0.8/0.7 and 0.5/0.5004 pairs, two delta cells already right). Partial: no delta-wide=>pair-wide coupling 5 red; no exactness past 15 places 10 red."
+context_for_next_session:
+  - "PAST_DBL_DIG_15_PLACES_A_CELL_MUST_BE_THE_EXACT_DECIMAL_score_pair_cells_and_delta_cell_both_up_to_15_it_is_a_rounding"
+  - "A_ROW_WHOSE_DELTA_CELL_IS_PAST_15_PLACES_STARTS_ITS_PAIR_AT_16_so_0_31_to_0_010000000000000002_at_0_3_no_longer_prints_0_310_0_010_beside_minus_0_299999999999999998"
+  - "PAIR_FALLBACK_IS_BOTH_EXACT_DECIMALS_AT_ONE_WIDTH_NOT_THE_REPRS_same_numbers_no_exponent_form"
+  - "HALF_EVEN_ON_THE_DECIMAL_MOVES_TIES_0_0005_at_3_is_0_000_was_0_001_demo_unaffected_two_decimal_scores"
+  - "LONE_CELLS_ON_NEW_REMOVED_ROWS_STILL_DOT_3F_OF_THE_FLOAT_differ_only_at_decimal_ties_not_filed"
+  - "RENDER_REPORT_MINUS_0_000_ON_EMPTY_CALIBRATIONRESULT_IS_NOT_427_427_is_pearson_r_arithmetic_this_is_a_renderer_given_literal_minus_0_0_still_not_filed"
+followups: []
+---
