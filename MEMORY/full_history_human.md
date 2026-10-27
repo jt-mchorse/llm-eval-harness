@@ -3941,3 +3941,17 @@ right side of zero and of the threshold. The flagged row now reads
 against zero, which rounding can't cross, so it is unchanged. The JSON
 value is also unchanged. The demo commands give exactly the same output as
 before.
+
+## 2026-10-27 — The #291 test now reads the delta cell as the decimal it prints (#440)
+
+The test that checks every printed delta cell against its row's verdict
+converted each cell back to a float before comparing it with the
+threshold. A float can't tell `-0.10000000000000001` apart from `-0.1`,
+so the test would have called #437's correct flagged cell wrong, and it
+would have passed the old, wrong `-0.100`. It only stayed green because
+its random inputs never landed exactly on the threshold. It now reads
+cells back as exact decimals, which is what the flag is decided on. It
+also adds rows that sit right on each threshold as floats, and it checks
+that some of those rows are flagged and some are not. Run against the
+renderers from before #437, the stronger test fails and the old one
+passes. Only the test changed; nothing in the shipped code did.

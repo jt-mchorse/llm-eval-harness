@@ -4657,3 +4657,22 @@ context_for_next_session:
   - "THE_291_SEARCH_TEST_READS_CELLS_BACK_WITH_float_which_cannot_see_this_class_new_tests_read_back_with_Fraction"
 followups: []
 ---
+
+---
+session: 2026-10-27T07:30Z
+issue: 440
+branch: session/2026-10-27-0730-issue-440
+focus: THE_291_SEARCH_TEST_READ_DELTA_CELLS_BACK_WITH_float_WHICH_EQUATES_MINUS_0_10000000000000001_WITH_MINUS_0_1_AND_ITS_RANDOM_INPUTS_NEVER_HIT_THE_BOUNDARY
+phase: shipped
+delta:
+  files_changed: 1
+  tests_added: 0
+  suite: "3166 -> 3166 passed, 28 skipped (fresh 3.12 venv, pip install -e .[dev]); existing search test strengthened, no new test functions; ruff, format, mypy clean"
+decisions_made: []
+measured: "main 091f8fa at 0.1: 0.2->0.09999999999999999 flagged, cell -0.10000000000000001, float read-back says not flagged. Boundary rows per threshold (rows / float delta == -t / flagged among those): 0.1 267/100/14, 0.05 282/98/5, 0.25 222/90/17. Inverted probe, comment.py+runner.py from ea25ba0: new test 2 of 8 red (search x ascii/markdown, 0.11->0.009999999999999993 prints -0.100 flagged), old test 8 green. Boundary rows with float read-back on main: 2 red. Fraction read-back without boundary rows pre-439: 8 green, so both halves are load-bearing."
+context_for_next_session:
+  - "DELTA_CELL_READ_BACKS_ARE_ALL_Fraction_NOW_291_search_437_cell_350_score_pair_mean_delta"
+  - "REMAINING_float_READ_BACKS_render_classified_render_comparison_drift_gate_ARE_FLOAT_DECIDED_VERDICTS_so_float_is_their_contract"
+  - "CALIBRATION_READ_BACKS_NOT_SWEPT_438_IN_FLIGHT_concurrently"
+followups: []
+---
