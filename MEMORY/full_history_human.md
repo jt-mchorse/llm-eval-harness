@@ -3955,3 +3955,19 @@ also adds rows that sit right on each threshold as floats, and it checks
 that some of those rows are flagged and some are not. Run against the
 renderers from before #437, the stronger test fails and the old one
 passes. Only the test changed; nothing in the shipped code did.
+
+## 2026-10-27 — A calibration result can no longer state a κ its own rows contradict (#438)
+
+A calibration result holds the per-row human and judge scores plus two
+summary numbers, Cohen's κ and Pearson r, and the report puts its PASS/FAIL
+verdict and labels on those two numbers. The result already checked that its
+row count matched its rows, but nothing checked the two numbers. So a result
+built by hand with κ = 0.95 over four rows where the judge disagreed with
+the human every time rendered "PASS, almost perfect". The rows actually give
+κ = -1. The result now recomputes κ and r from its rows, using the same
+helper the real calibration run uses, and refuses any value that is not
+exactly the same number. There is no tolerance, because κ is what the CI
+gate compares against, and a tiny rounding gap once flipped PASS to FAIL
+(#283). A result with no rows has nothing to check against, so it is
+accepted as before. Real calibration runs are never refused, which a test
+checks over 40 randomly generated datasets.
