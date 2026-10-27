@@ -38,6 +38,7 @@ from typing import Any, Protocol
 from eval_harness.calibration import _require_correlation_range
 from eval_harness.comparison import (
     render_configured,
+    render_delta_cell,
     render_score_pair,
     render_signed_classified,
 )
@@ -1229,10 +1230,11 @@ def render_delta_ascii(report: DeltaReport) -> str:
         else:
             baseline = f"{r.baseline_score:.3f}" if r.baseline_score is not None else "-"
             current = f"{r.current_score:.3f}" if r.current_score is not None else "-"
-        # Beside its verdict, so it may not read as the other verdict (#291).
+        # Beside its verdict, so it may not read as the other verdict (#291),
+        # from the decimal difference that verdict was decided on (#437).
         delta = (
-            render_signed_classified(r.delta, (0.0, -report.threshold_drop))
-            if r.delta is not None
+            render_delta_cell(r.baseline_score, r.current_score, report.threshold_drop)
+            if r.baseline_score is not None and r.current_score is not None
             else "-"
         )
         cells.append(

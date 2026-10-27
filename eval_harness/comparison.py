@@ -172,7 +172,7 @@ def render_comparison(
     return (repr(value), repr(other))
 
 
-def _band(value: float, boundary: float) -> int:
+def _band(value: float | Fraction, boundary: float | Fraction) -> int:
     """Which side of *boundary* *value* falls on: ``-1`` below, ``0`` at, ``1`` above."""
     if value < boundary:
         return -1
@@ -298,6 +298,46 @@ def _decimal_band(delta: Fraction, threshold_drop: Fraction) -> int:
     if delta < 0:
         return -1
     return 0 if delta == 0 else 1
+
+
+def _fixed(value: Fraction, width: int) -> str:
+    """*value* at exactly *width* decimal places, signed, rounded half to even."""
+    scaled = round(abs(value) * 10**width)
+    whole, frac = divmod(scaled, 10**width)
+    digits = f"{whole}.{frac:0{width}d}" if width else str(whole)
+    return f"{'-' if value < 0 else '+'}{digits}"
+
+
+def render_delta_cell(
+    baseline: float, current: float, threshold_drop: float, *, places: int = COMPARISON_PLACES
+) -> str:
+    """Render a delta row's Δ cell from the difference its verdict was decided on (#437).
+
+    #291 classified the cell with :func:`render_signed_classified` on the
+    float ``delta``. D-034 then moved the *flag* onto the scores' decimal
+    difference, and published ``delta`` as the nearest float to it -- which
+    rounds onto ``-threshold_drop`` itself, where no width can separate it::
+
+        0.8 -> 0.7                  exact -0.1                  -0.100
+        0.2 -> 0.09999999999999999  exact -0.10000000000000001  -0.100  FLAG
+
+    So the cell is classified and rendered on the exact decimal difference,
+    against the same two boundaries as before (``0`` and ``-threshold_drop``,
+    each its own band), and widened until the rendered decimal reads back on
+    the same side of each. Past :data:`COMPARISON_MAX_PLACES` it prints the
+    whole exact difference, which terminates because both operands do.
+    """
+    exact = Fraction(repr(current)) - Fraction(repr(baseline))
+    boundaries = (Fraction(0), -Fraction(repr(threshold_drop)))
+    targets = [_band(exact, b) for b in boundaries]
+    for width in range(places, COMPARISON_MAX_PLACES + 1):
+        rendered = _fixed(exact, width)
+        if [_band(Fraction(rendered), b) for b in boundaries] == targets:
+            return rendered
+    width = len(str(exact.denominator)) - 1  # 10**width is a multiple of it
+    while (exact * 10**width).denominator != 1:
+        width += 1
+    return _fixed(exact, width)
 
 
 def render_score_pair(
