@@ -82,7 +82,7 @@ def test_the_report_still_refuses_for_library_callers(bad: object) -> None:
     )
     score = JudgeScore(score=1.0, reasoning="r", raw="SCORE: 1.0\nREASONING: r")
     result = CalibrationResult(
-        n=1, cohens_kappa=0.5, pearson_r=0.5, judge_scores=[score], rows=[row]
+        n=1, cohens_kappa=0.0, pearson_r=0.0, judge_scores=[score], rows=[row]
     )
     with pytest.raises(ValueError, match="threshold_kappa must be"):
         render_report(result, judge_model="m", threshold_kappa=bad)  # type: ignore[arg-type]

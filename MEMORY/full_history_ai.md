@@ -4676,3 +4676,23 @@ context_for_next_session:
   - "CALIBRATION_READ_BACKS_NOT_SWEPT_438_IN_FLIGHT_concurrently"
 followups: []
 ---
+
+---
+session: 2026-10-27T07:33Z
+issue: 438
+branch: session/2026-10-27-0724-issue-438
+focus: CALIBRATIONRESULT_CHECKED_N_AGAINST_ROWS_BUT_NOT_KAPPA_OR_R_SO_A_HAND_BUILT_RESULT_RENDERED_PASS_ALMOST_PERFECT_OVER_ROWS_THAT_ALL_DISAGREE
+phase: shipped
+delta:
+  files_changed: 9
+  tests_added: 51
+  suite: "3144 -> 3196 passed, 28 skipped (3.12 venv and CI-shaped 3.11 venv, pip install -e .[dev], --cov); ruff, format, mypy clean; CLI smoke ok"
+decisions_made: []
+measured: "main ea25ba0: CalibrationResult(n=4, kappa=0.95, r=0.97) over human [1,0,1,0] / judge [0,1,0,1] -> render_report 'result: **PASS**', '0.950 | almost perfect', '0.970 | very strong'; rows give kappa -1.0, r -1.0. After: ValueError 'cohens_kappa=0.95 but the 4 rows give -1.0'. Revert calibration.py: 8 of 51 new red, 43 green controls (40 seeded calibrate round trips, consistent hand-built renders, int 0 accepted, empty result unchecked). A math.isclose wrong fix: 4 red (ULP-below-0.6, -0.0 kappa, -0.0 r, bool)."
+context_for_next_session:
+  - "_AGREEMENT_ROWS_JUDGE_SCORES_IS_THE_ONE_KAPPA_R_DEFINITION_calibrate_builds_from_it_and_post_init_compares_to_it_exactly_incl_sign_of_zero_and_bool"
+  - "EMPTY_RESULT_N_0_IS_NOT_CHECKED_kappa_undefined_on_empty_render_report_range_guards_still_load_bearing_there_renderer_fixtures_needing_arbitrary_kappa_use_it"
+  - "ONE_ROW_RESULT_ALWAYS_HAS_KAPPA_0_R_0_both_raters_constant"
+  - "RENDER_REPORT_PRINTS_MINUS_0_000_FOR_A_NEGATIVE_ZERO_KAPPA_OR_R_ON_AN_EMPTY_RESULT_not_filed"
+followups: []
+---

@@ -84,7 +84,7 @@ def _stated_n(md: str) -> int:
 
 def test_the_two_lists_are_not_the_callers_objects() -> None:
     scores, rows = [_score()], [_row()]
-    result = CalibrationResult(n=1, cohens_kappa=0.5, pearson_r=0.5, judge_scores=scores, rows=rows)
+    result = CalibrationResult(n=1, cohens_kappa=0.0, pearson_r=0.0, judge_scores=scores, rows=rows)
     assert result.judge_scores is not scores
     assert result.rows is not rows
     assert result.judge_scores == scores
@@ -98,7 +98,7 @@ def test_appending_to_both_caller_lists_no_longer_desyncs_the_report() -> None:
     somewhere the renderer does not read cannot pass it.
     """
     scores, rows = [_score()], [_row("r1")]
-    result = CalibrationResult(n=1, cohens_kappa=0.5, pearson_r=0.5, judge_scores=scores, rows=rows)
+    result = CalibrationResult(n=1, cohens_kappa=0.0, pearson_r=0.0, judge_scores=scores, rows=rows)
     scores.append(_score(0.9))
     rows.append(_row("r2"))
     md = render_report(result, judge_model="stub", threshold_kappa=0.6)
@@ -110,7 +110,7 @@ def test_appending_to_one_caller_list_no_longer_raises_out_of_the_renderer() -> 
     """The loud half: before the copy this was `ValueError: zip() argument 2 is
     longer than argument 1`, raised by `render_report`."""
     scores, rows = [_score()], [_row()]
-    result = CalibrationResult(n=1, cohens_kappa=0.5, pearson_r=0.5, judge_scores=scores, rows=rows)
+    result = CalibrationResult(n=1, cohens_kappa=0.0, pearson_r=0.0, judge_scores=scores, rows=rows)
     scores.append(_score(0.9))
     md = render_report(result, judge_model="stub", threshold_kappa=0.6)
     assert len(_table_rows(md)) == 1
@@ -118,7 +118,7 @@ def test_appending_to_one_caller_list_no_longer_raises_out_of_the_renderer() -> 
 
 def test_a_tuple_is_accepted_and_stored_as_the_annotated_list() -> None:
     result = CalibrationResult(
-        n=1, cohens_kappa=0.5, pearson_r=0.5, judge_scores=(_score(),), rows=(_row(),)
+        n=1, cohens_kappa=0.0, pearson_r=0.0, judge_scores=(_score(),), rows=(_row(),)
     )
     assert type(result.judge_scores) is list
     assert type(result.rows) is list

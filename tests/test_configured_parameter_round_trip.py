@@ -61,7 +61,6 @@ from eval_harness.comparison import (
     render_comparison,
     render_configured,
 )
-from eval_harness.judge import JudgeScore
 from eval_harness.runner import DEFAULT_THRESHOLD_DROP, DeltaReport, RowDelta, render_delta_ascii
 
 pytest_plugins = ["pytester"]
@@ -362,18 +361,15 @@ _FAR_KAPPA = 0.9
 _FINE_KAPPA_THRESHOLD = 0.6004
 
 
+_CALIBRATION_ROW = CalibrationRow(
+    id="c1", prompt="p", response="r", rubric="rub", human_score=0.6, provenance={}
+)
+
+
 def _calibration_result(kappa: float) -> CalibrationResult:
-    return CalibrationResult(
-        n=1,
-        cohens_kappa=kappa,
-        pearson_r=0.9,
-        judge_scores=[JudgeScore(score=0.6, reasoning="r", raw="SCORE: 0.6")],
-        rows=[
-            CalibrationRow(
-                id="c1", prompt="p", response="r", rubric="rub", human_score=0.6, provenance={}
-            )
-        ],
-    )
+    # Empty: a result with rows must state the κ its rows give (#438), and these
+    # arms need an arbitrary one.
+    return CalibrationResult(n=0, cohens_kappa=kappa, pearson_r=0.9, judge_scores=[], rows=[])
 
 
 def test_a_near_threshold_kappa_hides_this_defect_and_that_is_why_the_arms_use_a_far_one() -> None:
@@ -431,9 +427,7 @@ def test_the_cli_error_annotation_names_the_threshold_the_run_was_gated_at(
 
     calibration = tmp_path / "calibration.jsonl"
     calibration.write_text("")
-    monkeypatch.setattr(
-        cli_module, "load_calibration", lambda _p: [_calibration_result(0.1).rows[0]]
-    )
+    monkeypatch.setattr(cli_module, "load_calibration", lambda _p: [_CALIBRATION_ROW])
     monkeypatch.setattr(cli_module, "calibrate", lambda *_a, **_k: _calibration_result(0.1))
 
     class _Backend:

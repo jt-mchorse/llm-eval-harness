@@ -32,41 +32,32 @@ import pytest
 
 from eval_harness.calibration import (
     CalibrationResult,
-    CalibrationRow,
     _interpret_kappa,
     cohens_kappa,
     pearson_r,
     render_report,
 )
-from eval_harness.judge import JudgeScore
 
 NAN = float("nan")
 INF = float("inf")
 
 
 def _result(kappa: float, r: float = 0.9) -> CalibrationResult:
-    """A one-row `CalibrationResult` carrying an arbitrary κ / r.
+    """An empty `CalibrationResult` carrying an arbitrary κ / r.
 
     Constructed directly rather than via `calibrate` on purpose: `calibrate`
     feeds `cohens_kappa` guarded `binarize` output, so the *only* way a
     corrupt κ reaches `render_report` is a caller building the public
     dataclass — which is exactly the reachable path, since
     `CalibrationResult` and `render_report` are both in `eval_harness.__all__`.
+
+    Empty, not one row: since #438 a result with rows must state the κ / r
+    those rows give, so a one-row result carrying NaN is refused by the
+    constructor before `render_report` sees it. An empty result has nothing to
+    recompute from and is still accepted, which is why the renderer's own
+    range checks below are still load-bearing.
     """
-    rows = [
-        CalibrationRow(
-            id="r1",
-            prompt="p",
-            response="a",
-            rubric="rubric text",
-            human_score=1.0,
-            provenance={},
-        )
-    ]
-    scores = [
-        JudgeScore(score=1.0, reasoning="looks right", raw="SCORE: 1.0\nREASONING: looks right")
-    ]
-    return CalibrationResult(n=1, cohens_kappa=kappa, pearson_r=r, judge_scores=scores, rows=rows)
+    return CalibrationResult(n=0, cohens_kappa=kappa, pearson_r=r, judge_scores=[], rows=[])
 
 
 # ----------------------------------------------------------------------

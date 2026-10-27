@@ -413,7 +413,7 @@ def test_render_report_escapes_pipe_in_id_and_reasoning_so_columns_dont_break():
     ]
     judge_scores = [JudgeScore(score=0.7, reasoning="faithful | grounded in prompt", raw="raw")]
     result = CalibrationResult(
-        n=1, cohens_kappa=1.0, pearson_r=1.0, judge_scores=judge_scores, rows=rows
+        n=1, cohens_kappa=0.0, pearson_r=0.0, judge_scores=judge_scores, rows=rows
     )
     md = render_report(result, judge_model="stub", threshold_kappa=0.6)
 
@@ -457,7 +457,7 @@ def test_render_report_neutralizes_newline_in_id_so_the_row_stays_one_line():
     ]
     judge_scores = [JudgeScore(score=0.5, reasoning="fine", raw="raw")]
     result = CalibrationResult(
-        n=1, cohens_kappa=1.0, pearson_r=1.0, judge_scores=judge_scores, rows=rows
+        n=1, cohens_kappa=0.0, pearson_r=0.0, judge_scores=judge_scores, rows=rows
     )
     md = render_report(result, judge_model="stub", threshold_kappa=0.6)
 
@@ -495,7 +495,7 @@ def test_render_report_neutralizes_backtick_in_id_so_the_code_span_stays_single(
     ]
     judge_scores = [JudgeScore(score=0.5, reasoning="fine", raw="raw")]
     result = CalibrationResult(
-        n=1, cohens_kappa=1.0, pearson_r=1.0, judge_scores=judge_scores, rows=rows
+        n=1, cohens_kappa=0.0, pearson_r=0.0, judge_scores=judge_scores, rows=rows
     )
     md = render_report(result, judge_model="stub", threshold_kappa=0.6)
 
