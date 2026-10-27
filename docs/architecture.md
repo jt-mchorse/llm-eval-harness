@@ -688,7 +688,12 @@ every frozen dataclass with a mutable-container field — rather than taking the
 list; the arm in `tests/test_frozen_record_result_ownership.py` is pinned by value
 at six rows. The shape check runs before each copy (`list("ab")` splats), and
 `CalibrationResult` also enforces `n == len(rows) == len(judge_scores)`, because
-the copy closes only the *outside* route to a stale count.
+the copy closes only the *outside* route to a stale count. κ and r are two more
+statements about the same rows (#438): a result with rows must state exactly the
+values `calibrate()` computes from them (same helper, exact comparison including
+the sign of zero), so a hand-built `κ = 0.95` can no longer render **PASS** over
+rows that give `-1.0`. An empty result has nothing to recompute from and is not
+checked; `render_report`'s own range checks remain the guard there.
 
 "Owned" is D-027's line, not immutability: the record stops sharing its container
 with the caller, and code holding the record can still edit its own attribute.

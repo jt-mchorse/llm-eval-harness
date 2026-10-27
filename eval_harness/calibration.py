@@ -113,6 +113,38 @@ class CalibrationResult:
                 f"len(judge_scores)={len(self.judge_scores)}; render_report states n "
                 f"and pairs the two lists row for row"
             )
+        # κ and r are two more statements about the same rows, and the report
+        # puts them over the table that contradicts them: `n=4, κ=0.95, r=0.97`
+        # over four rows that all disagree (true κ and r: -1.0) rendered
+        # "**PASS**", "almost perfect", "very strong" (#438). Recomputed with the
+        # one helper `calibrate()` builds them from, and compared EXACTLY: both
+        # metrics are deterministic in the rows, so the producer's own output
+        # always matches, and κ is the number the gate reads -- a tolerance would
+        # re-admit the few-ULP-below-the-threshold value #283 removed.
+        #
+        # "Exactly" includes the sign of zero and the type: `-0.0 == 0.0`, but a
+        # stated `-0.0` renders `-0.000` where the rows give `0.000`, and
+        # `False == 0.0` is a bool the renderer refuses anyway.
+        #
+        # Empty rows are not checked: κ and r are undefined there (both metric
+        # functions refuse empty input), `calibrate()` never produces it, and
+        # `n == 0` is the one shape with no table to contradict.
+        if self.rows:
+            kappa, r = _agreement(self.rows, self.judge_scores)
+            for label, stated, derived in (
+                ("cohens_kappa", self.cohens_kappa, kappa),
+                ("pearson_r", self.pearson_r, r),
+            ):
+                if not (
+                    isinstance(stated, (int, float))
+                    and not isinstance(stated, bool)
+                    and stated == derived
+                    and math.copysign(1.0, stated) == math.copysign(1.0, derived)
+                ):
+                    raise ValueError(
+                        f"{label}={stated!r} but the {len(self.rows)} rows give "
+                        f"{derived!r}; render_report states it above those rows"
+                    )
 
 
 def _owned_list(name: str, value: object, element_type: type) -> list[Any]:
@@ -617,18 +649,32 @@ def calibrate(judge: Judge, rows: Iterable[CalibrationRow]) -> CalibrationResult
             )
         judge_scores.append(verdict)
 
-    human_continuous = [r.human_score for r in rows_list]
-    judge_continuous = [s.score for s in judge_scores]
+    kappa, r = _agreement(rows_list, judge_scores)
+    return CalibrationResult(
+        n=len(rows_list),
+        cohens_kappa=kappa,
+        pearson_r=r,
+        judge_scores=judge_scores,
+        rows=rows_list,
+    )
+
+
+def _agreement(rows: list[CalibrationRow], judge_scores: list[JudgeScore]) -> tuple[float, float]:
+    """(κ, r) of the judge against the humans over these rows, row for row.
+
+    The one definition: `calibrate()` builds its result from it and
+    `CalibrationResult.__post_init__` checks a stated κ / r against it (#438),
+    so the producer and the check cannot drift apart.
+    """
+    human_continuous = [row.human_score for row in rows]
+    judge_continuous = [score.score for score in judge_scores]
 
     human_binary = [binarize(s) for s in human_continuous]
     judge_binary = [binarize(s) for s in judge_continuous]
 
-    return CalibrationResult(
-        n=len(rows_list),
-        cohens_kappa=cohens_kappa(human_binary, judge_binary),
-        pearson_r=pearson_r(human_continuous, judge_continuous),
-        judge_scores=judge_scores,
-        rows=rows_list,
+    return (
+        cohens_kappa(human_binary, judge_binary),
+        pearson_r(human_continuous, judge_continuous),
     )
 
 

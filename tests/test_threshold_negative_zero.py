@@ -22,12 +22,10 @@ import pytest
 from eval_harness import cli
 from eval_harness.calibration import (
     CalibrationResult,
-    CalibrationRow,
     checked_threshold_kappa,
     render_report,
 )
 from eval_harness.drift import compute_drift, render_html
-from eval_harness.judge import JudgeScore
 
 REPO = Path(__file__).resolve().parent.parent
 
@@ -37,13 +35,9 @@ def _positive(x: float) -> bool:
 
 
 def _result(kappa: float) -> CalibrationResult:
-    row = CalibrationRow(
-        id="r1", prompt="p", response="a", rubric="rubric text", human_score=1.0, provenance={}
-    )
-    score = JudgeScore(score=1.0, reasoning="r", raw="SCORE: 1.0\nREASONING: r")
-    return CalibrationResult(
-        n=1, cohens_kappa=kappa, pearson_r=0.5, judge_scores=[score], rows=[row]
-    )
+    # Empty: a result with rows must state the κ its rows give (#438), and these
+    # arms need an arbitrary one.
+    return CalibrationResult(n=0, cohens_kappa=kappa, pearson_r=0.5, judge_scores=[], rows=[])
 
 
 def _threshold_line(report: str) -> str:
