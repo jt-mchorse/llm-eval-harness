@@ -14,8 +14,10 @@ and the sticky PR comment published the same `-0.100 | :warning:` beside
 
 from __future__ import annotations
 
+import math
 import random
 import re
+from fractions import Fraction
 
 import pytest
 
@@ -80,10 +82,29 @@ def test_the_issue_rows_publish_deltas_their_verdicts_agree_with(deltas_of) -> N
     assert deltas_of(_report(_ISSUE_ROWS)) == _EXPECTED
 
 
+def _boundary_pairs(threshold: float) -> dict[str, tuple[float, float]]:
+    """Two-decimal baselines whose current lands on ``-threshold`` as a float.
+
+    Each current is the float ``base - threshold`` or a one-ULP neighbour of
+    it, so the float delta is ``-threshold`` (or a ULP off) while the decimal
+    difference D-034 flags on falls either side of it (#440).
+    """
+    pairs = {}
+    for n in range(1, 100):
+        base = n / 100
+        exact = base - threshold
+        if exact <= 0:
+            continue
+        for cur in (exact, math.nextafter(exact, 0), math.nextafter(exact, 1)):
+            pairs[f"b{base!r}->{cur!r}"] = (base, cur)
+    return pairs
+
+
 @pytest.mark.parametrize("deltas_of", [_ascii_deltas, _markdown_deltas], ids=["ascii", "markdown"])
 def test_every_published_delta_reads_back_as_its_own_verdict(deltas_of) -> None:
     # Search, not construct: 4-decimal scores, and a band of pairs straddling
-    # each threshold, so both boundaries are exercised from both sides.
+    # each threshold, so both boundaries are exercised from both sides; plus
+    # the rows whose float delta is the threshold itself (#440).
     rng = random.Random(291)
     for threshold in (0.1, 0.05, 0.25):
         pairs: dict[str, tuple[float, float]] = {}
@@ -93,19 +114,30 @@ def test_every_published_delta_reads_back_as_its_own_verdict(deltas_of) -> None:
             pairs[f"t{i}"] = (base, round(base - drop, 4))
             pairs[f"r{i}"] = (round(rng.uniform(0, 1), 4), round(rng.uniform(0, 1), 4))
         pairs["z0"] = (0.5, 0.50004)
+        pairs.update(_boundary_pairs(threshold))
         report = _report(pairs, threshold)
         published = deltas_of(report)
         by_id = {r.example_id: r for r in report.rows}
+        # Read back as the decimal the cell is, against the decimal threshold:
+        # the flag is decided on those (D-034). `float(text)` cannot tell
+        # `-0.10000000000000001` from `-0.1`, so it read a correctly widened
+        # FLAG cell as unflagged (#440).
+        limit = -Fraction(repr(threshold))
         flagged = 0
+        flags_at_threshold: set[bool] = set()
         for ex_id, text in published.items():
             row = by_id[ex_id]
-            back = float(text)
-            assert (back < -threshold) is row.flagged, (ex_id, text, row)
+            back = Fraction(text)
+            assert (back < limit) is row.flagged, (ex_id, text, row)
             sign = "regressed" if back < 0 else "improved" if back > 0 else "unchanged"
             assert sign == row.status, (ex_id, text, row)
             flagged += row.flagged
-        # Non-vacuous: both verdicts of the flag occur in the population.
+            if row.delta == -threshold:
+                flags_at_threshold.add(row.flagged)
+        # Non-vacuous: both verdicts of the flag occur in the population, and
+        # both occur among rows whose published float delta IS the threshold.
         assert 0 < flagged < len(published)
+        assert flags_at_threshold == {True, False}, threshold
 
 
 @pytest.mark.parametrize(
