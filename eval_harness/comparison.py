@@ -73,6 +73,7 @@ whether either operand survived the trip; asking it is D-029.
 
 from __future__ import annotations
 
+import sys
 from collections.abc import Sequence
 from fractions import Fraction
 
@@ -94,6 +95,12 @@ COMPARISON_PLACES = 3
 #: identically at *any* fixed number of places, which is what the `repr`
 #: fallback is for.
 COMPARISON_MAX_PLACES = 17
+
+#: Decimal digits a double carries faithfully (``DBL_DIG``, 15): any decimal
+#: of up to 15 significant digits survives a round trip through a float, so a
+#: fixed-width rendering at up to 15 places reads as a rounding. Past it the
+#: digits are at the double's own resolution and read as the value (#443).
+_DOUBLE_DIGITS = sys.float_info.dig
 
 
 def render_comparison(
@@ -308,6 +315,14 @@ def _fixed(value: Fraction, width: int) -> str:
     return f"{'-' if value < 0 else '+'}{digits}"
 
 
+def _exact_places(value: Fraction) -> int:
+    """The fewest decimal places that write *value* exactly (a score's decimal terminates)."""
+    width = len(str(value.denominator)) - 1  # 10**width is a multiple of it
+    while (value * 10**width).denominator != 1:
+        width += 1
+    return width
+
+
 def render_delta_cell(
     baseline: float, current: float, threshold_drop: float, *, places: int = COMPARISON_PLACES
 ) -> str:
@@ -326,18 +341,23 @@ def render_delta_cell(
     each its own band), and widened until the rendered decimal reads back on
     the same side of each. Past :data:`COMPARISON_MAX_PLACES` it prints the
     whole exact difference, which terminates because both operands do.
+
+    Past :data:`_DOUBLE_DIGITS` places the cell must also *be* the exact
+    difference, for the reason :func:`render_score_pair` gives for its cells
+    (#443): ``0.6 -> 0.49999999999999994`` is ``-0.10000000000000006``, and
+    ``-0.1000000000000001`` at 16 places reads as a different double. So a row
+    that widens that far prints a Δ its two score cells subtract to exactly.
     """
     exact = Fraction(repr(current)) - Fraction(repr(baseline))
     boundaries = (Fraction(0), -Fraction(repr(threshold_drop)))
     targets = [_band(exact, b) for b in boundaries]
     for width in range(places, COMPARISON_MAX_PLACES + 1):
         rendered = _fixed(exact, width)
+        if width > _DOUBLE_DIGITS and Fraction(rendered) != exact:
+            continue
         if [_band(Fraction(rendered), b) for b in boundaries] == targets:
             return rendered
-    width = len(str(exact.denominator)) - 1  # 10**width is a multiple of it
-    while (exact * 10**width).denominator != 1:
-        width += 1
-    return _fixed(exact, width)
+    return _fixed(exact, _exact_places(exact))
 
 
 def render_score_pair(
@@ -352,15 +372,45 @@ def render_score_pair(
     (D-034), so the pair widens, at one shared width, until the difference of
     the two *rendered* decimals falls in the same band as the true one. Scores
     with three or fewer decimals render as before.
+
+    **Each cell is that decimal rounded, not the binary float (#443).** At the
+    16-17 places a boundary row widens to, ``f"{0.2:.17f}"`` is
+    ``0.20000000000000001``: the double's digits, which are neither the score
+    D-034 decides on nor its repr, and which subtract to ``-0.10000000000000002``
+    beside a Δ cell of ``-0.10000000000000001``. So the cells are rendered from
+    ``Fraction(repr(score))`` with the Δ cell's own :func:`_fixed`, half to even.
+
+    Past :data:`_DOUBLE_DIGITS` places a fixed-width cell is at the double's
+    own resolution, where a reader takes it for the score rather than a
+    rounding of it: ``0.4999999999999999`` is a different double from the
+    stored ``0.49999999999999994``. At those widths each cell must also read
+    back as exactly its score's decimal, and if no width up to
+    :data:`COMPARISON_MAX_PLACES` gives that, the pair is both exact decimals
+    at one shared width -- the same numbers as the two reprs, but in the
+    column's fixed-point form (``0.11`` -> ``0.009999999999999993`` and
+    ``1e-20`` are reprs that line up with nothing), and subtracting exactly to
+    the Δ cell's own fallback.
+
+    And a row whose Δ cell is at that resolution prints its scores there too,
+    so the reader can subtract them to it: at ``--threshold-drop 0.3``,
+    ``0.31 -> 0.010000000000000002`` is already in its band at ``0.310 |
+    0.010``, beside a Δ of ``-0.299999999999999998``.
     """
+    base, cur = Fraction(repr(baseline)), Fraction(repr(current))
     threshold = Fraction(repr(threshold_drop))
-    target = _decimal_band(Fraction(repr(current)) - Fraction(repr(baseline)), threshold)
+    target = _decimal_band(cur - base, threshold)
+    delta = render_delta_cell(baseline, current, threshold_drop, places=places)
+    if len(delta.partition(".")[2]) > _DOUBLE_DIGITS:
+        places = max(places, _DOUBLE_DIGITS + 1)
     for width in range(places, COMPARISON_MAX_PLACES + 1):
-        rendered = (f"{baseline:.{width}f}", f"{current:.{width}f}")
-        shown = Fraction(rendered[1]) - Fraction(rendered[0])
-        if _decimal_band(shown, threshold) == target:
+        rendered = (_fixed(base, width).lstrip("+"), _fixed(cur, width).lstrip("+"))
+        shown = (Fraction(rendered[0]), Fraction(rendered[1]))
+        if width > _DOUBLE_DIGITS and shown != (base, cur):
+            continue
+        if _decimal_band(shown[1] - shown[0], threshold) == target:
             return rendered
-    return (repr(baseline), repr(current))
+    width = max(_exact_places(base), _exact_places(cur))
+    return (_fixed(base, width).lstrip("+"), _fixed(cur, width).lstrip("+"))
 
 
 def render_configured(value: float, *, places: int = COMPARISON_PLACES) -> str:
