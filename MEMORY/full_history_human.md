@@ -3971,3 +3971,16 @@ gate compares against, and a tiny rounding gap once flipped PASS to FAIL
 (#283). A result with no rows has nothing to check against, so it is
 accepted as before. Real calibration runs are never refused, which a test
 checks over 40 randomly generated datasets.
+
+## 2026-10-27 — The two score cells in the delta table print the scores themselves (#443)
+
+When a delta row's change sits right on the threshold, the table adds digits
+until the numbers read the right way. The change cell was already worked out
+from the scores' exact decimals (#437), but the baseline and current cells
+beside it were printed from the computer's binary approximation. At 17
+digits that shows the approximation's noise: a score of 0.2 printed as
+`0.20000000000000001`, and the two cells did not subtract to the change
+printed next to them. Both cells now come from the scores' decimals. Once a
+row needs more than 15 digits, every cell in it, including the change, is
+the exact number, so a reader subtracting the two scores gets exactly the
+change shown. The demo commands give exactly the same output as before.
