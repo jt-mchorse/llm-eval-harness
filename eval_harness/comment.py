@@ -26,6 +26,7 @@ from urllib import error, request
 
 from eval_harness.comparison import (
     render_configured,
+    render_delta_cell,
     render_score_pair,
     render_signed_classified,
 )
@@ -210,10 +211,13 @@ def _row_to_md(r: RowDelta, threshold_drop: float) -> str:
         return "—" if v is None else f"{v:.3f}"
 
     # Beside its `:warning:` and its status, so it may not read as the other
-    # verdict: two rows both showing `-0.100`, one flagged (#291).
-    delta_str = (
-        "—" if r.delta is None else render_signed_classified(r.delta, (0.0, -threshold_drop))
-    )
+    # verdict: two rows both showing `-0.100`, one flagged (#291). Rendered from
+    # the decimal difference the flag is decided on, not the published float
+    # `delta`, which can round onto `-threshold_drop` itself (#437).
+    if r.baseline_score is not None and r.current_score is not None:
+        delta_str = render_delta_cell(r.baseline_score, r.current_score, threshold_drop)
+    else:
+        delta_str = "—"
     flag = ":warning:" if r.flagged else ""
     # Wrap example_id in `code` so multi-word IDs stay legible — but backticks
     # protect neither GFM table delimiter: a literal `|` injects an extra column
