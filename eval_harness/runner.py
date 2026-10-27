@@ -39,6 +39,7 @@ from eval_harness.calibration import _require_correlation_range
 from eval_harness.comparison import (
     render_configured,
     render_delta_cell,
+    render_score,
     render_score_pair,
     render_signed_classified,
 )
@@ -535,8 +536,8 @@ class RowDelta:
         # The write-side half of every rule `from_json` states (#266), sharing
         # its definitions. The three scores are *stored* as the checked float,
         # not only checked: the reader coerces a numeric string with `float()`,
-        # and both renderers format these with `.3f`, so a stored `"0.5"` would
-        # be a raw ValueError at render time rather than a value.
+        # and both renderers format these as numbers, so a stored `"0.5"` would
+        # be a raw error at render time rather than a value.
         _check_delta_row_example_id(self.example_id)
         _check_delta_row_status(self.status, self.example_id)
         _check_delta_row_flagged(self.flagged, self.example_id)
@@ -1228,8 +1229,10 @@ def render_delta_ascii(report: DeltaReport) -> str:
                 r.baseline_score, r.current_score, report.threshold_drop
             )
         else:
-            baseline = f"{r.baseline_score:.3f}" if r.baseline_score is not None else "-"
-            current = f"{r.current_score:.3f}" if r.current_score is not None else "-"
+            # A lone score prints as a paired cell prints it: its decimal,
+            # half to even, not `.3f` of the float (#446).
+            baseline = render_score(r.baseline_score) if r.baseline_score is not None else "-"
+            current = render_score(r.current_score) if r.current_score is not None else "-"
         # Beside its verdict, so it may not read as the other verdict (#291),
         # from the decimal difference that verdict was decided on (#437).
         delta = (

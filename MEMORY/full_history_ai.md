@@ -4718,3 +4718,21 @@ context_for_next_session:
   - "RENDER_REPORT_MINUS_0_000_ON_EMPTY_CALIBRATIONRESULT_IS_NOT_427_427_is_pearson_r_arithmetic_this_is_a_renderer_given_literal_minus_0_0_still_not_filed"
 followups: []
 ---
+
+---
+session: 2026-10-27T08:02Z
+issue: 446
+branch: session/2026-10-27-0757-issue-446
+focus: LONE_SCORE_CELL_ON_NEW_REMOVED_ROWS_WAS_DOT_3F_OF_THE_FLOAT_SO_0_0005_PRINTED_0_001_BESIDE_A_PAIRED_0_000_IN_THE_SAME_COLUMN
+phase: shipped
+delta:
+  files_changed: 4
+  tests_added: 43
+  suite: "3285 passed, 28 skipped (fresh 3.12 venv with --cov and 3.11 venv, pip install -e .[dev]); ruff, format, mypy clean"
+decisions_made: []
+measured: "main fcc9bb3, comment._row_to_md, all scores 0.0005: unchanged row 0.000 | 0.000, new row 0.001. After: 0.000 on both; all 1000 ties 0.xxx5 in one report agree lone vs paired in ascii and markdown. Demo diff-json default/0.05/0.1/0.2 x json/markdown/ascii byte-identical, all rc=1. Revert comment.py+runner.py (render_score kept so the file imports): 14 of 43 red, 29 green controls (ties where .3f agrees e.g. 0.0015, plain scores, table self-check, render_score unit tests)."
+context_for_next_session:
+  - "COMPARISON_RENDER_SCORE_IS_THE_LONE_CELL_same_fixed_half_even_as_render_score_pair_at_COMPARISON_PLACES_never_widens_no_partner"
+  - "SWEEP_COMPARISON_COMMENT_RUNNER_NO_OTHER_DOT_NF_SCORE_CELLS_only_docstrings_cli_calibrate_stdout_kappa_r_still_dot_3f"
+followups: []
+---

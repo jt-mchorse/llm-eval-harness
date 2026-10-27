@@ -413,6 +413,21 @@ def render_score_pair(
     return (_fixed(base, width).lstrip("+"), _fixed(cur, width).lstrip("+"))
 
 
+def render_score(score: float, *, places: int = COMPARISON_PLACES) -> str:
+    """Render the one score on a ``new`` / ``removed`` delta row (#446).
+
+    It has no partner to be read against, so nothing widens it, but it shares
+    a column with :func:`render_score_pair`'s cells and has to print a score
+    the way they do: the score's decimal, rounded half to even. It was
+    ``.3f`` of the binary float, so at a decimal tie the same score read two
+    ways in one column::
+
+        0.0005   paired 0.000   lone (.3f) 0.001
+        0.0125   paired 0.012   lone (.3f) 0.013
+    """
+    return _fixed(Fraction(repr(score)), places).lstrip("+")
+
+
 def render_configured(value: float, *, places: int = COMPARISON_PLACES) -> str:
     """Render a configured parameter so it reads back as the value that was set.
 

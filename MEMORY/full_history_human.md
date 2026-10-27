@@ -3984,3 +3984,14 @@ printed next to them. Both cells now come from the scores' decimals. Once a
 row needs more than 15 digits, every cell in it, including the change, is
 the exact number, so a reader subtracting the two scores gets exactly the
 change shown. The demo commands give exactly the same output as before.
+
+## 2026-10-27 — A new or removed row prints its score the way a paired row does (#446)
+
+Since #443 the delta table prints a row's two scores from their exact
+decimals, rounding a tie to the even digit. A row that exists in only one
+of the two runs has a single score, and that cell was still printed the old
+way. So the same score could read two ways in one column: 0.0005 showed as
+`0.000` beside its pair and `0.001` on its own. Both the PR comment and the
+terminal table now print the lone score the same way as the pair. A test
+checks all 1000 four-digit ties at once. The demo commands give exactly the
+same output as before.
