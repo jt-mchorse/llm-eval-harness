@@ -4736,3 +4736,21 @@ context_for_next_session:
   - "SWEEP_COMPARISON_COMMENT_RUNNER_NO_OTHER_DOT_NF_SCORE_CELLS_only_docstrings_cli_calibrate_stdout_kappa_r_still_dot_3f"
 followups: []
 ---
+
+---
+session: 2026-10-27T08:06Z
+issue: 445
+branch: session/2026-10-27-0803-issue-445
+focus: RENDER_REPORT_PRINTED_A_MINUS_0_0_KAPPA_OR_R_AS_MINUS_0_000_416_NORMALISED_ONLY_THE_THRESHOLD_LINE
+phase: shipped
+delta:
+  files_changed: 2
+  tests_added: 18
+  suite: "3242 -> 3260 passed, 28 skipped (fresh 3.12 venv with --cov and 3.11 venv, pip install -e .[dev]); ruff, format, mypy clean; CLI smoke ok"
+decisions_made: []
+measured: "main fcc9bb3: render_report(CalibrationResult(n=0, kappa=-0.0, r=-0.0, [], [])) -> '| Cohen's κ ... | -0.000 | slight |' and '| Pearson r ... | -0.000 | negligible |'. After: 0.000 in both; whole report byte-identical to the 0.0 report for -0.0 kappa/r/both at thresholds 0.6, 0.0, -0.0, -0.5. Revert calibration.py: 14 of 18 red, 4 green controls (-0.0001 kappa/r keep their sign, cohens_kappa and pearson_r grid never return -0.0)."
+context_for_next_session:
+  - "RENDER_REPORT_NORMALISES_KAPPA_R_WITH_UNSIGNED_ZERO_AFTER_RANGE_CHECK_post_init_deliberately_untouched_441_compares_sign_of_zero"
+  - "COHENS_KAPPA_FRACTION_AND_PEARSON_R_SUM_FROM_INT_0_NEVER_RETURN_MINUS_0_0_so_cli_calibrate_stdout_dot_3f_line_is_unaffected"
+followups: []
+---

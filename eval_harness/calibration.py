@@ -748,12 +748,18 @@ def render_report(
     threshold_kappa = checked_threshold_kappa(threshold_kappa)
     _require_correlation_range(result.cohens_kappa, "result.cohens_kappa")
     _require_correlation_range(result.pearson_r, "result.pearson_r")
+    # A `-0.0` κ or r passes the range checks just as the threshold's did, and
+    # printed `-0.000` in the table (#445), the cells #416 did not list. Only an
+    # empty, hand-built result can state one: since #441 a result with rows must
+    # state what its rows give, and `calibrate` returns +0.0.
+    kappa = unsigned_zero(result.cohens_kappa)
+    pearson_r = unsigned_zero(result.pearson_r)
     # The verdict is decided here at full precision and the two numbers behind it
     # are rendered further down -- κ in the table at `.3f`, the threshold in the
     # bullet list unformatted. At a near-threshold κ that published a FAIL beside
     # "0.600" and "0.6", so the report contradicted its own verdict (#252). Both
     # go through `render_comparison`, which also matches their precision.
-    pass_fail = "PASS" if result.cohens_kappa >= threshold_kappa else "FAIL"
+    pass_fail = "PASS" if kappa >= threshold_kappa else "FAIL"
     # `threshold_kappa` is the operator's `--threshold-kappa`, so it must read
     # back as itself and not merely differ from κ: the pairwise loop stops at
     # three places, which published a configured 0.6004 as `0.600` in the line
@@ -764,8 +770,8 @@ def render_report(
     # and an r of 0.69974 printed `0.700 | strong`, where the ladders call 0.200
     # "fair" and 0.700 "very strong" (#329). So the width must also make the
     # rendered value read back into the label printed beside it.
-    rendered_kappa, rendered_threshold = _render_kappa_pair(result.cohens_kappa, threshold_kappa)
-    rendered_pearson = _render_interpreted(result.pearson_r, _interpret_pearson)
+    rendered_kappa, rendered_threshold = _render_kappa_pair(kappa, threshold_kappa)
+    rendered_pearson = _render_interpreted(pearson_r, _interpret_pearson)
     lines = [
         "# Judge calibration report",
         "",
@@ -776,8 +782,8 @@ def render_report(
         "",
         "| metric | value | interpretation |",
         "|--------|-------|----------------|",
-        f"| Cohen's κ (binarized at 0.5) | {rendered_kappa} | {_interpret_kappa(result.cohens_kappa)} |",
-        f"| Pearson r (continuous)       | {rendered_pearson} | {_interpret_pearson(result.pearson_r)} |",
+        f"| Cohen's κ (binarized at 0.5) | {rendered_kappa} | {_interpret_kappa(kappa)} |",
+        f"| Pearson r (continuous)       | {rendered_pearson} | {_interpret_pearson(pearson_r)} |",
         "",
         "## Per-row scores",
         "",
