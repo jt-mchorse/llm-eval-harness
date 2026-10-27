@@ -3925,3 +3925,19 @@ the rows, so a contradictory file is refused with exit 2. A missing count is
 still fine when the rows would give zero. A missing mean change can't be
 checked against the rows, so it now shows as a dash instead of a made-up
 `+0.000`. Every documented command gives exactly the same output as before.
+
+## 2026-10-27 — The delta cell is worked out from the same exact difference as the flag (#437)
+
+Since D-034, whether a row is flagged depends on the exact decimal
+difference between its two scores, but the delta cell beside the flag was
+still worked out from the rounded float that the JSON stores. That float
+can land exactly on the threshold, so `0.8 → 0.7` and
+`0.2 → 0.09999999999999999` both printed `-0.100` at a 0.1 threshold, one
+flagged and one not. That is the same output #291 fixed. Both the PR
+comment and the terminal table now work out and print the cell from the
+exact difference, adding digits until the printed number falls on the
+right side of zero and of the threshold. The flagged row now reads
+`-0.10000000000000001`. The mean change in the headline is only compared
+against zero, which rounding can't cross, so it is unchanged. The JSON
+value is also unchanged. The demo commands give exactly the same output as
+before.

@@ -4636,3 +4636,24 @@ context_for_next_session:
   - "HAND_BUILT_TEST_RECORDS_MUST_NOW_BE_CONSISTENT_status_escaping_tests_force_the_status_after_the_report_is_built"
 followups: []
 ---
+
+---
+session: 2026-10-27T07:17Z
+issue: 437
+branch: session/2026-10-27-0717-issue-437
+focus: DELTA_CELL_WAS_CLASSIFIED_ON_THE_PUBLISHED_FLOAT_DELTA_WHICH_ROUNDS_ONTO_MINUS_THRESHOLD_WHILE_THE_FLAG_USES_D_034_EXACT_DECIMALS_SO_TWO_ROWS_PRINTED_MINUS_0_100_ONE_FLAGGED
+phase: shipped
+delta:
+  files_changed: 4
+  tests_added: 21
+  suite: "3144 -> 3166 passed, 28 skipped (fresh 3.12 and 3.11 venvs, pip install -e .[dev]); ruff, format, mypy clean; CLI smoke ok"
+decisions_made: []
+measured: "main ea25ba0: 0.8->0.7, 0.2->0.09999999999999999, 0.24->0.7*0.2 at 0.1 -> ascii and markdown all '-0.100', a unflagged, b/c FLAG; JSON delta -0.1 on all three. After: a '-0.100', b/c '-0.10000000000000001'. Demo diff-json at 0.1/0.05/0.0125/0 x ascii/markdown/json byte-identical to main (12 commands). Revert comment.py+runner.py with helper kept: 8 of 21 red (issue rows x2, search x6); 13 green = float-delta precondition, helper unit table + fallback, 2 mean-headline controls. Full revert: collection error."
+context_for_next_session:
+  - "RENDER_DELTA_CELL_TAKES_THE_TWO_SCORES_NOT_THE_DELTA_bands_are_0_and_minus_threshold_each_its_own_band_like_291_not_decimal_band_which_merges_at_threshold_into_regressed"
+  - "FIXED_WIDTH_FORMATTING_IS_OF_THE_FRACTION_HALF_EVEN_so_0_8_to_0_6995_is_minus_0_1005_not_the_float_minus_0_101_fallback_past_17_places_prints_the_whole_terminating_decimal"
+  - "MEAN_DELTA_HEADLINE_STAYS_ON_RENDER_SIGNED_CLASSIFIED_one_boundary_at_0_and_float_of_a_nonzero_exact_keeps_its_sign"
+  - "SCORE_PAIR_STILL_RENDERS_FROM_THE_FLOAT_0_2_AT_17_PLACES_IS_0_20000000000000001_decimal_repr_rendering_deferred_changes_tie_rounding"
+  - "THE_291_SEARCH_TEST_READS_CELLS_BACK_WITH_float_which_cannot_see_this_class_new_tests_read_back_with_Fraction"
+followups: []
+---
