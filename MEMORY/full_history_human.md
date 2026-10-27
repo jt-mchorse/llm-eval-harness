@@ -3995,3 +3995,13 @@ way. So the same score could read two ways in one column: 0.0005 showed as
 terminal table now print the lone score the same way as the pair. A test
 checks all 1000 four-digit ties at once. The demo commands give exactly the
 same output as before.
+
+## 2026-10-27 — The calibration report prints a zero κ or r without a minus sign (#445)
+
+A calibration result that states its agreement score (κ) or correlation (r)
+as negative zero printed `-0.000` in the report's table. An earlier fix
+(#416) had removed that sign from the threshold line only. The report now
+prints `0.000` for both, and the whole report for a negative zero is now
+identical to the report for zero. Only a result built by hand with no rows
+can carry a negative zero: the calibration arithmetic itself never returns
+one, which a new test checks over a grid of inputs.
