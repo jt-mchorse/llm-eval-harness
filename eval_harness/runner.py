@@ -523,6 +523,74 @@ def _check_delta_summary_counts(summary: dict[str, Any], rows: tuple[RowDelta, .
             )
 
 
+def _check_delta_summary_mean(summary: dict[str, Any], rows: tuple[RowDelta, ...]) -> None:
+    """Refuse a `mean_delta` that `diff_runs` could not have published (#449).
+
+    #435 checked the counts and left the mean, on the premise that a mean
+    cannot be checked against the rows. The record holds what `diff_runs`
+    computed it from, though: each run's `mean_score_*`, and every score (a
+    paired row carries both, `removed` the baseline's, `new` the current's).
+    `diff_runs` publishes `_decimal_mean(current) - _decimal_mean(baseline)`,
+    and each side is one of two values: the exact mean of that run's row
+    scores, or the decimal its `mean_score` was written as. Which one depends
+    on whether the rows reproduce `mean_score` in *scoring* order, and 3.11's
+    `sum` is order-dependent while these rows are sorted by id, so the check
+    accepts any pairing rather than re-deciding it. It also accepts the plain
+    float difference of the two means, which a record written before #336
+    carries. A hand-edited `+0.5` over means of 0.77 and 0.84 matches none.
+    Absent or null stays accepted (the renderers print a dash), and a side with
+    neither a mean nor a score cannot be checked.
+    """
+    stated = summary.get("mean_delta")
+    if stated is None:
+        return
+    sides = []
+    for mean_key, score_of in (
+        ("mean_score_current", lambda r: r.current_score),
+        ("mean_score_baseline", lambda r: r.baseline_score),
+    ):
+        scores = [score for score in map(score_of, rows) if score is not None]
+        candidates: set[Fraction] = set()
+        if scores:
+            candidates.add(sum((_decimal(score) for score in scores), Fraction(0)) / len(scores))
+        mean = summary.get(mean_key)
+        if mean is not None:
+            mean = _require_float(mean, mean_key)
+            if math.isfinite(mean):
+                candidates.add(_decimal(mean))
+        if not candidates:
+            return
+        sides.append(candidates)
+    current, baseline = sides
+    possible = set()
+    for a in current:
+        for b in baseline:
+            try:
+                possible.add(_published(a - b, "mean_delta"))
+            except ValueError:
+                continue
+    # A record written before #336 published the plain float difference of the
+    # two means (`0.15000000000000002 - 0.15` is `2.8e-17`); it still reads.
+    cur_mean = summary.get("mean_score_current")
+    base_mean = summary.get("mean_score_baseline")
+    if (
+        isinstance(cur_mean, (int, float))
+        and isinstance(base_mean, (int, float))
+        and not isinstance(cur_mean, bool)
+        and not isinstance(base_mean, bool)
+    ):
+        legacy = float(cur_mean) - float(base_mean)
+        if math.isfinite(legacy):
+            possible.add(legacy)
+    if _require_float(stated, "mean_delta") not in possible:
+        shown = ", ".join(repr(v) for v in sorted(possible))
+        raise ValueError(
+            f"delta JSON summary 'mean_delta' is {stated!r} but its means and rows give "
+            f"{shown} — the comment headline is rendered from the summary, so it would "
+            "contradict the record it heads"
+        )
+
+
 @dataclass(frozen=True)
 class RowDelta:
     example_id: str
@@ -708,6 +776,7 @@ class DeltaReport:
         # scores, and the summary's counts must be the rows' (#435).
         _check_delta_rows(self.rows, self.threshold_drop)
         _check_delta_summary_counts(self.summary, self.rows)
+        _check_delta_summary_mean(self.summary, self.rows)
 
     @property
     def regressed_ids(self) -> list[str]:
@@ -858,6 +927,7 @@ class DeltaReport:
         # until #435, and the headline then contradicted the table under it.
         _check_delta_rows(rows, threshold_drop)
         _check_delta_summary_counts(summary, rows)
+        _check_delta_summary_mean(summary, rows)
         return cls(
             current_run_id=current_run_id,
             baseline_run_id=baseline_run_id,
@@ -1266,7 +1336,7 @@ def render_delta_ascii(report: DeltaReport) -> str:
     # preserved) to bring the two renderers to parity (#100). The None arm was
     # a coercion to 0.0, which printed `+0.000`, a mean nobody measured; since
     # #435 it prints this table's missing-value dash, as the PR comment prints
-    # its own. Unlike the counts, a mean cannot be checked against the rows.
+    # its own. The mean is checked against the record's means and rows (#449).
     raw_mean_delta = s.get("mean_delta")
     mean_delta_cell = (
         render_signed_classified(float(raw_mean_delta), (0.0,))

@@ -4754,3 +4754,22 @@ context_for_next_session:
   - "COHENS_KAPPA_FRACTION_AND_PEARSON_R_SUM_FROM_INT_0_NEVER_RETURN_MINUS_0_0_so_cli_calibrate_stdout_dot_3f_line_is_unaffected"
 followups: []
 ---
+
+---
+session: 2026-10-28T07:44Z
+issue: 449
+branch: session/2026-10-28-0743-issue-449
+focus: DELTA_RECORD_SUMMARY_MEAN_DELTA_WAS_UNCHECKED_ON_THE_FALSE_PREMISE_A_MEAN_CANNOT_BE_CHECKED_NOW_MUST_BE_ONE_DIFF_RUNS_COULD_PUBLISH
+phase: shipped
+delta:
+  files_changed: 7
+  tests_added: 213
+  suite: "3545 passed 1 skipped (after commit); ruff check + format + mypy clean"
+decisions_made: []
+measured: "origin/main d546794: demo delta with summary.mean_delta edited to 0.5 (means 0.77/0.84) -> comment --dry-run '[X] mean Δ **+0.500**' exit 0. After: ::error:: ... give -0.07, exit 2. Re-deciding _decimal_mean's per-side pick from the id-sorted record rows falsely refused 2688/20000 genuine records whose mean_score was a 3.11 left fold in scoring order -> the check accepts any pairing of {exact row mean, decimal(mean_score)} per side plus the pre-#336 float difference. Probes: main 7 red/206 green; no-legacy 1 red (the pre-336 arm); single-pick 43 red. 4 existing fixtures carried a mean_delta their own rows contradict; fixed to the rows' value. PR #450."
+context_for_next_session:
+  - "A_SEARCH_THAT_BUILDS_RUNS_IN_ID_ORDER_CANNOT_SEE_THE_SCORING_ORDER_LEFT_FOLD_first_search_found_0_the_scoring_order_one_found_2688"
+  - "THE_PREMISE_IN_A_FIX_COMMENT_a_mean_cannot_be_checked_WAS_THE_BUG_the_record_carries_both_means_and_every_score"
+  - "NOT_DONE_mean_score_vs_rows_check_stays_357s_deferral"
+followups: []
+---

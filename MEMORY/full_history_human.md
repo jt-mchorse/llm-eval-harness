@@ -4005,3 +4005,15 @@ prints `0.000` for both, and the whole report for a negative zero is now
 identical to the report for zero. Only a result built by hand with no rows
 can carry a negative zero: the calibration arithmetic itself never returns
 one, which a new test checks over a grid of inputs.
+
+## 2026-10-28 — A delta file's average change must match its own numbers (#449)
+
+Last week's fix made the delta report refuse a summary whose counts disagree
+with its rows. It left the average change unchecked, on the belief that it
+could not be checked. It can: the file holds both runs' averages and every
+score. A hand-edited average of +0.5, sitting over averages of 0.77 and 0.84,
+was posted as the PR comment's headline. That file is now refused with a
+clear error. The check accepts every value the real diff could have written,
+including files written before an earlier rounding fix. A stricter version
+wrongly refused about 13% of genuine files, because Python 3.11 adds numbers
+in an order-dependent way, and the tests now pin that case. PR #450.

@@ -345,6 +345,8 @@ def test_a_present_mean_delta_still_renders_its_value(tmp_path: Path) -> None:
     # Control: a real 0.0 is a value, not a missing one.
     payload = _demo_delta(tmp_path)
     payload["summary"]["mean_delta"] = 0.0
+    # Means that give a 0.0 delta, so the record agrees with itself (#449).
+    payload["summary"].update(mean_score_current=0.8, mean_score_baseline=0.8)
     report = DeltaReport.from_json(payload)
     assert "mean Δ **+0.000**" in render_delta_markdown(report)
     assert "summary: mean Δ=+0.000  " in render_delta_ascii(report)
