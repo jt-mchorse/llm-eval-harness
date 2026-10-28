@@ -83,9 +83,9 @@ def render_delta_markdown(report: DeltaReport, *, max_bytes: int | None = None) 
     # A present-but-null mean_delta (an undefined mean Δ — e.g. an all-new
     # suite — serialized as JSON null) reached the `:+.3f` format and raised
     # TypeError, so null was coerced to 0.0 — and printed `+0.000`, a mean Δ
-    # nobody measured, as did a missing key. Unlike the counts it cannot be
-    # checked against the rows, so it renders as the table's missing-value
-    # dash (#435); `is not None` (not `or`) keeps a real 0.0.
+    # nobody measured, as did a missing key. A missing one has nothing to be
+    # checked against (a present one is, #449), so it renders as the table's
+    # missing-value dash (#435); `is not None` (not `or`) keeps a real 0.0.
     raw_mean_delta = summary.get("mean_delta")
     mean_delta_cell = (
         render_signed_classified(float(raw_mean_delta), (0.0,))

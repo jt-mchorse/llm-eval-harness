@@ -246,12 +246,13 @@ def test_a_delta_json_reader_leaves_other_values_alone() -> None:
     # Control: `None` cells, non-zero scores and counts are untouched.
     payload = _delta()
     payload["rows"][0].update(baseline_score=0.25, current_score=None, delta=None, status="removed")
-    payload["summary"].update(mean_delta=-0.125, mean_score_baseline=0.5, n_unchanged=0)
+    # A mean Δ the record's own means give, 0.0 - 0.5 (#449).
+    payload["summary"].update(mean_delta=-0.5, mean_score_baseline=0.5, n_unchanged=0)
     payload["summary"]["n_removed"] = 1
     report = DeltaReport.from_json(payload)
     row = report.rows[0]
     assert (row.baseline_score, row.current_score, row.delta) == (0.25, None, None)
-    assert report.summary["mean_delta"] == -0.125
+    assert report.summary["mean_delta"] == -0.5
     assert report.summary["mean_score_baseline"] == 0.5
     assert report.summary["n_removed"] == 1
 

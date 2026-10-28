@@ -831,7 +831,8 @@ def test_comment_valid_summary_count_exits_zero(tmp_path: Path, capsys, good) ->
             "suite": "s",
             "threshold_drop": 0.1,
             "rows": rows,
-            "summary": {"mean_delta": 0.0, "n_flagged": good, "n_regressed": n},
+            # Since #449 the mean must agree too: every row goes 0.9 -> 0.5.
+            "summary": {"mean_delta": -0.4 if n else 0.0, "n_flagged": good, "n_regressed": n},
         },
     )
     rc = main(_comment_dry_run(delta))

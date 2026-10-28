@@ -97,7 +97,8 @@ def test_a_widened_delta_and_a_long_id_still_line_up() -> None:
         threshold_drop=0.1,
         rows=rows,
         summary={
-            "mean_delta": -0.05,
+            # The rows' means, 0.65 - 0.7000000005 (#449).
+            "mean_delta": -0.0500000005,
             "n_regressed": 1,
             "n_flagged": 1,
             "n_improved": 0,
