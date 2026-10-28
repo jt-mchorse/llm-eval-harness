@@ -4758,7 +4758,7 @@ followups: []
 ---
 session: 2026-10-28T07:44Z
 issue: 449
-branch: session/2026-10-28-0744-issue-449
+branch: session/2026-10-28-0743-issue-449
 focus: DELTA_RECORD_SUMMARY_MEAN_DELTA_WAS_UNCHECKED_ON_THE_FALSE_PREMISE_A_MEAN_CANNOT_BE_CHECKED_NOW_MUST_BE_ONE_DIFF_RUNS_COULD_PUBLISH
 phase: shipped
 delta:
