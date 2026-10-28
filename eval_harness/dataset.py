@@ -40,6 +40,7 @@ from __future__ import annotations
 
 import json
 import re
+import sys
 from collections import Counter
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -632,10 +633,18 @@ def _encode_record(index: int, example_id: str, record: dict[str, Any]) -> str:
     it was, like every other refusal in `dump_jsonl`. The field is found by
     re-encoding each top-level value, which only runs on the failure path.
     """
+    # The encoder's other refusal is a `ValueError` naming no example (#451): an
+    # int longer than `sys.get_int_max_str_digits()` cannot be converted to its
+    # digits. `loads_json` refuses the same literal on the way in (#365), so it
+    # is not writable either. A cycle, the encoder's other `ValueError`, never
+    # gets here: `_find_unrepresentable` refuses it first.
+    refused: type[Exception]
     try:
         return _dumps_canonical(record)
     except RecursionError:
-        pass
+        refused = RecursionError
+    except ValueError:
+        refused = ValueError
     # Outside the `except` so the message is not chained to the
     # `RecursionError`'s traceback, thousands of frames deep. Each field is
     # re-encoded as `{name: value}`, not bare, so it sits at the depth it had in
@@ -645,9 +654,16 @@ def _encode_record(index: int, example_id: str, record: dict[str, Any]) -> str:
     for name in sorted(record):
         try:
             _dumps_canonical({name: record[name]})
-        except RecursionError:
+        except refused:
             field_name = name
             break
+    if refused is ValueError:
+        raise ValueError(
+            f"examples[{index}] (id={ascii(example_id)}): field {field_name!r} holds an "
+            f"integer longer than the {sys.get_int_max_str_digits()}-digit limit for "
+            "int/str conversion; `json.dumps` cannot write it and `load_jsonl` would "
+            "refuse it. Store it as a string"
+        )
     raise ValueError(
         f"examples[{index}] (id={ascii(example_id)}): field {field_name!r} is nested "
         "too deep for `json.dumps` to encode on this interpreter (RecursionError); "

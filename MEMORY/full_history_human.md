@@ -4017,3 +4017,12 @@ clear error. The check accepts every value the real diff could have written,
 including files written before an earlier rounding fix. A stricter version
 wrongly refused about 13% of genuine files, because Python 3.11 adds numbers
 in an order-dependent way, and the tests now pin that case. PR #450.
+
+## 2026-10-28 — Saving a dataset with a huge number now says which example (#451)
+
+An integer with more than 4,300 digits cannot be written to JSON by Python
+without changing a global setting. Saving a dataset that held one failed
+with Python's own message, which named no example. The same number is already
+refused when a file is read. Saving now fails with the dataset's usual error,
+naming the example, its id and the field, and the file on disk is left
+untouched. PR #452.

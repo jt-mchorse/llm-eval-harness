@@ -4773,3 +4773,21 @@ context_for_next_session:
   - "NOT_DONE_mean_score_vs_rows_check_stays_357s_deferral"
 followups: []
 ---
+
+---
+session: 2026-10-28T08:02Z
+issue: 451
+branch: session/2026-10-28-0802-issue-451
+focus: DUMP_JSONL_LET_THE_ENCODERS_INT_DIGIT_LIMIT_VALUEERROR_ESCAPE_NAMING_NO_EXAMPLE_THE_WRITE_HALF_OF_365
+phase: shipped
+delta:
+  files_changed: 2
+  tests_added: 5
+  suite: "3337 passed 1 skipped (after commit); ruff + mypy clean"
+decisions_made: []
+measured: "origin/main d546794, py3.14: provenance {'n': 10**5000} -> raw 'Exceeds the limit (4300 digits)' ValueError, no index/id; after: examples[0] (id='a'): field 'provenance' ... 4300-digit limit. Revert 4 red / 1 green (the exactly-4300-digit round-trip control). PR #452."
+context_for_next_session:
+  - "_encode_record_NOW_TRANSLATES_BOTH_ENCODER_REFUSALS_RecursionError_430_and_the_int_digit_ValueError_451"
+  - "A_SEMICOLON_AFTER_A_LINT_GATE_LET_A_COMMIT_THROUGH_RED_amended_before_push_chain_the_commit_with_and"
+followups: []
+---
