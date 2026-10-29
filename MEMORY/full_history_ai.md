@@ -4791,3 +4791,21 @@ context_for_next_session:
   - "A_SEMICOLON_AFTER_A_LINT_GATE_LET_A_COMMIT_THROUGH_RED_amended_before_push_chain_the_commit_with_and"
 followups: []
 ---
+
+---
+session: 2026-10-29T07:34Z
+issue: 453
+branch: session/2026-10-29-0727-issue-453
+focus: EXPECTED_OUTPUTS_ITEM_ACCEPTED_ANY_EXTRA_KEY_AND_DUMP_DROPPED_IT_THE_TOP_LEVEL_UNKNOWN_FIELD_RULE_ONE_LEVEL_DOWN
+phase: shipped
+delta:
+  files_changed: 3
+  tests_added: 18
+  suite: "3543 passed, 28 skipped (after commit; 3.12 venv and 3.11 venv, pip install -e .[dev]); ruff, format, mypy clean"
+decisions_made: []
+measured: "origin/main f0c2192: issue file with items {kind,value,flags} and {kind,valu,value} -> 'ok: ... valid=1 findings=0' rc 0, dump_jsonl drops flags+valu. After: 'line 1 [schema]: expected_outputs[0]: unknown field(s): ['flags']', fail, rc 1. Revert dataset.py: 14 of 18 red, 4 green controls (bad kind wins, missing value wins, well-formed round trip, free-form provenance). PR #454."
+context_for_next_session:
+  - "_EXPECTED_OUTPUT_FIELDS_kind_value_CHECKED_AFTER_THE_ITEMS_OWN_KIND_VALUE_CHECKS_so_shape_errors_win_like_the_top_level"
+  - "SIBLINGS_CHECKED_dataset_provenance_free_form_and_dumped_whole_tags_list_of_str_calibration_only_nested_object_is_free_form_provenance_no_writer"
+followups: []
+---
