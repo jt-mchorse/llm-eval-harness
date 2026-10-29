@@ -4026,3 +4026,13 @@ with Python's own message, which named no example. The same number is already
 refused when a file is read. Saving now fails with the dataset's usual error,
 naming the example, its id and the field, and the file on disk is left
 untouched. PR #452.
+
+## 2026-10-29 — A typo inside an expected answer is now refused (#453)
+
+The dataset loader already refused an unknown top-level field, so that a
+typo would not be silently ignored. Inside each expected answer, though, it
+only checked that `kind` and `value` were present. A misspelt key (`"valu"`)
+or a guessed option (`"flags"`) therefore passed validation, and saving the
+dataset dropped it without a word. Such an answer is now refused with an
+error that names its position and the extra keys. A bad `kind` still gets
+its own message first. `provenance` stays free-form, as documented. PR #454.

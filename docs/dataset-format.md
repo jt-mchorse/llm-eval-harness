@@ -39,6 +39,11 @@ so that a typo (e.g. `expected_output` singular) doesn't silently no-op.
 { "kind": "exact" | "semantic" | "regex", "value": "<string>" }
 ```
 
+`kind` and `value` are the only keys. Any other key in an item is rejected
+with `expected_outputs[i]: unknown field(s)`, for the same reason as at the
+top level: a typo (`"valu"`) or a guessed option (`"flags"`) would otherwise
+validate clean and be dropped by `dump_jsonl` (#453).
+
 | `kind`     | how the comparator interprets `value`                                            |
 |------------|----------------------------------------------------------------------------------|
 | `exact`    | Case-insensitive substring match, post-trim. For literal short answers.          |
