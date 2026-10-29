@@ -343,6 +343,10 @@ _REQUIRED_FIELDS: tuple[str, ...] = (
     "provenance",
 )
 
+# The keys of one `expected_outputs` item, which is all `ExpectedOutput.to_dict`
+# writes back. Anything else is refused on read (#453).
+_EXPECTED_OUTPUT_FIELDS: frozenset[str] = frozenset({"kind", "value"})
+
 
 # --- schema, shared by both sides of the seam (#235) -------------------------
 #
@@ -717,6 +721,16 @@ def _validate_record(raw: Any, line_no: int) -> Example:
             expected_outputs.append(ExpectedOutput(kind=item["kind"], value=item["value"]))
         except ValueError as e:
             raise DatasetLoadError(line_no, f"expected_outputs[{i}]: {e}") from None
+        # The top-level rule below, one level down (#453). An item is where a
+        # typo is most likely (`"valu"`, a guessed `"flags"`), and `ExpectedOutput`
+        # keeps only `kind` and `value`, so an extra key validated clean and
+        # `dump_jsonl` dropped it without a word. After the item's own checks, as
+        # at the top level, so a bad kind still wins the message.
+        item_unknown = sorted(set(item) - _EXPECTED_OUTPUT_FIELDS)
+        if item_unknown:
+            raise DatasetLoadError(
+                line_no, f"expected_outputs[{i}]: unknown field(s): {item_unknown}"
+            )
 
     reason = _find_field_violation(values, ("tags",))
     if reason is not None:
