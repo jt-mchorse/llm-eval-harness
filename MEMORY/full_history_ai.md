@@ -4809,3 +4809,23 @@ context_for_next_session:
   - "SIBLINGS_CHECKED_dataset_provenance_free_form_and_dumped_whole_tags_list_of_str_calibration_only_nested_object_is_free_form_provenance_no_writer"
 followups: []
 ---
+
+---
+session: 2026-10-30T07:28Z
+issue: 455
+branch: session/2026-10-30-0728-issue-455
+focus: ONE_STICKY_MARKER_FOR_EVERY_SUITE_SO_A_PER_SUITE_WORKFLOW_HAD_ONE_COMMENT_AND_THE_LAST_SUITE_OVERWROTE_THE_OTHERS_REGRESSION
+phase: shipped
+delta:
+  files_changed: 8
+  tests_added: 18
+  suite: "3562 passed 28 skipped (after commit; 3.12 and 3.11 venvs, pip install -e .[dev]); ruff check + format + mypy clean"
+decisions_made: []
+measured: "origin/main bc04cba, loopback fake API: faithfulness 0.9->0.3 then factuality 0.9->0.9 on PR 7 -> [('POST',1),('PATCH',1)], 1 comment headed factuality. After: [('POST',1),('POST',2)]; legacy comment 50 -> [('PATCH',50),('POST',60),('PATCH',50)]. Probes on 18 new tests: full revert = collection error (not red); shared marker 4 red; no legacy_marker 1 red; no escaping 11 red; percent-encode without the dash-after-dash rule 6 red. PR #458."
+context_for_next_session:
+  - "sticky_marker(suite)_IS_PERCENT_ENCODED_PLUS_DASH_AFTER_DASH_AS_PCT2D_no_marker_is_contained_in_another_so_D009_substring_match_stays_exact"
+  - "LEGACY_BARE_MARKER_ADOPTED_ONLY_VIA_legacy_marker_KWARG_the_CLI_passes_it_library_callers_default_None"
+  - "456_STARTSWITH_NOT_SHIPPED_D009_HUMAN_RECORD_SAYS_substring_first_match_wins_and_accepts_wrong_comment_edits_and_claims_human_edit_survival_JTS_CALL"
+followups:
+  - "456: starts-with matching changes D-009's recorded matching rule; awaiting JT. Draft patch exists (has_sticky_marker with BOM/whitespace lstrip, writer check shares the predicate)."
+---

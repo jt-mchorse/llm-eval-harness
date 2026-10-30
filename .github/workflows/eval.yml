@@ -2,7 +2,7 @@
 #
 # Diffs the committed `fixtures/demo_current.json` against
 # `fixtures/demo_baseline.json` and posts a sticky comment to the PR
-# under the `<!-- eval-harness:sticky-comment -->` marker.
+# under the `<!-- eval-harness:sticky-comment suite=demo-faithfulness -->` marker.
 #
 # What this PR ships is the *plumbing* — the diff-and-comment surface.
 # Downstream consumers (rag-production-kit, agent-orchestration-platform,

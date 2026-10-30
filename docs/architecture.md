@@ -478,16 +478,19 @@ flowchart LR
   BASELINE[fixtures/demo_baseline.json] --> DIFFJSON
   DIFFJSON --> MD[markdown delta + headline]
   MD --> COMMENT[eval-harness comment]
-  COMMENT --> MARKER["&lt;!-- eval-harness:sticky-comment --&gt;"]
+  COMMENT --> MARKER["&lt;!-- eval-harness:sticky-comment suite=… --&gt;"]
   MARKER --> ACTION[.github/workflows/eval.yml]
   ACTION -- upsert by marker --> PR[PR comment]
 ```
 
 `comment.py` is the sticky-comment renderer. The
-`<!-- eval-harness:sticky-comment -->` HTML marker is how the GitHub
-Action's upsert step finds and edits the prior comment in place on
-every push (D-009) — comment-id-based identity would have stacked
-duplicates across pushes. `.github/workflows/eval.yml` is the action
+`<!-- eval-harness:sticky-comment suite=<suite> -->` HTML marker on the
+body's first line is how the GitHub Action's upsert step finds and edits
+the prior comment in place on every push (D-009) — comment-id-based
+identity would have stacked duplicates across pushes. It names the suite
+so each suite keeps its own comment (#455). A comment with the bare
+pre-#455 `<!-- eval-harness:sticky-comment -->` is taken over by the
+first suite to post. `.github/workflows/eval.yml` is the action
 the framework ships; downstream repos use `eval-harness diff-json` +
 `eval-harness comment` to do the same on their own PRs.
 `diff-json` deliberately operates on two `RunResult` JSON files

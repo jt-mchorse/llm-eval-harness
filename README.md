@@ -435,9 +435,15 @@ The plugin parametrizes via `pytest_generate_tests`, so `pytest -k`,
 The `eval` workflow (`.github/workflows/eval.yml`) runs on every PR
 and posts a single self-updating comment with the per-row Δ between
 `fixtures/demo_current.json` and `fixtures/demo_baseline.json`. The
-comment is identified by a hidden HTML marker
-(`<!-- eval-harness:sticky-comment -->`) so it's edited in place on
-every push — no duplicates pile up across the PR's lifetime (D-009).
+comment is identified by a hidden HTML marker on its first line,
+`<!-- eval-harness:sticky-comment suite=demo-faithfulness -->`, so it's
+edited in place on every push — no duplicates pile up across the PR's
+lifetime (D-009). The marker names the suite (percent-encoded, so no
+suite name can close the HTML comment), and a workflow that posts once
+per suite keeps one comment per suite (#455). A comment posted before
+the marker named its suite carries the bare
+`<!-- eval-harness:sticky-comment -->`; the first suite to post after
+an upgrade takes it over, and any other suite gets a new comment.
 
 Downstream repos that import `eval-harness` use the same two CLI
 steps in their own workflow:

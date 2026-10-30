@@ -4036,3 +4036,16 @@ or a guessed option (`"flags"`) therefore passed validation, and saving the
 dataset dropped it without a word. Such an answer is now refused with an
 error that names its position and the extra keys. A bad `kind` still gets
 its own message first. `provenance` stays free-form, as documented. PR #454.
+
+## 2026-10-30 — Two suites on one PR now keep two comments (#455)
+
+Every sticky comment carried the same hidden marker. A project that posts
+one comment per suite, as the README's workflow does, ended up with a single
+comment that each suite overwrote in turn. A regression in one suite could
+vanish under another suite's clean result. The marker now names the suite,
+with the name encoded so it cannot break out of the hidden HTML comment, and
+each suite keeps its own comment. A comment posted before this change is
+taken over by the first suite to post, so it is not left stale. The related
+#456 (ignore comments that only quote the marker) was not changed. The
+recorded decision D-009 explicitly chose "the marker appears anywhere in the
+comment", so changing that is JT's call. PR #458.
