@@ -9,7 +9,9 @@ Two pieces:
 - `upsert_sticky_comment(repo, pr, body)` — finds the prior eval-harness
   comment on the PR by HTML marker and edits it; otherwise creates a new
   comment. Marker-based identity (D-009) is reliable across bot renames
-  and across consumers calling the same action from different repos.
+  and across consumers calling the same action from different repos. The
+  marker names the suite (`sticky_marker`), so each suite keeps its own
+  comment on a PR (#455).
 
 The HTTP plumbing is `urllib.request` so the module has zero pip-installable
 deps; CI passes `GITHUB_TOKEN` (the workflow's automatic token) via env.
@@ -23,6 +25,7 @@ import os
 import re
 from typing import Any
 from urllib import error, request
+from urllib.parse import quote
 
 from eval_harness.comparison import (
     render_configured,
@@ -36,6 +39,12 @@ from eval_harness.markdown import md_code_cell, md_code_span, md_table_cell
 from eval_harness.runner import DeltaReport, RowDelta
 
 STICKY_MARKER = "<!-- eval-harness:sticky-comment -->"
+"""The bare marker every comment carried before #455, kept to find those comments.
+
+The renderer now writes :func:`sticky_marker` instead. ``comment`` still
+adopts a comment that carries this one when its suite has none yet, so a
+PR's existing comment is updated rather than orphaned.
+"""
 
 # GitHub refuses an issue comment longer than 65,536 characters with a 422
 # ("Body is too long"), on POST and on the PATCH that updates the sticky
@@ -53,12 +62,27 @@ _KEEP_ORDER: dict[str, int] = {
     "improved": 4,
     "unchanged": 5,
 }
-"""Hidden HTML marker the bot uses to find its prior comment.
 
-Lives inside the rendered comment body. The find-step does a substring
-scan over each comment's body and picks the first one that contains the
-marker. Renaming the bot or rotating tokens doesn't break identity.
-"""
+
+def sticky_marker(suite: str) -> str:
+    """Hidden HTML marker the bot uses to find its prior comment for *suite*.
+
+    The first line of the rendered comment body. Renaming the bot or rotating
+    tokens doesn't break identity (D-009). One marker for every suite meant a
+    PR whose workflow runs ``diff-json`` + ``comment`` once per suite had one
+    comment, and the last suite to post overwrote the other's delta (#455).
+
+    ``suite`` is free-form, so it is percent-encoded (UTF-8) with nothing left
+    safe but ``A-Z a-z 0-9 _ . - ~``, and a ``-`` that follows a ``-`` is
+    encoded too. The value then cannot hold ``--`` or ``>`` (which would end
+    the HTML comment and show the rest on the PR), a space (which ends the
+    value) or a newline. Two suites never share a marker, and none is
+    contained in another, so the find step's substring match stays exact:
+    ``<!--`` occurs once, at the start, and every value is followed by the
+    same `` -->``.
+    """
+    value = re.sub(r"(?<=-)-", "%2D", quote(suite, safe=""))
+    return f"<!-- eval-harness:sticky-comment suite={value} -->"
 
 
 def render_delta_markdown(report: DeltaReport, *, max_bytes: int | None = None) -> str:
@@ -110,7 +134,7 @@ def render_delta_markdown(report: DeltaReport, *, max_bytes: int | None = None) 
     n_rem = _count("n_removed")
     n_same = _count("n_unchanged")
 
-    lines: list[str] = [STICKY_MARKER, ""]
+    lines: list[str] = [sticky_marker(report.suite), ""]
     # `suite` is a free-form operator-chosen name; a backtick in it closes this
     # heading's code span early (#180 fixed the same class in the table cells but
     # not this non-table span). `md_code_span` neutralizes the backtick without
@@ -378,17 +402,22 @@ def find_sticky_comment(
     *,
     token: str | None = None,
     marker: str = STICKY_MARKER,
+    legacy_marker: str | None = None,
     api_base: str = _GITHUB_API,
 ) -> int | None:
     """Return the id of the prior sticky comment on this PR, or None.
 
     Paginates through `/issues/<n>/comments` (100 per page) and matches
-    bodies against `marker`. First match wins. Pagination caps at 1000
-    comments so a runaway query doesn't burn rate limit; if a real PR
-    has 1000+ comments this query would need refinement, but that's not
-    a portfolio-scale concern today.
+    bodies against `marker`. First match wins. If none matches, the first
+    body that contains `legacy_marker` is returned instead: ``comment``
+    passes the bare pre-#455 marker, so the first suite to post after an
+    upgrade takes over the PR's old comment rather than orphaning it.
+    Pagination caps at 1000 comments so a runaway query doesn't burn rate
+    limit; if a real PR has 1000+ comments this query would need
+    refinement, but that's not a portfolio-scale concern today.
     """
     token = _resolve_token(token)
+    legacy_id: int | None = None
     for page in range(1, 11):
         url = f"{api_base}/repos/{repo}/issues/{pr_number}/comments?per_page=100&page={page}"
         result = _do_request("GET", url, token)
@@ -418,17 +447,26 @@ def find_sticky_comment(
                     f"GitHub API GET {url} returned a comment body that is a "
                     f"{type(body).__name__}, not a string"
                 )
-            if marker in body:
+            is_match = marker in body
+            is_legacy = (
+                not is_match
+                and legacy_id is None
+                and legacy_marker is not None
+                and legacy_marker in body
+            )
+            if is_match or is_legacy:
                 comment_id = _comment_id(item.get("id"))
                 if comment_id is None:
                     raise RuntimeError(
                         f"GitHub API GET {url} returned the sticky comment with id "
                         f"{item.get('id')!r}, not an integer"
                     )
-                return comment_id
+                if is_match:
+                    return comment_id
+                legacy_id = comment_id
         if len(result) < 100:
-            return None
-    return None
+            return legacy_id
+    return legacy_id
 
 
 def _comment_id(value: object) -> int | None:
@@ -445,11 +483,13 @@ def upsert_sticky_comment(
     *,
     token: str | None = None,
     marker: str = STICKY_MARKER,
+    legacy_marker: str | None = None,
     api_base: str = _GITHUB_API,
 ) -> int:
     """Edit the existing sticky comment in place, or create a new one.
 
-    Returns the comment id.
+    Returns the comment id. `legacy_marker` is passed to
+    `find_sticky_comment`.
     """
     token = _resolve_token(token)
     # Sanity: refuse to upsert a body that's missing the marker — the next
@@ -457,7 +497,12 @@ def upsert_sticky_comment(
     if marker not in body:
         raise ValueError("body is missing the sticky marker; refusing to upsert")
     existing_id = find_sticky_comment(
-        repo, pr_number, token=token, marker=marker, api_base=api_base
+        repo,
+        pr_number,
+        token=token,
+        marker=marker,
+        legacy_marker=legacy_marker,
+        api_base=api_base,
     )
     if existing_id is not None:
         url = f"{api_base}/repos/{repo}/issues/comments/{existing_id}"

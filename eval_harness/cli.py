@@ -37,6 +37,7 @@ from eval_harness.comment import (
     STICKY_MARKER,
     check_repo,
     render_delta_markdown,
+    sticky_marker,
     upsert_sticky_comment,
 )
 from eval_harness.comparison import render_comparison
@@ -829,7 +830,15 @@ def _run_comment(args: argparse.Namespace) -> int:
         print(body, end="")
         return 0
     try:
-        comment_id = upsert_sticky_comment(args.repo, args.pr, body)
+        # One comment per suite (#455). A comment posted before the marker named
+        # its suite is taken over by the first suite to post, not left stale.
+        comment_id = upsert_sticky_comment(
+            args.repo,
+            args.pr,
+            body,
+            marker=sticky_marker(report.suite),
+            legacy_marker=STICKY_MARKER,
+        )
     except RuntimeError as e:
         # A missing GITHUB_TOKEN/GH_TOKEN (_resolve_token) and any failed GitHub
         # API request (_do_request: an HTTP error, a connection error or timeout,

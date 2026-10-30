@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 
 from eval_harness.cli import main as cli_main
-from eval_harness.comment import COMMENT_BODY_BUDGET, STICKY_MARKER, render_delta_markdown
+from eval_harness.comment import COMMENT_BODY_BUDGET, render_delta_markdown, sticky_marker
 from eval_harness.runner import DeltaReport, RowDelta
 
 GITHUB_LIMIT = 65_536
@@ -80,7 +80,7 @@ def test_a_large_report_fits_and_keeps_its_flagged_row(n: int) -> None:
     body = render_delta_markdown(_report(_big(n)), max_bytes=COMMENT_BODY_BUDGET)
     assert len(body.encode("utf-8")) <= COMMENT_BODY_BUDGET
     assert len(body) < GITHUB_LIMIT
-    assert STICKY_MARKER in body
+    assert body.startswith(sticky_marker("big-suite"))
     assert "zz-the-regression" in body
     assert body.rstrip().endswith("this comment is updated in-place on every push</sub>")
 

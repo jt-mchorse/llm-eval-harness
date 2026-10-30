@@ -30,6 +30,7 @@ from eval_harness.comment import (
     STICKY_MARKER,
     find_sticky_comment,
     render_delta_markdown,
+    sticky_marker,
     upsert_sticky_comment,
 )
 from eval_harness.runner import DeltaReport, RowDelta, render_delta_ascii
@@ -90,9 +91,10 @@ def test_render_contains_sticky_marker():
             _default_summary(mean_delta=0.1, n_improved=1),
         )
     )
-    assert STICKY_MARKER in md
     # Marker should be at the very top so a partial-read parser would catch it.
-    assert md.startswith(STICKY_MARKER)
+    # It names the suite (#455), so it is not the bare pre-#455 marker.
+    assert md.startswith(sticky_marker("demo-suite") + "\n")
+    assert STICKY_MARKER not in md
 
 
 def test_render_handles_null_mean_delta_in_summary():
@@ -546,7 +548,7 @@ def test_cli_diff_json_renders_markdown(tmp_path: Path, capsys) -> None:
     )
     captured = capsys.readouterr().out
     assert rc == 1  # demo has a flagged regression
-    assert STICKY_MARKER in captured
+    assert captured.startswith(sticky_marker("demo-faithfulness"))
     assert "qa_history_01" in captured
     assert "qa_followup_01" in captured  # new row
     assert "qa_summarize_01" in captured  # removed row
@@ -609,7 +611,7 @@ def test_cli_comment_dry_run(tmp_path: Path, capsys, monkeypatch: pytest.MonkeyP
     )
     out = capsys.readouterr().out
     assert rc == 0
-    assert STICKY_MARKER in out
+    assert out.startswith(sticky_marker("demo-faithfulness"))
     assert "demo-faithfulness" in out
 
 
