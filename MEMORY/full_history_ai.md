@@ -4829,3 +4829,21 @@ context_for_next_session:
 followups:
   - "456: starts-with matching changes D-009's recorded matching rule; awaiting JT. Draft patch exists (has_sticky_marker with BOM/whitespace lstrip, writer check shares the predicate)."
 ---
+
+---
+session: 2026-10-30T07:51Z
+issue: 457
+branch: session/2026-10-30-0745-issue-457
+focus: ATOMIC_WRITE_TEXT_RENAMED_OVER_A_READ_ONLY_0444_TARGET_NOW_EACCES_LIKE_PATH_WRITE_TEXT_CHECK_WRITABLE_AGREES_SO_RUN_OUT_AND_CALIBRATE_REPORT_REFUSE_BEFORE_THE_JUDGE
+phase: shipped
+delta:
+  files_changed: 2
+  tests_added: 14
+  suite: "3577 passed 28 skipped (after commit; 3.12 and 3.11 venvs, pip install -e .[dev]); ruff check + format + mypy clean"
+decisions_made: []
+measured: "origin/main 2cb81e8 (macOS uid 502): atomic_write_text on a 0444 file -> no error, contents replaced, mode still 0444; check_writable -> no error; Path.write_text -> PermissionError(13). After: EACCES, file byte-identical, no .tmp; run --out / calibrate --report / validate --out / drift --output on a 0444 file -> 'failed to write' exit 2, judge calls 0 for run and calibrate. Revert io_utils: 10 of 14 red, 4 controls green (2 write_text parity, 2 writable/missing); check_writable call alone removed: 5 red. PR #459."
+context_for_next_session:
+  - "_refuse_unwritable_target_RUNS_AFTER_THE_SYMLINK_RESOLVE_IN_BOTH_ATOMIC_WRITE_TEXT_AND_CHECK_WRITABLE_root_still_writes_port_of_prompt_regression_suite_318"
+  - "ONLY_ONE_RENAME_WRITER_IN_THE_PACKAGE_no_atomic_write_bytes_or_many_check_writable_callers_each_write_one_file_db_covered_by_check_db_281"
+followups: []
+---

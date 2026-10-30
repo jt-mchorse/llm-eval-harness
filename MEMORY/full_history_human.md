@@ -4049,3 +4049,17 @@ taken over by the first suite to post, so it is not left stale. The related
 #456 (ignore comments that only quote the marker) was not changed. The
 recorded decision D-009 explicitly chose "the marker appears anywhere in the
 comment", so changing that is JT's call. PR #458.
+
+## 2026-10-30 — A read-only output file is no longer silently overwritten (#457)
+
+Every write goes through a helper that writes a temporary file and renames
+it over the target, so an interrupted write can't leave a half-written
+file. But a rename only needs permission on the directory. So a file made
+read-only with `chmod 444` was rewritten anyway: `--out`, `--report` and
+`drift --output` replaced it and reported success. A plain file write
+refuses in that case, and the CLI already documented a read-only path as an
+error with exit 2. The helper now checks that an existing target is
+writable before it starts. The pre-flight check that `run` and `calibrate`
+do before calling the judge now asks the same question, so a read-only
+output is refused before any judge call is paid for. New files and writable
+files behave as before. PR #459.
